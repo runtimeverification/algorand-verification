@@ -7,14 +7,9 @@
 *.cmxa
 *.cmxs
 *.glob
-*.ml.d
-*.ml4.d
-*.mli.d
-*.mllib.d
-*.mlpack.d
+*.d
 *.native
 *.o
-*.v.d
 *.vio
 *.vo
 .coq-native/
@@ -28,3 +23,5 @@ lia.cache
 nia.cache
 nlia.cache
 nra.cache
+Makefile.coq
+Makefile.coq.conf
