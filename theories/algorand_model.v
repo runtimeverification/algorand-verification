@@ -1,9 +1,6 @@
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
-From mathcomp.finmap
-Require Import finmap.
-
 Require Import Coq.Reals.Reals.
 Require Import Interval.Interval_tactic.
 

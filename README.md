@@ -16,5 +16,5 @@ We recommend installing the dependencies of the project via
 
 ```
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq-mathcomp-ssreflect
+opam install coq-mathcomp-ssreflect coq-interval coq-mathcomp-finmap
 ```

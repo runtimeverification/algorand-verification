@@ -5,3 +5,4 @@
 -arg -w -arg -redundant-canonical-projection
 
 theories/base.v
+theories/algorand_model.v
