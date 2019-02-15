@@ -41,50 +41,36 @@ Inductive MType :=
   | Nextvote_Open
   | Nextvote_Val.
 
-(***************
-   I was here trying to equip MType with a fintype structure. Some progress is made
-   as you can see below but then it took me too much time trying to figure out why the
-   FinMixin would't work..  So I gave up at that point.
-*)
-
-Definition eqMT (mt1 mt2: MType) :=
-  match mt1, mt2 with
-  | Block, Block => true
-  | Proposal, Proposal => true
-  | Reproposal, Reproposal => true
-  | Softvote, Softvote => true
-  | Certvote, Certvote => true
-  | Nextvote_Open, Nextvote_Open => true
-  | Nextvote_Val, Nextvote_Val => true
-  | _, _ => false
+(* Make MType a finType by showing an isomorphism
+   with the ordinal 'I_7 *)
+Definition mtype2o (m:MType) : 'I_7 :=
+  match m with
+  | Block => inord 0
+  | Proposal => inord 1
+  | Reproposal => inord 2
+  | Softvote => inord 3
+  | Certvote => inord 4
+  | Nextvote_Open => inord 5
+  | Nextvote_Val => inord 6
   end.
+Definition o2mtype (i:'I_7) : option MType :=
+  match val i in nat with
+  | 0 => Some Block
+  | 1 => Some Proposal
+  | 2 => Some Reproposal
+  | 3 => Some Softvote
+  | 4 => Some Certvote
+  | 5 => Some Nextvote_Open
+  | 6 => Some Nextvote_Val
+  | _ => None
+  end.
+Lemma pcancel_MType_7 : pcancel mtype2o o2mtype.
+Proof. by case;rewrite /o2mtype /= inordK. Qed.
 
-Lemma eqMTP : Equality.axiom eqMT.
-Proof.
-move=> n m. apply: (iffP idP) => [ | <- ] ; last by elim n.
-elim: n m => [] [H1 | H2 | H3 | H4 | H5 | H6 | H7]  //= .
-Qed.
-
-Canonical MType_eqMixin := EqMixin eqMTP.
-Canonical MType_eqType := EqType MType MType_eqMixin.
-
-
-Definition MType_enum := [:: Block; Proposal; Reproposal; Softvote; Certvote; Nextvote_Open; Nextvote_Val].
-Check MType_enum.
-
-Lemma MType_enumP : Finite.axiom MType_enum.
-Proof. by case. Qed.
-
-Check MType_enumP.
-Check MType_enum.
-
-Check Finite.axiom.
-Check FinMixin.
-
-(* This here fails!! *)
-Definition MType_finMixin := Eval hnf in FinMixin MType_enumP.
-***************)
-
+Canonical mtype_eqType     := EqType     MType (PcanEqMixin     pcancel_MType_7).
+Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7).
+Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
+Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
 
 (* None is bottom *)
 Definition MaybeValue := option Value.
