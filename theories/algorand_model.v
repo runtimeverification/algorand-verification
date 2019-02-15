@@ -1,7 +1,11 @@
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
+From mathcomp.finmap
+Require Import finmap.
+
 Require Import Coq.Reals.Reals.
+Require Import Coq.Relations.Relation_Definitions.
 Require Import Interval.Interval_tactic.
 
 Set Implicit Arguments.
@@ -97,10 +101,15 @@ Inductive ExValue :=
 (* A message type as a product type *)
 Definition Msg := (MType * ExValue * nat * nat * UserId)%type.
 
+
 (* Alternatively, we could construct a message as a more elaborate record ??) 
 Record Msg := 
   mkMsg {
-    type : MType ; val : Value ; round: nat ; period : nat ; user : UserId
+    type : MType ; 
+    val : Value ; 
+    round: nat ; 
+    period : nat ; 
+    user : UserId
   }.
 *)
 
@@ -132,7 +141,7 @@ Inductive Steps :=
    Note: again we may end up not using all of these fields (and there may
    be others we may want to add later)
 *)
-Record User := 
+Record UState := 
   mkUser { 
     id            : UserId;
     corrupt       : bool;
@@ -141,16 +150,16 @@ Record User :=
     step          : Steps;
     timer         : R;
     p_start       : R;
-    rec_msgs      : list Msg;
+    rec_msgs      : seq Msg;
     cert_may_exist: bool;
-    prev_certvals : list Value;
-    proposals     : nat -> nat -> list PropRecord;    
-    blocks        : nat -> nat -> list Value;
-    softvotes     : nat -> nat -> list Vote;  
-    certvotes     : nat -> nat -> list Vote;
-    certvals      : nat -> nat -> list Value;
-    nextvotes_open: nat -> nat -> nat -> list Vote;
-    nextvotes_val : nat -> nat -> nat -> list Vote;
+    prev_certvals : seq Value;
+    proposals     : nat -> nat -> seq PropRecord;    
+    blocks        : nat -> nat -> seq Value;
+    softvotes     : nat -> nat -> seq Vote;  
+    certvotes     : nat -> nat -> seq Vote;
+    certvals      : nat -> nat -> seq Value;
+    nextvotes_open: nat -> nat -> nat -> seq Vote;
+    nextvotes_val : nat -> nat -> nat -> seq Vote;
   }.
 
 (* The credential of a User at a round-period-step triple 
@@ -168,12 +177,12 @@ Inductive Signature :=
    Note: I think we should abstract over channels and instead 
    collect messages in transit in the global state.
 *)
-Record Global :=
+Record GState :=
   mkGlobal {
     now     : R;
     network_partition : bool;
-    users   : list User ;
-    msg_in_transit : list Msg;
+    users   : seq UState ;
+    msg_in_transit : seq Msg;
   }.    
 
 (* small - non-block - message delivery delay *)
@@ -197,6 +206,41 @@ Variable tau_v : nat.
 
 (* upper bound on the credential to be part of the committee for step k *)
 Variable chi   : nat -> Value. 
+
+(* User-state-level trnasitions *)
+Definition u_transition_type := relation UState.
+
+Reserved Notation "x ~> y" (at level 70). 
+
+(* [TODO: define user-state-level transitions ] *)
+Inductive UTransition : u_transition_type := (***)
+  | dummy : forall (pre post : UState), pre ~> post
+where "x ~> y" := (UTransition x y) : type_scope . 
+
+
+(* Note: would be nice to use ssreflect's rel instead of relation 
+   so that connect may be directly used to define the reflexive 
+   transivite closure *)
+(* Definition UTransition_closed pre post :=
+ connect UTransition pre post.*)
+
+
+(* Global transition relation type *)
+Definition g_transition_type := relation GState . 
+
+Reserved Notation "x ~~> y" (at level 90).
+
+(* [TODO: define the transition relation]
+*)
+Inductive GTransition : g_transition_type :=  (***) 
+where "x ~~> y" := (GTransition x y) : type_scope . 
+
+(* We might also think of an initial state S and a schedule of events X
+   and comptue traces corresponding to S and X, and then showing properties 
+   on them
+*)
+
+
 
 
 
