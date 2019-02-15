@@ -18,7 +18,7 @@ Section AlgoModel.
 
 (* We first define a user's state structure *)
 (* Note: these definitions follow quite closely the ones given by Victor
-   in his automaton model of the system. We may stick to those or refine/abstract 
+   in his automaton model of the system. We may stick to those or refine/abstract
    over some of the details as we move on.
 *)
 
@@ -26,7 +26,7 @@ Section AlgoModel.
 *)
 Variable UserId : finType.
 
-(* What are the values manipulated by the protocol? block hashes perhaps? 
+(* What are the values manipulated by the protocol? block hashes perhaps?
 *)
 Variable Value : finType .
 
@@ -44,10 +44,10 @@ Inductive MType :=
 (***************
    I was here trying to equip MType with a fintype structure. Some progress is made
    as you can see below but then it took me too much time trying to figure out why the
-   FinMixin would't work..  So I gave up at that point. 
+   FinMixin would't work..  So I gave up at that point.
 *)
-(*
-Definition eqMT (mt1 mt2: MType) := 
+
+Definition eqMT (mt1 mt2: MType) :=
   match mt1, mt2 with
   | Block, Block => true
   | Proposal, Proposal => true
@@ -61,18 +61,18 @@ Definition eqMT (mt1 mt2: MType) :=
 
 Lemma eqMTP : Equality.axiom eqMT.
 Proof.
-move=> n m. apply: (iffP idP) => [ | <- ] ; last by elim n. 
-elim: n m => [] [H1 | H2 | H3 | H4 | H5 | H6 | H7]  //= .  
+move=> n m. apply: (iffP idP) => [ | <- ] ; last by elim n.
+elim: n m => [] [H1 | H2 | H3 | H4 | H5 | H6 | H7]  //= .
 Qed.
 
-Canonical MType_eqMixin := EqMixin eqMTP. 
+Canonical MType_eqMixin := EqMixin eqMTP.
 Canonical MType_eqType := EqType MType MType_eqMixin.
 
 
 Definition MType_enum := [:: Block; Proposal; Reproposal; Softvote; Certvote; Nextvote_Open; Nextvote_Val].
 Check MType_enum.
 
-Lemma MType_enumP : Finite.axiom MType_enum. 
+Lemma MType_enumP : Finite.axiom MType_enum.
 Proof. by case. Qed.
 
 Check MType_enumP.
@@ -89,9 +89,9 @@ Definition MType_finMixin := Eval hnf in FinMixin MType_enumP.
 (* None is bottom *)
 Definition MaybeValue := option Value.
 
-(* Not sure if we will ever need this, but it these are the strucutres used as values in 
+(* Not sure if we will ever need this, but it these are the strucutres used as values in
    messages in Victor's paper
-*)  
+*)
 Inductive ExValue :=
   | val      : MaybeValue -> ExValue
   | step_val : nat -> ExValue
@@ -102,13 +102,13 @@ Inductive ExValue :=
 Definition Msg := (MType * ExValue * nat * nat * UserId)%type.
 
 
-(* Alternatively, we could construct a message as a more elaborate record ??) 
-Record Msg := 
+(* Alternatively, we could construct a message as a more elaborate record ??)
+Record Msg :=
   mkMsg {
-    type : MType ; 
-    val : Value ; 
-    round: nat ; 
-    period : nat ; 
+    type : MType ;
+    val : Value ;
+    round: nat ;
+    period : nat ;
     user : UserId
   }.
 *)
@@ -120,19 +120,19 @@ Definition MsgPool := {fset Msg} .
 *)
 
 (* A proposal/preproposal record is a triple consisting of two
-   values along with a boolean indicating with the this is 
-   a proposal (true) or a preproposal (false) 
+   values along with a boolean indicating with the this is
+   a proposal (true) or a preproposal (false)
 *)
 Definition PropRecord := (Value * Value * bool)%type.
 
-(* A vote is a pair of values 
+(* A vote is a pair of values
 *)
 Definition Vote := (nat * Value)%type.
 
 (* Constructors for the different steps in a period
 *)
 Inductive Steps :=
-  | Proposing 
+  | Proposing
   | Softvoting
   | Certvoting
   | Nextvoting .
@@ -141,8 +141,8 @@ Inductive Steps :=
    Note: again we may end up not using all of these fields (and there may
    be others we may want to add later)
 *)
-Record UState := 
-  mkUser { 
+Record UState :=
+  mkUser {
     id            : UserId;
     corrupt       : bool;
     round         : nat;
@@ -153,28 +153,28 @@ Record UState :=
     rec_msgs      : seq Msg;
     cert_may_exist: bool;
     prev_certvals : seq Value;
-    proposals     : nat -> nat -> seq PropRecord;    
+    proposals     : nat -> nat -> seq PropRecord;
     blocks        : nat -> nat -> seq Value;
-    softvotes     : nat -> nat -> seq Vote;  
+    softvotes     : nat -> nat -> seq Vote;
     certvotes     : nat -> nat -> seq Vote;
     certvals      : nat -> nat -> seq Value;
     nextvotes_open: nat -> nat -> nat -> seq Vote;
     nextvotes_val : nat -> nat -> nat -> seq Vote;
   }.
 
-(* The credential of a User at a round-period-step triple 
+(* The credential of a User at a round-period-step triple
    (we abstract away the random value produced by an Oracle)
 *)
-Inductive Credential := 
+Inductive Credential :=
   | cred : UserId -> nat -> nat -> nat -> Credential.
 
 (* Constructor of values signed by a user
 *)
 Inductive Signature :=
-  | sign : UserId -> Value -> Signature. 
+  | sign : UserId -> Value -> Signature.
 
-(* The global state 
-   Note: I think we should abstract over channels and instead 
+(* The global state
+   Note: I think we should abstract over channels and instead
    collect messages in transit in the global state.
 *)
 Record GState :=
@@ -183,7 +183,7 @@ Record GState :=
     network_partition : bool;
     users   : seq UState ;
     msg_in_transit : seq Msg;
-  }.    
+  }.
 
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
@@ -193,50 +193,50 @@ Variable big_lambda : R.
 
 (* some other thresholds *)
 (* number of soft-votes needed to cert-vote *)
-Variable tau_s : nat. 
+Variable tau_s : nat.
 
 (* number of cert-votes needed for a certificate *)
-Variable tau_c : nat. 
+Variable tau_c : nat.
 
 (* number of next-votes for None to move to next period *)
-Variable tau_b : nat. 
+Variable tau_b : nat.
 
 (* number of next-votes for a non-None value to move to next period *)
-Variable tau_v : nat. 
+Variable tau_v : nat.
 
 (* upper bound on the credential to be part of the committee for step k *)
-Variable chi   : nat -> Value. 
+Variable chi   : nat -> Value.
 
 (* User-state-level trnasitions *)
 Definition u_transition_type := relation UState.
 
-Reserved Notation "x ~> y" (at level 70). 
+Reserved Notation "x ~> y" (at level 70).
 
 (* [TODO: define user-state-level transitions ] *)
 Inductive UTransition : u_transition_type := (***)
   | dummy : forall (pre post : UState), pre ~> post
-where "x ~> y" := (UTransition x y) : type_scope . 
+where "x ~> y" := (UTransition x y) : type_scope .
 
 
-(* Note: would be nice to use ssreflect's rel instead of relation 
-   so that connect may be directly used to define the reflexive 
+(* Note: would be nice to use ssreflect's rel instead of relation
+   so that connect may be directly used to define the reflexive
    transivite closure *)
 (* Definition UTransition_closed pre post :=
  connect UTransition pre post.*)
 
 
 (* Global transition relation type *)
-Definition g_transition_type := relation GState . 
+Definition g_transition_type := relation GState .
 
 Reserved Notation "x ~~> y" (at level 90).
 
 (* [TODO: define the transition relation]
 *)
-Inductive GTransition : g_transition_type :=  (***) 
-where "x ~~> y" := (GTransition x y) : type_scope . 
+Inductive GTransition : g_transition_type :=  (***)
+where "x ~~> y" := (GTransition x y) : type_scope .
 
 (* We might also think of an initial state S and a schedule of events X
-   and comptue traces corresponding to S and X, and then showing properties 
+   and comptue traces corresponding to S and X, and then showing properties
    on them
 *)
 
