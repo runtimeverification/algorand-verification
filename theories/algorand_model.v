@@ -12,6 +12,44 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* Some proofs about the model use lemmas that
+   do not refer to model types, and only show
+   properties of library types *)
+Section UtilLemmas.
+Lemma Forall_map : forall A B (f : A -> B) (P : B -> Prop) l,
+    List.Forall (fun a => P (f a)) l -> List.Forall P (map f l).
+Proof.
+  intros A B f P.
+  induction l.
+  simpl.
+  intro. constructor.
+  simpl.
+  inversion 1; subst.
+  constructor;solve[auto].
+Qed.
+
+Lemma Forall_impl2 : forall A (P Q R : A -> Prop),
+    (forall a, P a -> Q a -> R a) ->
+    forall l, List.Forall P l -> List.Forall Q l -> List.Forall R l.
+Proof.
+  intros A P Q R Himpl.
+  induction l.
+  intros;constructor.
+  inversion 1;subst. inversion 1;subst. constructor;solve[auto].
+Qed.
+
+Lemma Rle_pos_r : forall x y p,
+    (x <= y -> x <= y + pos p)%R.
+Proof.
+  intros x y p Hxy.
+  apply Rle_trans with (y + 0)%R.
+  rewrite Rplus_0_r;assumption.
+  clear x Hxy.
+  apply Rplus_le_compat_l, Rlt_le, cond_pos.
+Qed.
+End UtilLemmas.
+
+
 
 Section AlgoModel.
 
@@ -42,16 +80,16 @@ Inductive MType :=
   | Nextvote_Val.
 
 (* Make MType a finType by showing an isomorphism
-   with the ordinal 'I_7 *)
+   with the ssreflect bounded nat type 'I_7 *)
 Definition mtype2o (m:MType) : 'I_7 :=
-  match m with
-  | Block => inord 0
-  | Proposal => inord 1
-  | Reproposal => inord 2
-  | Softvote => inord 3
-  | Certvote => inord 4
-  | Nextvote_Open => inord 5
-  | Nextvote_Val => inord 6
+ inord  match m with
+  | Block => 0
+  | Proposal => 1
+  | Reproposal => 2
+  | Softvote => 3
+  | Certvote => 4
+  | Nextvote_Open => 5
+  | Nextvote_Val => 6
   end.
 Definition o2mtype (i:'I_7) : option MType :=
   match val i in nat with
@@ -82,11 +120,34 @@ Inductive ExValue :=
   | val      : MaybeValue -> ExValue
   | step_val : nat -> ExValue
   | repr_val : Value -> UserId -> nat -> ExValue
-  | nexv_val : Value -> nat -> ExValue.
+  | next_val : Value -> nat -> ExValue.
+
+Definition codeExVal (e:ExValue) :
+  option Value + nat + (Value * UserId * nat) + (Value * nat) :=
+  match e with
+  | val mv => inl (inl (inl mv))
+  | step_val k => inl (inl (inr k))
+  | repr_val v user n => inl (inr (v, user, n))
+  | next_val v n => inr (v,n)
+  end.
+Definition decodeExVal
+           (c:option Value + nat + (Value * UserId * nat) + (Value * nat))
+           : ExValue :=
+  match c with
+  | inl (inl (inl mv)) => val mv
+  | inl (inl (inr k)) => step_val k
+  | inl (inr (v, user, n)) => repr_val v user n
+  | inr (v,n) => next_val v n
+  end.
+Lemma cancelExVal : pcancel codeExVal (fun x => Some (decodeExVal x)).
+Proof. case;reflexivity. Qed.
+
+Canonical exvalue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
+Canonical exvalue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
+Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
 
 (* A message type as a product type *)
-Definition Msg := (MType * ExValue * nat * nat * UserId)%type.
-
+Definition Msg : Type := MType * ExValue * nat * nat * UserId.
 
 (* Alternatively, we could construct a message as a more elaborate record ??)
 Record Msg :=
@@ -99,11 +160,7 @@ Record Msg :=
   }.
 *)
 
-(* Obviously this is not possible, but it would have been useful (let's discuss this when we meet)
-*)
-(*
 Definition MsgPool := {fset Msg} .
-*)
 
 (* A proposal/preproposal record is a triple consisting of two
    values along with a boolean indicating with the this is
@@ -135,6 +192,7 @@ Record UState :=
     period        : nat;
     step          : Steps;
     timer         : R;
+    deadline      : option R;
     p_start       : R;
     rec_msgs      : seq Msg;
     cert_may_exist: bool;
@@ -147,6 +205,51 @@ Record UState :=
     nextvotes_open: nat -> nat -> nat -> seq Vote;
     nextvotes_val : nat -> nat -> nat -> seq Vote;
   }.
+
+(*
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := u.(cert_may_exist);
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+ *)
+
+Definition update_timer (u : UState) timer' : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := timer';
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := u.(cert_may_exist);
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
 
 (* The credential of a User at a round-period-step triple
    (we abstract away the random value produced by an Oracle)
@@ -170,6 +273,28 @@ Record GState :=
     users   : seq UState ;
     msg_in_transit : seq Msg;
   }.
+
+(*
+  {| now := g.(now);
+     network_partition := g.(network_partition);
+     users := g.(users);
+     msg_in_transit := g.(msg_in_transit)
+  |}.
+ *)
+
+Definition update_now (now' : R) (g : GState) : GState :=
+  {| now := now';
+     network_partition := g.(network_partition);
+     users := g.(users);
+     msg_in_transit := g.(msg_in_transit)
+  |}.
+
+Definition update_users (users' : seq UState) (g : GState) : GState :=
+  {| now := g.(now);
+     network_partition := g.(network_partition);
+     users := users';
+     msg_in_transit := g.(msg_in_transit)
+  |}.
 
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
@@ -216,10 +341,28 @@ Definition g_transition_type := relation GState .
 
 Reserved Notation "x ~~> y" (at level 90).
 
+Definition user_can_advance_timer (increment : posreal) (u : UState) : Prop :=
+  match u.(deadline) with
+  | None => True
+  | Some d => (u.(timer) + pos increment <= d)%R
+  end.
+Arguments user_can_advance_timer increment u /.
+Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
+  update_timer u (u.(timer) + pos increment)%R.
+
+Definition tick_ok increment pre : Prop :=
+  List.Forall (user_can_advance_timer increment) (pre.(users)).
+Definition tick_result increment pre :=
+  pre.(update_now (pre.(now) + pos increment)%R)
+     .(update_users (map (user_advance_timer increment) pre.(users))).
+
 (* [TODO: define the transition relation]
 *)
 Inductive GTransition : g_transition_type :=  (***)
+| tick : forall increment pre, tick_ok increment pre ->
+    pre ~~> tick_result increment pre
 where "x ~~> y" := (GTransition x y) : type_scope .
+
 
 (* We might also think of an initial state S and a schedule of events X
    and comptue traces corresponding to S and X, and then showing properties
@@ -227,7 +370,27 @@ where "x ~~> y" := (GTransition x y) : type_scope .
 *)
 
 
+(** Now we have lemmas showing that transitions preserve various invariants *)
 
+Definition user_timers_valid (u : UState) : Prop :=
+  (u.(p_start) <= u.(timer) /\
+  match u.(deadline) with
+  | Some d => u.(timer) <= d
+  | None => True
+  end)%R.
+Arguments user_timers_valid u /.
 
+Lemma tick_preserves_timers : forall pre,
+    List.Forall user_timers_valid pre.(users) ->
+    forall increment, tick_ok increment pre ->
+    List.Forall user_timers_valid (tick_result increment pre).(users).
+Proof.
+  destruct pre as [? ? users ?];unfold tick_ok;simpl;clear.
+  intros Htimers_valid increment Hcan_advance.
+  apply Forall_map. revert Htimers_valid Hcan_advance.
+  apply Forall_impl2. clear. intro u.
+  destruct u;simpl;clear.
+  destruct deadline0;intuition auto using Rle_pos_r.
+Qed.
 
 End AlgoModel.
