@@ -229,6 +229,29 @@ Record UState :=
    |}.
  *)
 
+
+Definition update_step (u : UState) step' : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := step';
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := u.(cert_may_exist);
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+
 Definition update_timer (u : UState) timer' : UState :=
   {|
     id             := u.(id);
@@ -323,11 +346,20 @@ Definition u_transition_type := relation UState.
 
 Reserved Notation "x ~> y" (at level 70).
 
+Definition propose_ok (pre : UState) r p c : Prop :=
+  pre.(round) = r /\ pre.(period) = p /\ pre.(step) = Proposing /\
+  cred pre.(id) r p 1 = c /\ pre.(cert_may_exist).
+
+Definition propose_result (pre : UState) : UState :=
+  update_timer (update_step pre Softvoting) 0.
+
 (* [TODO: define user-state-level transitions ] *)
 Inductive UTransition : u_transition_type := (***)
   | dummy : forall (pre post : UState), pre ~> post
+  | propose : forall (pre : UState) (r : nat) (p : nat) (c : Credential),
+      propose_ok pre r p c ->
+      pre ~> propose_result pre
 where "x ~> y" := (UTransition x y) : type_scope .
-
 
 (* Note: would be nice to use ssreflect's rel instead of relation
    so that connect may be directly used to define the reflexive
@@ -362,7 +394,6 @@ Inductive GTransition : g_transition_type :=  (***)
 | tick : forall increment pre, tick_ok increment pre ->
     pre ~~> tick_result increment pre
 where "x ~~> y" := (GTransition x y) : type_scope .
-
 
 (* We might also think of an initial state S and a schedule of events X
    and comptue traces corresponding to S and X, and then showing properties
