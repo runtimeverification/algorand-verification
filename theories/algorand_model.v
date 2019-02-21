@@ -192,7 +192,7 @@ Record UState :=
     period        : nat;
     step          : Steps;
     timer         : R;
-    deadline      : option R;
+    deadline      : MType -> option R;
     p_start       : R;
     rec_msgs      : seq Msg;
     cert_may_exist: bool;
@@ -250,7 +250,7 @@ Definition update_step (u : UState) step' : UState :=
     certvals       := u.(certvals);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
-   |}.
+  |}.
 
 Definition update_timer (u : UState) timer' : UState :=
   {|
@@ -374,10 +374,11 @@ Definition g_transition_type := relation GState .
 Reserved Notation "x ~~> y" (at level 90).
 
 Definition user_can_advance_timer (increment : posreal) (u : UState) : Prop :=
-  match u.(deadline) with
-  | None => True
-  | Some d => (u.(timer) + pos increment <= d)%R
-  end.
+  forall (a : MType),
+    match u.(deadline) a with
+    | None => True
+    | Some d => (u.(timer) + pos increment <= d)%R
+    end.
 Arguments user_can_advance_timer increment u /.
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   update_timer u (u.(timer) + pos increment)%R.
@@ -405,7 +406,8 @@ where "x ~~> y" := (GTransition x y) : type_scope .
 
 Definition user_timers_valid (u : UState) : Prop :=
   (u.(p_start) <= u.(timer) /\
-  match u.(deadline) with
+  forall (a : MType),
+  match u.(deadline) a with
   | Some d => u.(timer) <= d
   | None => True
   end)%R.
@@ -421,7 +423,7 @@ Proof.
   apply Forall_map. revert Htimers_valid Hcan_advance.
   apply Forall_impl2. clear. intro u.
   destruct u;simpl;clear.
-  destruct deadline0;intuition auto using Rle_pos_r.
+  destruct deadline0;intuition auto using Rle_pos_r;constructor.
 Qed.
 
 End AlgoModel.
