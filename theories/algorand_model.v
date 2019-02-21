@@ -272,6 +272,28 @@ Definition update_timer (u : UState) timer' : UState :=
     certvals       := u.(certvals);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+  |}.
+
+Definition update_deadline (u : UState) deadline' : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := deadline';
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := u.(cert_may_exist);
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
    |}.
 
 (* The credential of a User at a round-period-step triple
@@ -346,18 +368,28 @@ Definition u_transition_type := relation UState.
 
 Reserved Notation "x ~> y" (at level 70).
 
-Definition propose_ok (pre : UState) r p c : Prop :=
-  pre.(round) = r /\ pre.(period) = p /\ pre.(step) = Proposing /\
-  cred pre.(id) r p 1 = c /\ pre.(cert_may_exist).
+(* TODO: what does valid mean? *)
+Definition valid (B : nat) : Prop := True.
 
+Definition check_params (u : UState) r p c s : Prop :=
+  u.(round) = r /\ u.(period) = p /\ u.(step) = s /\ cred u.(id) r p 1 = c.
+
+(* TODO: c < xi_1 *)
+Definition propose_ok (pre : UState) B r p c : Prop :=
+  check_params pre r p c Proposing /\ pre.(cert_may_exist) /\ valid B.
+
+(* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
-  update_timer (update_step pre Softvoting) 0.
+  update_step
+    (update_deadline (update_timer pre 0)
+                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    Softvoting.
 
 (* [TODO: define user-state-level transitions ] *)
 Inductive UTransition : u_transition_type := (***)
   | dummy : forall (pre post : UState), pre ~> post
-  | propose : forall (pre : UState) (r : nat) (p : nat) (c : Credential),
-      propose_ok pre r p c ->
+  | propose : forall (pre : UState) B r p c,
+      propose_ok pre B r p c ->
       pre ~> propose_result pre
 where "x ~> y" := (UTransition x y) : type_scope .
 
