@@ -399,6 +399,9 @@ Definition propose_ok (pre : UState) B r p : Prop :=
   pre.(cert_may_exist) /\ 
   valid B.
 
+(* TODO: what does valid mean? *)
+Definition valid (B : nat) : Prop := True.
+
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
   update_step
@@ -421,7 +424,6 @@ Definition svote_new_result (pre : UState) (v : Value) : UState :=
     (update_deadline (update_timer pre 0)
                      (fun b => if b == Proposal then None else pre.(deadline) b))
     Softvoting.
-
 
 (* [TODO: define user-state-level transitions ] *)
 Reserved Notation "x ~> y" (at level 70).
