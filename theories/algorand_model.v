@@ -60,12 +60,10 @@ Section AlgoModel.
    over some of the details as we move on.
 *)
 
-(* We assume a finite set of users
-*)
+(* We assume a finite set of users *)
 Variable UserId : finType.
 
-(* What are the values manipulated by the protocol? block hashes perhaps?
-*)
+(* And a finite set of values *)
 Variable Value : finType .
 
 (* An enumerated data type of all possible kinds of messages
@@ -110,10 +108,10 @@ Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7)
 Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
 Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
 
-(* None is bottom *)
+(* None means the value bottom *)
 Definition MaybeValue := option Value.
 
-(* Not sure if we will ever need this, but it these are the strucutres used as values in
+(* Not sure if we will ever need this, but these are the strucutres used as values in
    messages in Victor's paper
 *)
 Inductive ExValue :=
@@ -160,6 +158,7 @@ Record Msg :=
   }.
 *)
 
+(* Not used anymore *)
 Definition MsgPool := {fset Msg} .
 
 (* A proposal/preproposal record is a triple consisting of two
@@ -168,13 +167,12 @@ Definition MsgPool := {fset Msg} .
 *)
 Definition PropRecord := (Value * Value * bool)%type.
 
-(* A vote is a pair of values
-*)
-Definition Vote := (nat * Value)%type.
+(* A vote is a pair of UserID and Value *)
+Definition Vote := (UserId * Value)%type.
 
 (* Constructors for the different steps in a period
 *)
-Inductive Steps :=
+Inductive Step :=
   | Proposing
   | Softvoting
   | Certvoting
@@ -185,12 +183,12 @@ Inductive Steps :=
    be others we may want to add later)
 *)
 Record UState :=
-  mkUser {
+  mkUState {
     id            : UserId;
     corrupt       : bool;
     round         : nat;
     period        : nat;
-    step          : Steps;
+    step          : Step;
     timer         : R;
     deadline      : MType -> option R;
     p_start       : R;
@@ -302,6 +300,13 @@ Definition update_deadline (u : UState) deadline' : UState :=
 Inductive Credential :=
   | cred : UserId -> nat -> nat -> nat -> Credential.
 
+(* A proposition for whether a given credential qualifies its
+   owner to be a committee member *)
+(* Note: This abstract away how credential values are 
+   interpreted (which is a piece of detail that may not be
+   relevant to the model at this stage) *)
+Variable committee_cred : Credential -> Prop. 
+
 (* Constructor of values signed by a user
 *)
 Inductive Signature :=
@@ -312,7 +317,7 @@ Inductive Signature :=
    collect messages in transit in the global state.
 *)
 Record GState :=
-  mkGlobal {
+  mkGState {
     now     : R;
     network_partition : bool;
     users   : seq UState ;
@@ -361,36 +366,74 @@ Variable tau_b : nat.
 Variable tau_v : nat.
 
 (* upper bound on the credential to be part of the committee for step k *)
-Variable chi   : nat -> Value.
+(* this is no longer needed!! *)
+Variable chi   : nat -> nat.
 
 (* User-state-level trnasitions *)
 Definition u_transition_type := relation UState.
 
-Reserved Notation "x ~> y" (at level 70).
-
 (* TODO: what does valid mean? *)
 Definition valid (B : nat) : Prop := True.
 
+Definition valid_round_period (u : UState) r p : Prop :=
+  u.(round) = r /\ u.(period) = p .
+
+Definition valid_step (u : UState) s : Prop :=
+  u.(step) = s .
+
+Definition comm_cred (u : UState) r p k : Prop :=
+  committee_cred (cred u.(id) r p k) .
+
+(* this has been broken down into the smaller propositions above *)
+(*
 Definition check_params (u : UState) r p c s : Prop :=
   u.(round) = r /\ u.(period) = p /\ u.(step) = s /\ cred u.(id) r p 1 = c.
+*)
 
 (* TODO: c < xi_1 *)
-Definition propose_ok (pre : UState) B r p c : Prop :=
-  check_params pre r p c Proposing /\ pre.(cert_may_exist) /\ valid B.
+(* credentials are now abstract *)
+Definition propose_ok (pre : UState) B r p : Prop :=
+  valid_round_period pre r p /\
+  valid_step pre Proposing /\
+  comm_cred pre r p 1 /\
+  pre.(cert_may_exist) /\ 
+  valid B.
 
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
   update_step
     (update_deadline (update_timer pre 0)
                      (fun b => if b == Proposal then None else pre.(deadline) b))
+    Certvoting.
+
+(* TODO: softvote_new preconditions *)
+Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\
+  valid_step pre Softvoting /\ 
+  comm_cred pre r p 2 /\
+  (* now >= period_start + big_lambda *) 
+  ~ pre.(cert_may_exist) .
+  (* pre.(proposals) r p has v as its current leader value *)         
+
+(* TODO: softvote_new result *)
+Definition svote_new_result (pre : UState) (v : Value) : UState :=
+  update_step
+    (update_deadline (update_timer pre 0)
+                     (fun b => if b == Proposal then None else pre.(deadline) b))
     Softvoting.
 
+
 (* [TODO: define user-state-level transitions ] *)
+Reserved Notation "x ~> y" (at level 70).
+
 Inductive UTransition : u_transition_type := (***)
-  | dummy : forall (pre post : UState), pre ~> post
-  | propose : forall (pre : UState) B r p c,
-      propose_ok pre B r p c ->
+  (* | dummy : forall (pre post : UState), pre ~> post *)
+  | propose : forall (pre : UState) B r p,
+      propose_ok pre B r p ->
       pre ~> propose_result pre
+  | svote_new : forall (pre : UState) v r p,
+      svote_new_ok pre v r p ->
+      pre ~> svote_new_result pre v
 where "x ~> y" := (UTransition x y) : type_scope .
 
 (* Note: would be nice to use ssreflect's rel instead of relation
