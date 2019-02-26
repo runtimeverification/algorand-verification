@@ -6,3 +6,6 @@
 
 theories/base.v
 theories/algorand_model.v
+theories/boolp.v
+theories/reals.v
+theories/Rstruct.v
