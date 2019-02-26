@@ -393,14 +393,11 @@ Definition check_params (u : UState) r p c s : Prop :=
 (* TODO: c < xi_1 *)
 (* credentials are now abstract *)
 Definition propose_ok (pre : UState) B r p : Prop :=
-  valid_round_period pre r p /\
+  valid_round_period pre r p /\ p > 1 /\
   valid_step pre Proposing /\
   comm_cred pre r p 1 /\
   pre.(cert_may_exist) /\ 
   valid B.
-
-(* TODO: what does valid mean? *)
-Definition valid (B : nat) : Prop := True.
 
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
@@ -408,6 +405,34 @@ Definition propose_result (pre : UState) : UState :=
     (update_deadline (update_timer pre 0)
                      (fun b => if b == Proposal then None else pre.(deadline) b))
     Certvoting.
+
+(* TODO: v = H(B) *)
+Definition repropose_ok (pre : UState) (B : nat) v r p : Prop :=
+  valid_round_period pre r p /\
+  valid_step pre Proposing /\
+  comm_cred pre r p 1 /\
+  v \in pre.(prev_certvals).
+
+(* TODO: broadcasting? *)
+(* TODO: update deadline with softvote -> 2*lambda + delta *)
+Definition repropose_result (pre : UState) : UState :=
+  update_step
+    (update_deadline (update_timer pre 0)
+                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    Softvoting.
+
+(* TODO: c >= xi_1 *)
+Definition no_propose_ok (pre : UState) r p : Prop :=
+  valid_round_period pre r p /\
+  valid_step pre Proposing /\
+  comm_cred pre r p 1.
+  
+(* TODO: update deadline with softvote -> 2*lambda + delta *)
+Definition no_propose_result (pre : UState) : UState :=
+  update_step
+    (update_deadline (update_timer pre 0)
+                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    Softvoting.
 
 (* TODO: softvote_new preconditions *)
 Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
@@ -433,6 +458,12 @@ Inductive UTransition : u_transition_type := (***)
   | propose : forall (pre : UState) B r p,
       propose_ok pre B r p ->
       pre ~> propose_result pre
+  | repropose : forall (pre : UState) B v r p,
+      repropose_ok pre B v r p ->
+      pre ~> repropose_result pre
+  | no_propose : forall (pre : UState) r p,
+      no_propose_ok pre r p ->
+      pre ~> no_propose_result pre
   | svote_new : forall (pre : UState) v r p,
       svote_new_ok pre v r p ->
       pre ~> svote_new_result pre v
