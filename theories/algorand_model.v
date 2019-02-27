@@ -397,7 +397,6 @@ Variable tau_v : nat.
 Variable chi   : nat -> nat.
 
 (* User-state-level trnasitions *)
-Definition u_transition_type := relation UState.
 
 (* TODO: what does valid mean? *)
 Definition valid (B : nat) : Prop := True.
@@ -477,6 +476,7 @@ Definition svote_new_result (pre : UState) (v : Value) : UState :=
                      (fun b => if b == Proposal then None else pre.(deadline) b))
     Softvoting.
 
+(*
 Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
   match msg.1.1.1.1 with
   | Proposal =>
@@ -488,25 +488,26 @@ Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
     end
   | _ => ([:: msg], pre)
   end.
-
+*)
 
 (* [TODO: define user-state-level transitions ] *)
+Definition u_transition_type := (option Msg * UState) -> (UState * seq Msg) -> Prop.
+
 Reserved Notation "x ~> y" (at level 70).
 
 Inductive UTransition : u_transition_type := (***)
-  (* | dummy : forall (pre post : UState), pre ~> post *)
   | propose : forall (pre : UState) B r p,
       propose_ok pre B r p ->
-      pre ~> propose_result pre
-  | repropose : forall (pre : UState) B v r p,
+      (None, pre) ~> (propose_result pre, [:: (Proposal, step_val B, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
+(*  | repropose : forall (pre : UState) B v r p,
       repropose_ok pre B v r p ->
       pre ~> repropose_result pre
   | no_propose : forall (pre : UState) r p,
       no_propose_ok pre r p ->
-      pre ~> no_propose_result pre
+      pre ~> no_propose_result pre *)
   | svote_new : forall (pre : UState) v r p,
       svote_new_ok pre v r p ->
-      pre ~> svote_new_result pre v
+      (None, pre) ~> (svote_new_result pre v, [:: (Proposal, val (Some v), r, p, pre.(id))] )
 where "x ~> y" := (UTransition x y) : type_scope .
 
 (* Note: would be nice to use ssreflect's rel instead of relation
