@@ -12,6 +12,27 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(** Model Assumptions
+ **
+
+We generally list the assumptions made in this version of the model so far:
+- The set of users (identified by UserId) is finite
+- The set of values (Value) is finite
+- The system state gives each node its own clock but for now any transitions 
+  that advance clocks will advance all the same amount
+- Deadlines are defined only for message delivery delays (local user actions 
+  are instantaneous)
+- Messages are all broadcast messages. Network topologies are abstracted away 
+  (no peer-to-peer channels). A user may broadcast a message, which may reach 
+  all (honest) users at different times (guaranteed to arrive within the given 
+  time bounds in the absence of network partitions). 
+- We abstract over cyptographic and probabilistic computations (we assume 
+  perfect cryptographic schemes, and probabilistic transitions are modeled as 
+  non-deterministic transitions
+- [TODO: Note on credentials]
+**)
+
+
 (* Some proofs about the model use lemmas that
    do not refer to model types, and only show
    properties of library types *)
@@ -449,6 +470,19 @@ Definition svote_new_result (pre : UState) (v : Value) : UState :=
     (update_deadline (update_timer pre 0)
                      (fun b => if b == Proposal then None else pre.(deadline) b))
     Softvoting.
+
+Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
+  match msg.1.1.1.1 with
+  | Proposal =>
+    match propose_ok pre B r p with
+    | True =>
+      let: post := propose_result pre in
+      let: bmsg := (Block, step_val B, r, p, pre.(id)) in
+      ([:: msg; bmsg], post)
+    end
+  | _ => ([:: msg], pre)
+  end.
+
 
 (* [TODO: define user-state-level transitions ] *)
 Reserved Notation "x ~> y" (at level 70).
