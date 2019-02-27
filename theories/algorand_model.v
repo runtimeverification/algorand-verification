@@ -450,6 +450,19 @@ Definition svote_new_result (pre : UState) (v : Value) : UState :=
                      (fun b => if b == Proposal then None else pre.(deadline) b))
     Softvoting.
 
+Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
+  match msg.1.1.1.1 with
+  | Proposal =>
+    match propose_ok pre B r p with
+    | True =>
+      let: post := propose_result pre in
+      let: bmsg := (Block, step_val B, r, p, pre.(id)) in
+      ([:: msg; bmsg], post)
+    end
+  | _ => ([:: msg], pre)
+  end.
+
+
 (* [TODO: define user-state-level transitions ] *)
 Reserved Notation "x ~> y" (at level 70).
 
