@@ -21,16 +21,16 @@ Unset Printing Implicit Defensive.
 We generally list the assumptions made in this version of the model so far:
 - The set of users (identified by UserId) is finite
 - The set of values (Value) is finite
-- The system state gives each node its own clock but for now any transitions 
+- The system state gives each node its own clock but for now any transitions
   that advance clocks will advance all the same amount
-- Deadlines are defined only for message delivery delays (local user actions 
+- Deadlines are defined only for message delivery delays (local user actions
   are instantaneous)
-- Messages are all broadcast messages. Network topologies are abstracted away 
-  (no peer-to-peer channels). A user may broadcast a message, which may reach 
-  all (honest) users at different times (guaranteed to arrive within the given 
-  time bounds in the absence of network partitions). 
-- We abstract over cyptographic and probabilistic computations (we assume 
-  perfect cryptographic schemes, and probabilistic transitions are modeled as 
+- Messages are all broadcast messages. Network topologies are abstracted away
+  (no peer-to-peer channels). A user may broadcast a message, which may reach
+  all (honest) users at different times (guaranteed to arrive within the given
+  time bounds in the absence of network partitions).
+- We abstract over cyptographic and probabilistic computations (we assume
+  perfect cryptographic schemes, and probabilistic transitions are modeled as
   non-deterministic transitions
 - [TODO: Note on credentials]
 **)
@@ -326,10 +326,10 @@ Inductive Credential :=
 
 (* A proposition for whether a given credential qualifies its
    owner to be a committee member *)
-(* Note: This abstract away how credential values are 
+(* Note: This abstract away how credential values are
    interpreted (which is a piece of detail that may not be
    relevant to the model at this stage) *)
-Variable committee_cred : Credential -> Prop. 
+Variable committee_cred : Credential -> Prop.
 
 (* Constructor of values signed by a user
 *)
@@ -422,7 +422,7 @@ Definition propose_ok (pre : UState) B r p : Prop :=
   valid_round_period pre r p /\ p > 1 /\
   valid_step pre Proposing /\
   comm_cred pre r p 1 /\
-  pre.(cert_may_exist) /\ 
+  pre.(cert_may_exist) /\
   valid B.
 
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
@@ -452,7 +452,7 @@ Definition no_propose_ok (pre : UState) r p : Prop :=
   valid_round_period pre r p /\
   valid_step pre Proposing /\
   comm_cred pre r p 1.
-  
+
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition no_propose_result (pre : UState) : UState :=
   update_step
@@ -463,11 +463,11 @@ Definition no_propose_result (pre : UState) : UState :=
 (* TODO: softvote_new preconditions *)
 Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\
-  valid_step pre Softvoting /\ 
+  valid_step pre Softvoting /\
   comm_cred pre r p 2 /\
-  (* now >= period_start + big_lambda *) 
+  (* now >= period_start + big_lambda *)
   ~ pre.(cert_may_exist) .
-  (* pre.(proposals) r p has v as its current leader value *)         
+  (* pre.(proposals) r p has v as its current leader value *)
 
 (* TODO: softvote_new result *)
 Definition svote_new_result (pre : UState) (v : Value) : UState :=

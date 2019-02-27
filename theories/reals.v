@@ -90,8 +90,8 @@ Record class_of (R : Type) : Type := Class {
 
 Local Coercion base : class_of >-> Num.ArchimedeanField.class_of.
 Local Coercion base_rcf R (c : class_of R) : Num.RealClosedField.class_of R :=
-  @Num.RealClosedField.Class _ c (@mixin_rcf _ c). 
-  
+  @Num.RealClosedField.Class _ c (@mixin_rcf _ c).
+
 Structure type := Pack {sort; _ : class_of sort; _ : Type}.
 Local Coercion sort : type >-> Sortclass.
 Variables (T : Type) (cT : type).
@@ -519,7 +519,7 @@ move/sup_adherent=> -/(_ e) []; first by rewrite subr_gt0.
 move=> z Fz; rewrite /e opprB addrCA subrr addr0 => lt_yz.
 have /sup_upper_bound /(_ _ Fz) := has_sup_floor_set x.
 rewrite -(ler_add2r (-y)) => /ler_lt_trans /(_ lt1_FxBy).
-case/andP: Fy Fz lt_yz=> /RintP[yi -> _]. 
+case/andP: Fy Fz lt_yz=> /RintP[yi -> _].
 case/andP=> /RintP[zi -> _]; rewrite -rmorphB /= ltrz1 ltr_int.
 rewrite ltr_neqAle => /andP[ne_yz le_yz].
 rewrite -[_-_]gez0_abs ?subr_ge0 // ltz_nat ltnS leqn0.
