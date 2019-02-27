@@ -9,3 +9,4 @@ theories/algorand_model.v
 theories/boolp.v
 theories/reals.v
 theories/Rstruct.v
+theories/fmap_ext.v
