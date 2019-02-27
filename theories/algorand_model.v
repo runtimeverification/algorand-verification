@@ -12,6 +12,25 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(** Model Assumptions
+ **
+
+We generally list the assumptions made in this version of the model so far:
+- The set of users (identified by UserId) is finite
+- The set of values (Value) is finite
+- Deadlines are defined only for message delivery delays (local user actions 
+  are instantaneous)
+- Messages are all broadcast messages. Network topologies are abstracted away 
+  (no peer-to-peer channels). A user may broadcast a message, which may reach 
+  all (honest) users at different times (guaranteed to arrive within the given 
+  time bounds in the absence of network partitions). 
+- We abstract over cyptographic and probabilistic computations (we assume 
+  perfect cryptographic schemes, and probabilistic transitions are modeled as 
+  non-deterministic transitions
+- [TODO: Note on credentials]
+**)
+
+
 (* Some proofs about the model use lemmas that
    do not refer to model types, and only show
    properties of library types *)
