@@ -8,6 +8,9 @@ Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Interval.Interval_tactic.
 
+From Algorand
+Require Import Rstruct fmap_ext.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -333,6 +336,9 @@ Variable committee_cred : Credential -> Prop.
 Inductive Signature :=
   | sign : UserId -> Value -> Signature.
 
+Open Scope fmap_scope.
+Open Scope fset_scope.
+
 (* The global state
    Note: I think we should abstract over channels and instead
    collect messages in transit in the global state.
@@ -341,7 +347,7 @@ Record GState :=
   mkGState {
     now     : R;
     network_partition : bool;
-    users   : seq UState ;
+    users   : {fmap UserId -> UState} ;
     msg_in_transit : seq Msg;
   }.
 
@@ -360,7 +366,7 @@ Definition update_now (now' : R) (g : GState) : GState :=
      msg_in_transit := g.(msg_in_transit)
   |}.
 
-Definition update_users (users' : seq UState) (g : GState) : GState :=
+Definition update_users (users' : {fmap UserId -> UState}) (g : GState) : GState :=
   {| now := g.(now);
      network_partition := g.(network_partition);
      users := users';
@@ -515,27 +521,31 @@ Definition g_transition_type := relation GState .
 
 Reserved Notation "x ~~> y" (at level 90).
 
-Definition user_can_advance_timer (increment : posreal) (u : UState) : Prop :=
-  forall (a : MType),
-    match u.(deadline) a with
-    | None => True
-    | Some d => (u.(timer) + pos increment <= d)%R
-    end.
-Arguments user_can_advance_timer increment u /.
+Definition user_can_advance_timer (increment : posreal) : pred UState :=
+  fun u =>
+    all
+      (fun m => if u.(deadline) m is Some d then Rleb (u.(timer) + pos increment) d else true)
+      (enum [finType of MType]).
+
+Definition tick_ok increment pre : bool :=
+  \big[andb/true]_(i <- domf pre.(users)) (if pre.(users).[? i] is Some v then user_can_advance_timer increment v else true).
+
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   update_timer u (u.(timer) + pos increment)%R.
 
-Definition tick_ok increment pre : Prop :=
-  List.Forall (user_can_advance_timer increment) (pre.(users)).
-Definition tick_result increment pre :=
+Definition tick_users increment pre : {fmap UserId -> UState} :=
+  \big[(@catf _ _)/[fmap]]_(i <- domf pre.(users))
+   (if pre.(users).[? i] is Some us then [fmap].[i <- user_advance_timer increment us] else [fmap]).
+
+Definition tick_update increment pre :=
   pre.(update_now (pre.(now) + pos increment)%R)
-     .(update_users (map (user_advance_timer increment) pre.(users))).
+  .(update_users (tick_users increment pre)).
 
 (* [TODO: define the transition relation]
 *)
 Inductive GTransition : g_transition_type :=  (***)
 | tick : forall increment pre, tick_ok increment pre ->
-    pre ~~> tick_result increment pre
+    pre ~~> tick_update increment pre
 where "x ~~> y" := (GTransition x y) : type_scope .
 
 (* We might also think of an initial state S and a schedule of events X
@@ -543,18 +553,16 @@ where "x ~~> y" := (GTransition x y) : type_scope .
    on them
 *)
 
-
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
-Definition user_timers_valid (u : UState) : Prop :=
-  (u.(p_start) <= u.(timer) /\
-  forall (a : MType),
-  match u.(deadline) a with
-  | Some d => u.(timer) <= d
-  | None => True
-  end)%R.
-Arguments user_timers_valid u /.
+Definition user_timers_valid : pred UState :=
+  fun u =>
+    (Rleb u.(p_start) u.(timer) &&
+    all
+      (fun a => if u.(deadline) a is Some d then Rleb u.(timer) d else true)
+      (enum [finType of MType])).
 
+(*
 Lemma tick_preserves_timers : forall pre,
     List.Forall user_timers_valid pre.(users) ->
     forall increment, tick_ok increment pre ->
@@ -567,5 +575,6 @@ Proof.
   destruct u;simpl;clear.
   destruct deadline0;intuition auto using Rle_pos_r;constructor.
 Qed.
+*)
 
 End AlgoModel.
