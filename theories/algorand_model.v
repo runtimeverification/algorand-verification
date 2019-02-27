@@ -18,6 +18,8 @@ Unset Printing Implicit Defensive.
 We generally list the assumptions made in this version of the model so far:
 - The set of users (identified by UserId) is finite
 - The set of values (Value) is finite
+- The system state gives each node its own clock but for now any transitions 
+  that advance clocks will advance all the same amount
 - Deadlines are defined only for message delivery delays (local user actions 
   are instantaneous)
 - Messages are all broadcast messages. Network topologies are abstracted away 
