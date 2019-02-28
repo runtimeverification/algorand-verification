@@ -499,15 +499,15 @@ Inductive UTransition : u_transition_type := (***)
   | propose : forall (pre : UState) B r p,
       propose_ok pre B r p ->
       (None, pre) ~> (propose_result pre, [:: (Proposal, step_val B, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
-(*  | repropose : forall (pre : UState) B v r p,
+  | repropose : forall (pre : UState) B v r p,
       repropose_ok pre B v r p ->
-      pre ~> repropose_result pre
+      (None, pre) ~> (repropose_result pre, [:: (Reproposal, repr_val v pre.(id) p, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
   | no_propose : forall (pre : UState) r p,
       no_propose_ok pre r p ->
-      pre ~> no_propose_result pre *)
+      (None, pre) ~> (no_propose_result pre, [::])
   | svote_new : forall (pre : UState) v r p,
       svote_new_ok pre v r p ->
-      (None, pre) ~> (svote_new_result pre v, [:: (Proposal, val (Some v), r, p, pre.(id))] )
+      (None, pre) ~> (svote_new_result pre v, [:: (Proposal, val (Some v), r, p, pre.(id))])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 (* Note: would be nice to use ssreflect's rel instead of relation
