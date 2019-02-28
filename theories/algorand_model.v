@@ -214,7 +214,7 @@ Record UState :=
     period        : nat;
     step          : Step;
     timer         : R;
-    deadline      : MType -> option R;
+    deadline      : option R;
     p_start       : R;
     rec_msgs      : seq Msg;
     cert_may_exist: bool;
@@ -428,8 +428,7 @@ Definition propose_ok (pre : UState) B r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Certvoting.
 
 (* TODO: v = H(B) *)
@@ -443,8 +442,7 @@ Definition repropose_ok (pre : UState) (B : nat) v r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition repropose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Softvoting.
 
 (* TODO: c >= xi_1 *)
@@ -456,8 +454,7 @@ Definition no_propose_ok (pre : UState) r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition no_propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Softvoting.
 
 (* TODO: softvote_new preconditions *)
@@ -472,8 +469,7 @@ Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
 (* TODO: softvote_new result *)
 Definition svote_new_result (pre : UState) (v : Value) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Softvoting.
 
 (*
@@ -524,9 +520,7 @@ Reserved Notation "x ~~> y" (at level 90).
 
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u =>
-    all
-      (fun m => if u.(deadline) m is Some d then Rleb (u.(timer) + pos increment) d else true)
-      (enum [finType of MType]).
+    if u.(deadline) is Some d then Rleb (u.(timer) + pos increment) d else true.
 
 Definition tick_ok increment pre : bool :=
   \big[andb/true]_(i <- domf pre.(users)) (if pre.(users).[? i] is Some v then user_can_advance_timer increment v else true).
@@ -559,9 +553,7 @@ where "x ~~> y" := (GTransition x y) : type_scope .
 Definition user_timers_valid : pred UState :=
   fun u =>
     (Rleb u.(p_start) u.(timer) &&
-    all
-      (fun a => if u.(deadline) a is Some d then Rleb u.(timer) d else true)
-      (enum [finType of MType])).
+    if u.(deadline) is Some d then Rleb u.(timer) d else true).
 
 (*
 Lemma tick_preserves_timers : forall pre,
