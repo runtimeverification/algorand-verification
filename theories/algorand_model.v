@@ -416,10 +416,10 @@ Definition check_params (u : UState) r p c s : Prop :=
   u.(round) = r /\ u.(period) = p /\ u.(step) = s /\ cred u.(id) r p 1 = c.
 *)
 
-(* TODO: c < xi_1 *)
 (* credentials are now abstract *)
+(* TODO: p = 1 not in Victor's model *)
 Definition propose_ok (pre : UState) B r p : Prop :=
-  valid_round_period pre r p /\ p > 1 /\
+  valid_round_period pre r p /\ p = 1 /\
   valid_step pre Proposing /\
   comm_cred pre r p 1 /\
   pre.(cert_may_exist) /\ 
@@ -433,7 +433,7 @@ Definition propose_result (pre : UState) : UState :=
 
 (* TODO: v = H(B) *)
 Definition repropose_ok (pre : UState) (B : nat) v r p : Prop :=
-  valid_round_period pre r p /\
+  valid_round_period pre r p /\ p > 1 /\
   valid_step pre Proposing /\
   comm_cred pre r p 1 /\
   v \in pre.(prev_certvals).
@@ -458,10 +458,13 @@ Definition no_propose_result (pre : UState) : UState :=
     Softvoting.
 
 (* TODO: softvote_new preconditions *)
+(* TODO: p = 1 not in Victor's model *)
+(* TODO: Victor's model has clock >= 2*lambda *)
 Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\
   valid_step pre Softvoting /\ 
   comm_cred pre r p 2 /\
+  pre.(timer) = (2 * lambda)%R /\
   (* now >= period_start + big_lambda *) 
   ~ pre.(cert_may_exist) .
   (* pre.(proposals) r p has v as its current leader value *)         
@@ -470,7 +473,7 @@ Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
 Definition svote_new_result (pre : UState) (v : Value) : UState :=
   update_step
     (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
-    Softvoting.
+    Certvoting.
 
 (*
 Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
