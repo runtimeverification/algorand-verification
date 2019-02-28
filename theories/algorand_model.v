@@ -528,9 +528,6 @@ Reserved Notation "x ~~> y" (at level 90).
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u => if u.(deadline) is Some d then Rleb (u.(timer) + pos increment) d else true.
 
-Definition tick_ok increment pre : bool :=
-  \big[andb/true]_(i <- domf pre.(users)) (if pre.(users).[? i] is Some v then user_can_advance_timer increment v else true).
-
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   update_timer u (u.(timer) + pos increment)%R.
 
