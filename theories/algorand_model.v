@@ -3,6 +3,12 @@ Require Import all_ssreflect.
 
 From mathcomp.finmap
 Require Import finmap.
+From mathcomp.finmap
+Require Import multiset.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
@@ -72,8 +78,6 @@ Proof.
   apply Rplus_le_compat_l, Rlt_le, cond_pos.
 Qed.
 End UtilLemmas.
-
-
 
 Section AlgoModel.
 
@@ -182,8 +186,15 @@ Record Msg :=
   }.
 *)
 
-(* Not used anymore *)
-Definition MsgPool := {fset Msg} .
+(* Messages are grouped by target.
+   We do not need to remember the sender, everything only
+   depends on which keys signed parts of the message.
+
+   Messages are paired with a delivery deadline.
+   In the absence of a partition, messages must be
+   delivered before the deadline is reached.
+ *)
+Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
 
 (* A proposal/preproposal record is a triple consisting of two
    values along with a boolean indicating with the this is
@@ -214,7 +225,7 @@ Record UState :=
     period        : nat;
     step          : Step;
     timer         : R;
-    deadline      : MType -> option R;
+    deadline      : option R;
     p_start       : R;
     rec_msgs      : seq Msg;
     cert_may_exist: bool;
@@ -250,7 +261,6 @@ Record UState :=
     nextvotes_val  := u.(nextvotes_val);
    |}.
  *)
-
 
 Definition update_step (u : UState) step' : UState :=
   {|
@@ -336,19 +346,13 @@ Variable committee_cred : Credential -> Prop.
 Inductive Signature :=
   | sign : UserId -> Value -> Signature.
 
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
-(* The global state
-   Note: I think we should abstract over channels and instead
-   collect messages in transit in the global state.
-*)
+(* The global state *)
 Record GState :=
   mkGState {
     now     : R;
     network_partition : bool;
-    users   : {fmap UserId -> UState} ;
-    msg_in_transit : seq Msg;
+    users   : {fmap UserId -> UState};
+    msg_in_transit : MsgPool;
   }.
 
 (*
@@ -428,8 +432,7 @@ Definition propose_ok (pre : UState) B r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) None)
     Certvoting.
 
 (* TODO: v = H(B) *)
@@ -443,8 +446,7 @@ Definition repropose_ok (pre : UState) (B : nat) v r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition repropose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) None)
     Softvoting.
 
 (* TODO: c >= xi_1 *)
@@ -456,8 +458,7 @@ Definition no_propose_ok (pre : UState) r p : Prop :=
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition no_propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) None)
     Softvoting.
 
 (* TODO: softvote_new preconditions *)
@@ -472,8 +473,7 @@ Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
 (* TODO: softvote_new result *)
 Definition svote_new_result (pre : UState) (v : Value) : UState :=
   update_step
-    (update_deadline (update_timer pre 0)
-                     (fun b => if b == Proposal then None else pre.(deadline) b))
+    (update_deadline (update_timer pre 0) None)
     Softvoting.
 
 (*
@@ -523,16 +523,20 @@ Definition g_transition_type := relation GState .
 Reserved Notation "x ~~> y" (at level 90).
 
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
-  fun u =>
-    all
-      (fun m => if u.(deadline) m is Some d then Rleb (u.(timer) + pos increment) d else true)
-      (enum [finType of MType]).
-
-Definition tick_ok increment pre : bool :=
-  \big[andb/true]_(i <- domf pre.(users)) (if pre.(users).[? i] is Some v then user_can_advance_timer increment v else true).
-
+  fun u => if u.(deadline) is Some d then Rleb (u.(timer) + pos increment) d else true.
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   update_timer u (u.(timer) + pos increment)%R.
+
+Definition tick_ok_users increment (pre:GState) : bool :=
+  \big[andb/true]_(uid <- domf pre.(users))
+   (* we can't use codomf without making UState a choiceType *)
+   (if pre.(users).[? uid] is Some ustate then user_can_advance_timer increment ustate else true).
+Definition tick_ok_msgs (increment:posreal) (pre:GState) : bool :=
+  let target_time := (pre.(now) + pos increment)%R in
+  \big[andb/true]_(user_msgs <- codomf pre.(msg_in_transit))
+    \big[andb/true]_(m <- enum_mset user_msgs) Rleb target_time (fst m).
+Definition tick_ok (increment:posreal) (pre:GState) : bool :=
+  tick_ok_users increment pre && tick_ok_msgs increment pre.
 
 Definition tick_users increment pre : {fmap UserId -> UState} :=
   \big[(@catf _ _)/[fmap]]_(i <- domf pre.(users))
@@ -559,9 +563,7 @@ where "x ~~> y" := (GTransition x y) : type_scope .
 Definition user_timers_valid : pred UState :=
   fun u =>
     (Rleb u.(p_start) u.(timer) &&
-    all
-      (fun a => if u.(deadline) a is Some d then Rleb u.(timer) d else true)
-      (enum [finType of MType])).
+     if u.(deadline) is Some d then Rleb u.(timer) d else true).
 
 (*
 Lemma tick_preserves_timers : forall pre,
