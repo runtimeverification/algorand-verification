@@ -465,7 +465,7 @@ Definition no_propose_result (pre : UState) : UState :=
 (* TODO: p = 1 not in Victor's model *)
 (* TODO: Victor's model has clock >= 2*lambda *)
 Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
-  valid_round_period pre r p /\
+  valid_round_period pre r p /\ p = 1 /\
   valid_step pre Softvoting /\
   comm_cred pre r p 2 /\
   pre.(timer) = (2 * lambda)%R /\
@@ -474,10 +474,45 @@ Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
   (* pre.(proposals) r p has v as its current leader value *)
 
 (* TODO: softvote_new result *)
-Definition svote_new_result (pre : UState) (v : Value) : UState :=
+Definition svote_new_result (pre : UState) : UState :=
   update_step
     (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Certvoting.
+
+(* TODO: softvote_new preconditions *)
+(* TODO: p = 1 not in Victor's model *)
+(* TODO: Victor's model has clock >= 2*lambda *)
+Definition certvote_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\ p = 1 /\
+  valid_step pre Certvoting /\
+  comm_cred pre r p 3 /\
+  (pre.(timer) > 2 * lambda)%R /\
+  (pre.(timer) < lambda + big_lambda)%R /\
+  ~ pre.(cert_may_exist) .
+
+Definition certvote_result (pre : UState) : UState :=
+  update_step
+    (update_deadline pre None)
+    Nextvoting.
+
+(* TODO: softvote_new preconditions *)
+(* TODO: p = 1 not in Victor's model *)
+(* TODO: Victor's model has clock >= 2*lambda *)
+Definition nextvote_open_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\ p = 1 /\
+  valid_step pre Nextvoting /\
+  comm_cred pre r p 4 /\
+  pre.(certvals) r p = [::] /\
+  ~ pre.(cert_may_exist) .
+
+(* TODO: softvote_new preconditions *)
+(* TODO: p = 1 not in Victor's model *)
+(* TODO: Victor's model has clock >= 2*lambda *)
+Definition nextvote_val_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\ p = 1 /\
+  valid_step pre Nextvoting /\
+  comm_cred pre r p 5 /\
+  v \in pre.(certvals) r p .
 
 (*
 Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
@@ -499,6 +534,7 @@ Definition u_transition_type := (option Msg * UState) -> (UState * seq Msg) -> P
 Reserved Notation "x ~> y" (at level 70).
 
 Inductive UTransition : u_transition_type := (***)
+  (* Step 1: Block Proposal *)
   | propose : forall (pre : UState) B r p,
       propose_ok pre B r p ->
       (None, pre) ~> (propose_result pre, [:: (Proposal, step_val B, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
@@ -508,9 +544,22 @@ Inductive UTransition : u_transition_type := (***)
   | no_propose : forall (pre : UState) r p,
       no_propose_ok pre r p ->
       (None, pre) ~> (no_propose_result pre, [::])
+  (* Step 2: Filtering Step *)
   | svote_new : forall (pre : UState) v r p,
       svote_new_ok pre v r p ->
-      (None, pre) ~> (svote_new_result pre v, [:: (Proposal, val (Some v), r, p, pre.(id))])
+      (None, pre) ~> (svote_new_result pre, [:: (Proposal, val (Some v), r, p, pre.(id))])
+  (* Step 3: Certifying Step *)
+  | certvote : forall (pre : UState) v r p,
+      certvote_ok pre v r p ->
+      (None, pre) ~> (certvote_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
+  (* Step 4: First Finishing Step - i has not cert-voted some v *)
+  | nextvote_open : forall (pre : UState) v r p,
+      nextvote_open_ok pre v r p ->
+      (None, pre) ~> (pre, [:: (Nextvote_Open, next_val v 5, r, p, pre.(id))])
+  (* Step 4: First Finishing Step - i has cert-voted some v *)
+  | nextvote_val : forall (pre : UState) v r p,
+      nextvote_val_ok pre v r p ->
+      (None, pre) ~> (pre, [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 (* Note: would be nice to use ssreflect's rel instead of relation
