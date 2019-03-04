@@ -6,6 +6,9 @@ Require Import finmap.
 From mathcomp.finmap
 Require Import multiset.
 
+From mathcomp.finmap Require Import order.
+Import Order.Theory Order.Syntax Order.Def.
+
 Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
@@ -91,8 +94,11 @@ Section AlgoModel.
 (* We assume a finite set of users *)
 Variable UserId : finType.
 
-(* And a finite set of values *)
+(* And a finite set of values (blocks and block hashes) *)
 Variable Value : finType .
+
+(* An abstract representation of coomputing block hashes *)
+(* Variable hash : Value -> Value . *)
 
 (* An enumerated data type of all possible kinds of messages
 *)
@@ -328,23 +334,116 @@ Definition update_deadline (u : UState) deadline' : UState :=
     nextvotes_val  := u.(nextvotes_val);
    |}.
 
-(* The credential of a User at a round-period-step triple
-   (we abstract away the random value produced by an Oracle)
-*)
+Definition set_cert_may_exist (u : UState) : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := true;
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+
+Definition update_prev_certvals (u : UState) prev_certvals' : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := u.(cert_may_exist);
+    prev_certvals  := prev_certvals';
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := u.(certvals);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+
+Definition advance_period (u : UState) : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period) + 1;
+    step           := Proposing;
+    timer          := 0%R;
+    deadline       := Some 0%R;
+    p_start        := u.(p_start); (* not maintained so far *)
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := false;
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := (fun r p => [::]);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+
+(* The credential of a User at a round-period-step triple *)
+(* Note: We abstract away the random value produced by an Oracle *)
+(* and the fact that credentials are interpreted as integer *)
+(* values. Instead, we model the type of credentials as an *)
+(* abstract totally ordered type. *)
+
+Variable credType : orderType tt. 
+
+Variable credential : UserId -> nat -> nat -> nat -> credType.
+
+(* quick tests *)
+Variable u : UserId.
+Definition c1 := credential u 1 1 1.
+Definition c2 := credential u 1 1 2.
+Check (c1 < c2)%O.
+
+(*
 Inductive Credential :=
   | cred : UserId -> nat -> nat -> nat -> Credential.
+*)
 
 (* A proposition for whether a given credential qualifies its
    owner to be a committee member *)
 (* Note: This abstract away how credential values are
    interpreted (which is a piece of detail that may not be
    relevant to the model at this stage) *)
-Variable committee_cred : Credential -> Prop.
+Variable committee_cred : credType -> Prop.
 
-(* Constructor of values signed by a user
-*)
-Inductive Signature :=
-  | sign : UserId -> Value -> Signature.
+Definition comm_cred_step (u : UState) r p k : Prop :=
+  committee_cred (credential u.(id) r p k) .
+
+(* Similarly, a proposition for whether a given credential qualifies its
+   owner to be a potential leader *)
+Variable leader_cred : credType -> Prop. 
+
+Definition leader_cred_step (u : UState) r p k : Prop :=
+  leader_cred (credential u.(id) r p k) .
+
+(* The basic requirement that a potential leader for a particular round-period-step
+   must by defintion be a committee member as well for that round-period-step *)
+Hypothesis leader_is_comm_member : 
+  forall cr : credType, leader_cred cr -> committee_cred cr .
+
+
 
 (* The global state *)
 Record GState :=
@@ -398,12 +497,18 @@ Variable tau_v : nat.
 
 (* upper bound on the credential to be part of the committee for step k *)
 (* this is no longer needed!! *)
-Variable chi   : nat -> nat.
+(* Variable chi   : nat -> nat. *)
 
 (* User-state-level trnasitions *)
 
-(* TODO: what does valid mean? *)
-Definition valid (B : nat) : Prop := True.
+(* valid is an abstract proposition on values that tells us whether a value
+   is valid *)
+Variable valid : Value -> Prop.
+
+(* correct_hash is an abstract proposition on values that tells us whether a 
+   given hash value is indeed the hash of the given block value *)
+Variable correct_hash : Value -> Value -> Prop.
+
 
 Definition valid_round_period (u : UState) r p : Prop :=
   u.(round) = r /\ u.(period) = p .
@@ -411,35 +516,31 @@ Definition valid_round_period (u : UState) r p : Prop :=
 Definition valid_step (u : UState) s : Prop :=
   u.(step) = s .
 
-Definition comm_cred (u : UState) r p k : Prop :=
-  committee_cred (cred u.(id) r p k) .
-
 (* this has been broken down into the smaller propositions above *)
 (*
 Definition check_params (u : UState) r p c s : Prop :=
   u.(round) = r /\ u.(period) = p /\ u.(step) = s /\ cred u.(id) r p 1 = c.
 *)
 
-(* credentials are now abstract *)
-(* TODO: p = 1 not in Victor's model *)
+(* TODO: Revisit to distinguish p = 1 cases -- not in Victor's model *)
 Definition propose_ok (pre : UState) B r p : Prop :=
   valid_round_period pre r p /\ p = 1 /\
   valid_step pre Proposing /\
-  comm_cred pre r p 1 /\
-  pre.(cert_may_exist) /\
-  valid B.
+  leader_cred_step pre r p 1 /\
+  pre.(cert_may_exist) /\ 
+  pre.(timer) = 0%R /\ valid B.
 
-(* TODO: update deadline with softvote -> 2*lambda + delta *)
+(* Update step and deadline  *)
 Definition propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
-    Certvoting.
+    (update_deadline pre (Some (2 * lambda)%R))
+    Softvoting.
 
 (* TODO: v = H(B) *)
-Definition repropose_ok (pre : UState) (B : nat) v r p : Prop :=
+Definition repropose_ok (pre : UState) v r p : Prop :=
   valid_round_period pre r p /\ p > 1 /\
   valid_step pre Proposing /\
-  comm_cred pre r p 1 /\
+  comm_cred_step pre r p 1 /\
   v \in pre.(prev_certvals).
 
 (* TODO: broadcasting? *)
@@ -453,7 +554,7 @@ Definition repropose_result (pre : UState) : UState :=
 Definition no_propose_ok (pre : UState) r p : Prop :=
   valid_round_period pre r p /\
   valid_step pre Proposing /\
-  comm_cred pre r p 1.
+  comm_cred_step pre r p 1.
 
 (* TODO: update deadline with softvote -> 2*lambda + delta *)
 Definition no_propose_result (pre : UState) : UState :=
@@ -461,72 +562,95 @@ Definition no_propose_result (pre : UState) : UState :=
     (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
     Softvoting.
 
-(* TODO: softvote_new preconditions *)
-(* TODO: p = 1 not in Victor's model *)
+(* TODO: softvote_new one more precondition as shown below *)
 (* TODO: Victor's model has clock >= 2*lambda *)
-Definition svote_new_ok (pre : UState) (v : Value) r p : Prop :=
-  valid_round_period pre r p /\ p = 1 /\
+Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\
   valid_step pre Softvoting /\
-  comm_cred pre r p 2 /\
+  comm_cred_step pre r p 2 /\
   pre.(timer) = (2 * lambda)%R /\
-  (* now >= period_start + big_lambda *) 
   ~ pre.(cert_may_exist) .
   (* pre.(proposals) r p has v as its current leader value *)
 
 (* TODO: softvote_new result *)
-Definition svote_new_result (pre : UState) : UState :=
+Definition softvote_new_result (pre : UState) : UState :=
   update_step
-    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
+    (update_deadline pre (Some (lambda + big_lambda)%R))
     Certvoting.
 
-(* TODO: softvote_new preconditions *)
-(* TODO: p = 1 not in Victor's model *)
-(* TODO: Victor's model has clock >= 2*lambda *)
-Definition certvote_ok (pre : UState) (v : Value) r p : Prop :=
-  valid_round_period pre r p /\ p = 1 /\
-  valid_step pre Certvoting /\
-  comm_cred pre r p 3 /\
-  (pre.(timer) > 2 * lambda)%R /\
-  (pre.(timer) < lambda + big_lambda)%R /\
-  ~ pre.(cert_may_exist) .
+Definition matchValue (x : Vote) (v : Value) : bool :=
+  let: (u', v') := x in if v == v' then true else false .
 
+(* Certvoting step preconditions [successful certvoting case] *)
+(* Corresponds to transitions cert_softvotes and certvote in Victor's model *)
+Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
+  valid_round_period pre r p /\  
+  valid_step pre Certvoting /\
+  comm_cred_step pre r p 3 /\
+  (pre.(timer) > 2 * lambda)%R /\ (pre.(timer) < lambda + big_lambda)%R /\
+  ~ pre.(cert_may_exist) /\
+  valid b /\ correct_hash v b /\
+  b \in pre.(blocks) r p /\
+  size [seq x <- pre.(softvotes) r p | matchValue x v] > tau_s .
+
+(* Certvoting step preconditions [no certvoting case] *)
+(* Corresponds to transitions no_certvote_timeout and no_certvote_nocred in Victor's model *)
+Definition no_certvote_ok (pre : UState) r p : Prop :=
+  valid_round_period pre r p /\ valid_step pre Certvoting /\
+  (~ comm_cred_step pre r p 1 \/  
+    ( (pre.(timer) >= lambda + big_lambda)%R /\
+      forall v, size [seq x <- pre.(softvotes) r p | matchValue x v] <= tau_s ) 
+  ) .
+
+(* Certvoting step's resulting user state (for both cases) *)
 Definition certvote_result (pre : UState) : UState :=
   update_step
-    (update_deadline pre None)
+    (update_deadline pre (Some (lambda + big_lambda)%R)) (* the deadline is already this value *)
     Nextvoting.
 
-(* TODO: softvote_new preconditions *)
+
 (* TODO: p = 1 not in Victor's model *)
-(* TODO: Victor's model has clock >= 2*lambda *)
 Definition nextvote_open_ok (pre : UState) (v : Value) r p : Prop :=
-  valid_round_period pre r p /\ p = 1 /\
+  valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
-  comm_cred pre r p 4 /\
-  pre.(certvals) r p = [::] /\
+  comm_cred_step pre r p 4 /\
+  pre.(timer) = (lambda + big_lambda)%R /\
+  forall v, size [seq x <- pre.(softvotes) r p | matchValue x v] <= tau_s /\
+  (* pre.(certvals) r p = [::] /\ *) (* or we can maintain certvals and do this *)
   ~ pre.(cert_may_exist) .
 
-(* TODO: softvote_new preconditions *)
 (* TODO: p = 1 not in Victor's model *)
-(* TODO: Victor's model has clock >= 2*lambda *)
 Definition nextvote_val_ok (pre : UState) (v : Value) r p : Prop :=
-  valid_round_period pre r p /\ p = 1 /\
+  valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
-  comm_cred pre r p 5 /\
-  v \in pre.(certvals) r p .
+  comm_cred_step pre r p 5 /\
+  pre.(timer) = (lambda + big_lambda)%R /\
+  size [seq x <- pre.(softvotes) r p | matchValue x v] > tau_s
+  (* v \in pre.(certvals) r p *) .
 
-(*
-Definition tr_fun (msg : Msg) (pre : UState) B r p : seq Msg * UState :=
-  match msg.1.1.1.1 with
-  | Proposal =>
-    match propose_ok pre B r p with
-    | True =>
-      let: post := propose_result pre in
-      let: bmsg := (Block, step_val B, r, p, pre.(id)) in
-      ([:: msg; bmsg], post)
-    end
-  | _ => ([:: msg], pre)
-  end.
-*)
+(* TODO: p = 1 not in Victor's model *)
+Definition adv_period_open_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\ (* p = 1 /\ *)
+  valid_step pre Nextvoting /\
+  (* pre.(timer) = (lambda + big_lambda)%R /\ *)
+  size (pre.(nextvotes_open) r p 4) > tau_b . (* TODO: using 4 arbitrarily here *)
+
+Definition adv_period_open_result (pre : UState) : UState := advance_period pre .  
+
+
+(* TODO: p = 1 not in Victor's model *)
+Definition adv_period_val_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\ (* p = 1 /\ *)
+  valid_step pre Nextvoting /\
+  (* pre.(timer) = (lambda + big_lambda)%R /\ *)
+  size [seq x <- (pre.(nextvotes_val) r p 4) | matchValue x v]  > tau_v . (* TODO: using 4 arbitrarily here *)
+
+Definition adv_period_val_result (pre : UState) r p : UState := 
+  set_cert_may_exist (advance_period (update_prev_certvals pre (pre.(certvals) r p))).   
+
+(* Note: what about steps > 5 in the protocol description? how are they captured in the automaton model? *)
+(* Note: how is the distinction between period 1 and periods > 1 captured in the automaton model? *)
+
 
 (* [TODO: define user-state-level transitions ] *)
 Definition u_transition_type := (option Msg * UState) -> (UState * seq Msg) -> Prop.
@@ -537,36 +661,50 @@ Inductive UTransition : u_transition_type := (***)
   (* Step 1: Block Proposal *)
   | propose : forall (pre : UState) B r p,
       propose_ok pre B r p ->
-      (None, pre) ~> (propose_result pre, [:: (Proposal, step_val B, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
-  | repropose : forall (pre : UState) B v r p,
-      repropose_ok pre B v r p ->
-      (None, pre) ~> (repropose_result pre, [:: (Reproposal, repr_val v pre.(id) p, r, p, pre.(id)) ; (Block, step_val B, r, p, pre.(id))])
+      (None, pre) ~> (propose_result pre, 
+          [:: (Proposal, val (Some B), r, p, pre.(id)) ; 
+              (Block, val (Some B), r, p, pre.(id))])  
+          (* the first message should have the hash of the block B *) 
+  | repropose : forall (pre : UState) v r p,
+      repropose_ok pre v r p ->
+      (None, pre) ~> (repropose_result pre, 
+          [:: (Reproposal, repr_val v pre.(id) p, r, p, pre.(id)) ; 
+              (Block, step_val 2, r, p, pre.(id))])
   | no_propose : forall (pre : UState) r p,
       no_propose_ok pre r p ->
       (None, pre) ~> (no_propose_result pre, [::])
   (* Step 2: Filtering Step *)
-  | svote_new : forall (pre : UState) v r p,
-      svote_new_ok pre v r p ->
-      (None, pre) ~> (svote_new_result pre, [:: (Proposal, val (Some v), r, p, pre.(id))])
-  (* Step 3: Certifying Step *)
-  | certvote : forall (pre : UState) v r p,
-      certvote_ok pre v r p ->
-      (None, pre) ~> (certvote_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
+  | softvote_new : forall (pre : UState) v r p,
+      softvote_new_ok pre v r p ->
+      (None, pre) ~> (softvote_new_result pre, 
+          [:: (Softvote, val (Some v), r, p, pre.(id))]) (* v needs to come from pre *)
+  (* Step 3: Certifying Step [success] *)
+  | certvote : forall (pre : UState) v b r p,
+      certvote_ok pre v b r p ->
+      (None, pre) ~> (certvote_result pre, 
+          [:: (Certvote, val (Some v), r, p, pre.(id))])
+  (* Step 3: Certifying Step [failure] *)
+  | no_certvote : forall (pre : UState) r p,
+      no_certvote_ok pre r p ->
+      (None, pre) ~> (certvote_result pre, [::])
   (* Step 4: First Finishing Step - i has not cert-voted some v *)
   | nextvote_open : forall (pre : UState) v r p,
       nextvote_open_ok pre v r p ->
-      (None, pre) ~> (pre, [:: (Nextvote_Open, next_val v 5, r, p, pre.(id))])
+      (None, pre) ~> (pre, [:: (Nextvote_Open, next_val v 5, r, p, pre.(id))]) (* use bottom instead? *)
   (* Step 4: First Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall (pre : UState) v r p,
       nextvote_val_ok pre v r p ->
       (None, pre) ~> (pre, [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
+  (* Advance period (based on too many bottom-value votes) *)
+  | adv_period_open : forall (pre : UState) v r p,
+      adv_period_open_ok pre v r p ->
+      (None, pre) ~> (adv_period_open_result pre, [::]) 
+  (* Advance period (based on enough non-bottom-value votes) *)
+  | adv_period_val : forall (pre : UState) v r p,
+      adv_period_val_ok pre v r p ->
+      (None, pre) ~> (adv_period_val_result pre r p, [::])
 where "x ~> y" := (UTransition x y) : type_scope .
 
-(* Note: would be nice to use ssreflect's rel instead of relation
-   so that connect may be directly used to define the reflexive
-   transivite closure *)
-(* Definition UTransition_closed pre post :=
- connect UTransition pre post.*)
 
 
 (* Global transition relation type *)
