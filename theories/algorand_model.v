@@ -44,6 +44,25 @@ We generally list the assumptions made in this version of the model so far:
 - [TODO: Note on credentials]
 **)
 
+(* Union two fmaps, using a combining function when both have a value for a key *)
+Definition catf_with {V : Type} (f : V -> V -> V) {K:choiceType} : {fmap K -> V} -> {fmap K -> V} -> {fmap K -> V}.
+  refine (fun m1 m2 => [fmap x : (domf m1 `|` domf m2) => _]).
+  (*  SearchAbout fnd. *)
+  change (if true then V else unit).
+  replace true with (m1.[? val x] || m2.[?val x]).
+  Focus 2.
+  pose proof (valP x).
+  rewrite in_fsetU in H.
+  rewrite fndSome; rewrite fndSome.
+  assumption.
+  refine(
+                match m1.[? val x] as r1, m2.[? val x] as r2 return if r1 || r2 then V else unit with
+                | Some v1, Some v2 => f v1 v2
+                | Some v1, None => v1
+                | None, Some v2 => v2
+                | None, None => tt
+                end).
+Defined.
 
 (* Some proofs about the model use lemmas that
    do not refer to model types, and only show
@@ -476,6 +495,13 @@ Definition update_users (users' : {fmap UserId -> UState}) (g : GState) : GState
      msg_in_transit := g.(msg_in_transit)
   |}.
 
+Definition update_msgs_in_transit (msgs' : MsgPool) (g : GState) : GState :=
+  {| now := g.(now);
+     network_partition := g.(network_partition);
+     users := g.(users);
+     msg_in_transit := msgs'
+  |}.
+
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
 
@@ -753,11 +779,48 @@ Definition tick_update increment pre :=
   pre.(update_now (pre.(now) + pos increment)%R)
   .(update_users (tick_users increment pre)).
 
+Definition send_broadcast (targets:{fset UserId}) (deadline : R)
+           (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
+  catf_with msetU prev_msgs [fmap x : targets => [mset (deadline, msg)]].
+
+Definition send_broadcasts (targets:{fset UserId}) (deadline : R)
+           (prev_msgs:MsgPool) (msgs: seq Msg) : MsgPool :=
+  foldl (send_broadcast targets deadline) prev_msgs msgs.
+
+(* Computes the global state after a message delivery,
+   given the result of the user transition *)
+Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transit)) delivered ustate_post (sent: seq Msg) : GState :=
+  let users' := pre.(users).[uid <- ustate_post] in
+  let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
+  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
+                     pre.(msg_in_transit).[uid <- user_msgs'] sent in
+  pre.(update_users users').(update_msgs_in_transit msgs').
+Arguments delivery_result : clear implicits.
+
+Definition timeout_result pre uid ustate_post (sent: seq Msg) : GState :=
+  let users' := pre.(users).[uid <- ustate_post] in
+  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
+                               pre.(msg_in_transit) sent in
+  pre.(update_users users').(update_msgs_in_transit msgs').
+
 (* [TODO: define the transition relation]
 *)
 Inductive GTransition : g_transition_type :=  (***)
 | tick : forall increment pre, tick_ok increment pre ->
     pre ~~> tick_update increment pre
+| deliver_msg : forall pre uid (key_msg:uid \in pre.(msg_in_transit))
+                       pending,
+    pending \in pre.(msg_in_transit).[key_msg] ->
+    forall (key_ustate:uid \in pre.(users)) ustate_post sent,
+      let ustate_pre := pre.(users).[key_ustate] in
+      UTransition (Some (snd pending),ustate_pre) (ustate_post,sent) ->
+      pre ~~> delivery_result pre uid key_msg pending ustate_post sent
+| timeout : forall pre uid (H:uid \in pre.(users)),
+    let ustate_pre := pre.(users).[H] in
+    ustate_pre.(deadline) = Some (ustate_pre.(timer)) ->
+    forall ustate_post sent,
+      UTransition (None,ustate_pre) (ustate_post,sent) ->
+      pre ~~> timeout_result pre uid ustate_post sent
 where "x ~~> y" := (GTransition x y) : type_scope .
 
 (* We might also think of an initial state S and a schedule of events X
