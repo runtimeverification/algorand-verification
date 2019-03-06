@@ -516,68 +516,85 @@ Definition valid_round_period (u : UState) r p : Prop :=
 Definition valid_step (u : UState) s : Prop :=
   u.(step) = s .
 
-(* this has been broken down into the smaller propositions above *)
-(*
-Definition check_params (u : UState) r p c s : Prop :=
-  u.(round) = r /\ u.(period) = p /\ u.(step) = s /\ cred u.(id) r p 1 = c.
-*)
+(** Step 1: Proposing propositions and user state update **)
 
-(* TODO: Revisit to distinguish p = 1 cases -- not in Victor's model *)
-Definition propose_ok (pre : UState) B r p : Prop :=
-  valid_round_period pre r p /\ p = 1 /\
+(* The proposal step preconditions *)
+(* Note that this covers both: (a) the case when p = 1, and (b) 
+   the case when p > 1 with the previous period voting for bottom. 
+   Just as in Victor's model, the fact that the last period's winning 
+   vote was for a value is captured by the field cert_may_exist *)
+Definition propose_ok (pre : UState) v r p : Prop :=
+  pre.(timer) = 0%R /\ 
+  valid_round_period pre r p /\ 
   valid_step pre Proposing /\
   leader_cred_step pre r p 1 /\
-  pre.(cert_may_exist) /\ 
-  pre.(timer) = 0%R /\ valid B.
+  ~ pre.(cert_may_exist) /\ 
+  valid v.
 
-(* Update step and deadline  *)
+(* The reproposal step preconditions *)
+(* Note that this is the proposal step when p > 1 and the previous-
+   period's winning vote was for a value v *)
+(* Note also that we do not distinguish values from their hashes (for now),
+   and so the check that v = hash(B) is not used *)
+Definition repropose_ok (pre : UState) v r p : Prop :=
+  pre.(timer) = 0%R /\ 
+  valid_round_period pre r p /\ p > 1 /\
+  valid_step pre Proposing /\
+  leader_cred_step pre r p 1 /\
+  v \in pre.(prev_certvals).
+
+(* The no-propose step preconditions *)
+(* Note that this applies regardless of whether p = 1 *)
+Definition no_propose_ok (pre : UState) r p : Prop :=
+  pre.(timer) = 0%R /\ 
+  valid_round_period pre r p /\
+  valid_step pre Proposing /\
+  ~ leader_cred_step pre r p 1.
+
+(* The proposing step (propose, repropose and nopropose) post-state *)
+(* Move on to Softvoting and set the new deadline to 2*lambda *)
 Definition propose_result (pre : UState) : UState :=
   update_step
     (update_deadline pre (Some (2 * lambda)%R))
     Softvoting.
 
-(* TODO: v = H(B) *)
-Definition repropose_ok (pre : UState) v r p : Prop :=
-  valid_round_period pre r p /\ p > 1 /\
-  valid_step pre Proposing /\
-  comm_cred_step pre r p 1 /\
-  v \in pre.(prev_certvals).
+(** Step 2: Softvoting propositions and user state update **)
 
-(* TODO: broadcasting? *)
-(* TODO: update deadline with softvote -> 2*lambda + delta *)
-Definition repropose_result (pre : UState) : UState :=
-  update_step
-    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
-    Softvoting.
-
-(* TODO: c >= xi_1 *)
-Definition no_propose_ok (pre : UState) r p : Prop :=
-  valid_round_period pre r p /\
-  valid_step pre Proposing /\
-  comm_cred_step pre r p 1.
-
-(* TODO: update deadline with softvote -> 2*lambda + delta *)
-Definition no_propose_result (pre : UState) : UState :=
-  update_step
-    (update_deadline (update_timer pre 0) (Some (2 * lambda)%R))
-    Softvoting.
-
-(* TODO: softvote_new one more precondition as shown below *)
-(* TODO: Victor's model has clock >= 2*lambda *)
+(* The Softvoting-a-proposal step preconditions *)
+(* Note that this covers both: (a) the case when p = 1, and (b) 
+   the case when p > 1 with the previous period voting for bottom. *)
+(* Notes: - Victor's model has the constraint clock >= 2*lambda 
+          - The Algorand2 description includes an additional constraint
+            about whether the value is a p1 value or not *)
 Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
+  pre.(timer) = (2 * lambda)%R /\
   valid_round_period pre r p /\
   valid_step pre Softvoting /\
   comm_cred_step pre r p 2 /\
-  pre.(timer) = (2 * lambda)%R /\
-  ~ pre.(cert_may_exist) .
-  (* pre.(proposals) r p has v as its current leader value *)
+  ~ pre.(cert_may_exist) /\ 
+  ~ pre.(proposals) r p = [::] . (* so a leader can be identified *)
 
-(* TODO: softvote_new result *)
-Definition softvote_new_result (pre : UState) : UState :=
+(* TODO: The Softvoting-a-reproposal step preconditions *)
+(* Note that this is the proposal step when p > 1 and the previous-
+   period's winning vote was for a value v *)
+(* Notes: [same notes as for the case above] *)
+
+(* TODO: The Softvoting-conflict step preconditions *)
+(* Need to look further into what this transition does *)
+
+(* TODO: The Softvoting-timeout step preconditions *)
+(* If the (honest) user timeouts this step, it must have been the case 
+   the user was not a committee member*)
+
+(* The softvoting step post-state *)
+Definition softvote_result (pre : UState) : UState :=
   update_step
     (update_deadline pre (Some (lambda + big_lambda)%R))
     Certvoting.
 
+(** Step 3: Certvoting propositions and user state update **)
+
+(* Does the vote's value match the given value? *)
 Definition matchValue (x : Vote) (v : Value) : bool :=
   let: (u', v') := x in if v == v' then true else false .
 
@@ -608,8 +625,9 @@ Definition certvote_result (pre : UState) : UState :=
     (update_deadline pre (Some (lambda + big_lambda)%R)) (* the deadline is already this value *)
     Nextvoting.
 
+(** Step 4: Nextvoting propositions and user state update **)
 
-(* TODO: p = 1 not in Victor's model *)
+(* TODO:  to be revisited *)
 Definition nextvote_open_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
@@ -619,7 +637,7 @@ Definition nextvote_open_ok (pre : UState) (v : Value) r p : Prop :=
   (* pre.(certvals) r p = [::] /\ *) (* or we can maintain certvals and do this *)
   ~ pre.(cert_may_exist) .
 
-(* TODO: p = 1 not in Victor's model *)
+(* TODO: to be revisited *)
 Definition nextvote_val_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
@@ -628,7 +646,7 @@ Definition nextvote_val_ok (pre : UState) (v : Value) r p : Prop :=
   size [seq x <- pre.(softvotes) r p | matchValue x v] > tau_s
   (* v \in pre.(certvals) r p *) .
 
-(* TODO: p = 1 not in Victor's model *)
+(* TODO: to be revisited *)
 Definition adv_period_open_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
@@ -638,7 +656,7 @@ Definition adv_period_open_ok (pre : UState) (v : Value) r p : Prop :=
 Definition adv_period_open_result (pre : UState) : UState := advance_period pre .  
 
 
-(* TODO: p = 1 not in Victor's model *)
+(* TODO: to be revisited *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p : Prop :=
   valid_round_period pre r p /\ (* p = 1 /\ *)
   valid_step pre Nextvoting /\
@@ -648,9 +666,7 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p : Prop :=
 Definition adv_period_val_result (pre : UState) r p : UState := 
   set_cert_may_exist (advance_period (update_prev_certvals pre (pre.(certvals) r p))).   
 
-(* Note: what about steps > 5 in the protocol description? how are they captured in the automaton model? *)
-(* Note: how is the distinction between period 1 and periods > 1 captured in the automaton model? *)
-
+(* TODO: Note: need to capture repetitions of steps 4 and 5 in the protocol description *)
 
 (* [TODO: define user-state-level transitions ] *)
 Definition u_transition_type := (option Msg * UState) -> (UState * seq Msg) -> Prop.
@@ -667,16 +683,16 @@ Inductive UTransition : u_transition_type := (***)
           (* the first message should have the hash of the block B *) 
   | repropose : forall (pre : UState) v r p,
       repropose_ok pre v r p ->
-      (None, pre) ~> (repropose_result pre, 
+      (None, pre) ~> (propose_result pre, 
           [:: (Reproposal, repr_val v pre.(id) p, r, p, pre.(id)) ; 
               (Block, step_val 2, r, p, pre.(id))])
   | no_propose : forall (pre : UState) r p,
       no_propose_ok pre r p ->
-      (None, pre) ~> (no_propose_result pre, [::])
+      (None, pre) ~> (propose_result pre, [::])
   (* Step 2: Filtering Step *)
   | softvote_new : forall (pre : UState) v r p,
       softvote_new_ok pre v r p ->
-      (None, pre) ~> (softvote_new_result pre, 
+      (None, pre) ~> (softvote_result pre, 
           [:: (Softvote, val (Some v), r, p, pre.(id))]) (* v needs to come from pre *)
   (* Step 3: Certifying Step [success] *)
   | certvote : forall (pre : UState) v b r p,
