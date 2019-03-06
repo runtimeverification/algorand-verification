@@ -767,27 +767,44 @@ Definition send_broadcast (targets:{fset UserId}) (deadline : R)
            (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
   catf_with msetU prev_msgs [fmap x : targets => [mset (deadline, msg)]].
 
+Definition send_broadcasts (targets:{fset UserId}) (deadline : R)
+           (prev_msgs:MsgPool) (msgs: seq Msg) : MsgPool :=
+  foldl (send_broadcast targets deadline) prev_msgs msgs.
+
 (* Computes the global state after a message delivery,
    given the result of the user transition *)
 Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transit)) delivered ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
-  let msgs' := foldl (send_broadcast (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R)
+  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
                      pre.(msg_in_transit).[uid <- user_msgs'] sent in
   pre.(update_users users').(update_msgs_in_transit msgs').
 Arguments delivery_result : clear implicits.
+
+Definition timeout_result pre uid ustate_post (sent: seq Msg) : GState :=
+  let users' := pre.(users).[uid <- ustate_post] in
+  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
+                               pre.(msg_in_transit) sent in
+  pre.(update_users users').(update_msgs_in_transit msgs').
 
 (* [TODO: define the transition relation]
 *)
 Inductive GTransition : g_transition_type :=  (***)
 | tick : forall increment pre, tick_ok increment pre ->
     pre ~~> tick_update increment pre
-| deliver_msg : forall pre uid (H:uid \in pre.(msg_in_transit))
+| deliver_msg : forall pre uid (key_msg:uid \in pre.(msg_in_transit))
                        pending,
-    pending \in pre.(msg_in_transit).[H] ->
-    forall ustate_pre ustate_post sent,
+    pending \in pre.(msg_in_transit).[key_msg] ->
+    forall (key_ustate:uid \in pre.(users)) ustate_post sent,
+      let ustate_pre := pre.(users).[key_ustate] in
       UTransition (Some (snd pending),ustate_pre) (ustate_post,sent) ->
-    pre ~~> delivery_result pre uid H pending ustate_post sent
+      pre ~~> delivery_result pre uid key_msg pending ustate_post sent
+| timeout : forall pre uid (H:uid \in pre.(users)),
+    let ustate_pre := pre.(users).[H] in
+    ustate_pre.(deadline) = Some (ustate_pre.(timer)) ->
+    forall ustate_post sent,
+      UTransition (None,ustate_pre) (ustate_post,sent) ->
+      pre ~~> timeout_result pre uid ustate_post sent
 where "x ~~> y" := (GTransition x y) : type_scope .
 
 (* We might also think of an initial state S and a schedule of events X
