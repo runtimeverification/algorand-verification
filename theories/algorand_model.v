@@ -612,8 +612,9 @@ Definition propose_result (pre : UState) : UState :=
 (* Note that this covers both: (a) the case when p = 1, and (b) 
    the case when p > 1 with the previous period voting for bottom. *)
 (* Notes: - Victor's model has the constraint clock >= 2*lambda 
-          - The Algorand2 description includes an additional constraint
-            about whether the value is a p1 value or not *)
+          -  The Algorand2 description includes an additional constraint
+            about whether the value is a period-1 value or not 
+            [TODO: TBA in the specs of the transition relation below] *)
 Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_round_period pre r p /\
@@ -622,19 +623,27 @@ Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
   ~ pre.(cert_may_exist) /\ 
   ~ pre.(proposals) r p = [::] . (* so a leader can be identified *)
 
-(* TODO: The Softvoting-a-reproposal step preconditions *)
-(* Note that this is the proposal step when p > 1 and the previous-
+(* The Softvoting-a-reproposal step preconditions *)
+(* Note that this is the Softvoting step when p > 1 and the previous-
    period's winning vote was for a value v *)
-(* Notes: [same notes as for the case above] *)
+(* Notes: - Victor's model includes an additional condition that is not
+            explicitly given in the description [TODO: investigate]  *)
+Definition softvote_repr_ok (pre : UState) (v : Value) r p : Prop :=
+  pre.(timer) = (2 * lambda)%R /\
+  valid_round_period pre r p /\ p > 1 /\ 
+  valid_step pre Softvoting /\
+  comm_cred_step pre r p 2 /\
+  v \in pre.(prev_certvals).
 
 (* TODO: The Softvoting-conflict step preconditions *)
-(* Need to look further into what this transition does *)
+(* Need to look further into what this transition impolies and whether it is needed *)
 
 (* TODO: The Softvoting-timeout step preconditions *)
+(* Shouldn't timeouts be a global transition? *)
 (* If the (honest) user timeouts this step, it must have been the case 
    the user was not a committee member*)
 
-(* The softvoting step post-state *)
+(* The softvoting step (new or reproposal) post-state *)
 Definition softvote_result (pre : UState) : UState :=
   update_step
     (update_deadline pre (Some (lambda + big_lambda)%R))
@@ -646,8 +655,10 @@ Definition softvote_result (pre : UState) : UState :=
 Definition matchValue (x : Vote) (v : Value) : bool :=
   let: (u', v') := x in if v == v' then true else false .
 
-(* Certvoting step preconditions [successful certvoting case] *)
-(* Corresponds to transitions cert_softvotes and certvote in Victor's model *)
+(* Certvoting step preconditions *)
+(* The successful case *)
+(* Notes: - Note that this applies for period values *)
+(*        - Corresponds (roughly) to transitions cert_softvotes and certvote in Victor's model *)
 Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
   valid_round_period pre r p /\  
   valid_step pre Certvoting /\
@@ -658,8 +669,10 @@ Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
   b \in pre.(blocks) r p /\
   size [seq x <- pre.(softvotes) r p | matchValue x v] > tau_s .
 
-(* Certvoting step preconditions [no certvoting case] *)
-(* Corresponds to transitions no_certvote_timeout and no_certvote_nocred in Victor's model *)
+(* Certvoting step preconditions *)
+(* The unsuccessful case *)
+(* Notes: - Corresponds (roughly) to transitions no_certvote_timeout and no_certvote_nocred in Victor's model *)
+(*        - The Algorand2 description does not explicitly specify what happens in this case*) 
 Definition no_certvote_ok (pre : UState) r p : Prop :=
   valid_round_period pre r p /\ valid_step pre Certvoting /\
   (~ comm_cred_step pre r p 1 \/  
