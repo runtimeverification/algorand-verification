@@ -419,6 +419,28 @@ Definition advance_period (u : UState) : UState :=
     nextvotes_val  := u.(nextvotes_val);
    |}.
 
+Definition advance_round (u : UState) : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round) + 1;
+    period         := 1;
+    step           := Proposing;
+    timer          := 0%R;
+    deadline       := Some 0%R;
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    cert_may_exist := false;
+    prev_certvals  := u.(prev_certvals);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    certvals       := (fun r p => [::]);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+   |}.
+
 (* The credential of a User at a round-period-step triple *)
 (* Note: We abstract away the random value produced by an Oracle *)
 (* and the fact that credentials are interpreted as integer *)
@@ -690,7 +712,16 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p : Prop :=
   size [seq x <- (pre.(nextvotes_val) r p 4) | matchValue x v]  > tau_v . (* TODO: using 4 arbitrarily here *)
 
 Definition adv_period_val_result (pre : UState) r p : UState := 
-  set_cert_may_exist (advance_period (update_prev_certvals pre (pre.(certvals) r p))).   
+  set_cert_may_exist (advance_period (update_prev_certvals pre (pre.(certvals) r p))).
+
+Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
+  valid_round_period pre r p /\
+  valid v /\
+  v \in pre.(blocks) r p /\
+  size [seq x <- pre.(certvotes) r p | matchValue x v] > tau_c .
+ 
+Definition certify_result (pre : UState) : UState := advance_round pre.
+  
 
 (* TODO: Note: need to capture repetitions of steps 4 and 5 in the protocol description *)
 
@@ -745,6 +776,10 @@ Inductive UTransition : u_transition_type := (***)
   | adv_period_val : forall (pre : UState) v r p,
       adv_period_val_ok pre v r p ->
       (None, pre) ~> (adv_period_val_result pre r p, [::])
+  (* Changing rounds - TODO: no broadcast in Victor's model *)
+  | certify : forall (pre : UState) v r p,
+      certify_ok pre v r p ->
+      (None, pre) ~> (certify_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 
