@@ -11,7 +11,7 @@ Unset Printing Implicit Defensive.
 Open Scope fmap_scope.
 Open Scope fset_scope.
 
-Section CheckAllFmap.
+Section AllFmap.
 
 Variable (V : Type).
 
@@ -59,56 +59,11 @@ Qed.
 
 Variable upd : I -> V -> V.
 
-Definition updf :=
-  \big[(@catf _ _)/f]_(i <- domf f)
-   (if f.[? i] is Some v then [fmap].[i <- upd i v] else [fmap]).
-
-Definition updf' :=
-  \big[(@catf _ _)/[fmap]]_(i <- domf f)
-   (if f.[? i] is Some v then [fmap].[i <- upd i v] else [fmap]).
-
-(*
-Definition updf :=
-  \big[(@catf _ _)/f]_(i <- domf f)
-   (if f.[? i] is Some v then [fmap].[i <- upd i v] else [fmap]).
-*)
-
-Lemma updf_domf : domf f = domf updf.
-Proof.
-rewrite /updf.
-elim/big_rec: _ => //.
-move => i x Hd Hf.
-case Hi: (i \in domf f).
-  rewrite (in_fnd Hi) domf_cat -Hf /=.
-  by rewrite -fsetUA fset0U mem_fset1U.
-move/negP/idP: Hi => Hi.
-by rewrite not_fnd // cat0f.
-Qed.
-
 Variable s : {fset I}.
 
-Definition updf'' :=
-  \big[(@catf _ _)/f]_(i <- s)
+Definition updf' :=
+  \big[(@catf _ _)/[fmap]]_(i <- s)
    (if f.[? i] is Some v then [fmap].[i <- upd i v] else [fmap]).
-
-(*
-Lemma updf''_update :
-  forall g (i : I) (h : i \in s),
-    i \in domf updf -> updf.[? i] = Some (upd i f.[h]).
-Proof.
-rewrite /updf.
-elim/big_rec: _.
-*)
-
-(*
-Lemma updf_update :
-  forall (i : I) (h : i \in domf f),
-    i \in domf updf -> updf.[? i] = Some (upd i f.[h]).
-Proof.
-move => i h.
-rewrite /updf.
-elim/big_rec: _.
-*)
 
 Lemma updf'_update :
   forall (i : I) (h : i \in domf f),
@@ -182,18 +137,113 @@ move/negP/negP: Hi => Hi.
 by rewrite (not_fnd Hi).
 Qed.
 
-(*
-Lemma updf'_domf : domf f = domf updf'.
+Lemma updf'_s : forall i, i \in domf updf' -> i \in s.
 Proof.
 rewrite /updf'.
-elim/big_ind: _ => //.
-move => i x Hd Hf.
+have ->: (\big[catf (V:=V)/[fmap]]_(i0 <- s) match f.[? i0] with | Some v => [fmap].[i0 <- upd i0 v] | None => [fmap] end) =
+(\big[catf (V:=V)/[fmap]]_(i0 <- s | i0 \in s) match f.[? i0] with | Some v => [fmap].[i0 <- upd i0 v] | None => [fmap] end).
+  by rewrite big_seq.
+elim/big_rec: _ => //.
+move => i x Ht IH i0.
+case Hi0: (i0 \in domf x); first by move => Hi0'; apply: IH.
+move/negP/negP: Hi0 => Hi0.
 case Hi: (i \in domf f).
-  rewrite (in_fnd Hi) domf_cat -Hf /=.
-  by rewrite -fsetUA fset0U mem_fset1U.
-move/negP/idP: Hi => Hi.
-by rewrite not_fnd // cat0f.
+  rewrite (in_fnd Hi) /=.
+  rewrite fsetU0 /=.
+  rewrite in_fsetU.
+  case/orP; last by move => Hi0'; case/negP: Hi0.
+  rewrite in_fsetD.
+  move/andP => [Ha Ha'].
+  move: Ha'.
+  rewrite in_fset1.
+  by move/eqP =>->.
+move/negP/negP: Hi => Hi.
+rewrite (not_fnd Hi).
+rewrite mem_catf.
+case/orP => //.
+move => Hi0'.
+exact: IH.
 Qed.
-*)
+
+Definition updf := f + updf'.
+
+Lemma domf_s_updf' :
+  forall i,  i \in domf f -> (i \in enum_fset s) = (i \in domf updf').
+Proof.
+rewrite /updf'.
+have Hs := fset_uniq s.
+rewrite unlock.
+elim: (enum_fset s) Hs => //=.
+move => a l IH.
+move/andP => [Ha Hu].
+move/IH: Hu => {IH} IH.
+move => i Hi.
+rewrite in_cons in_fsetU.
+apply/idP/idP; first case/orP.
+- move => Haa.
+  move: Hi; move/eqP: Haa=>-> => Hi.
+  rewrite -IH //.
+  rewrite (in_fnd Hi).
+  apply/orP; left.
+  rewrite in_fsetD.
+  apply/andP; split; last by rewrite /= fsetU0 in_fset1.
+  move: Ha.
+  by rewrite IH.
+- move => Hf.
+  apply/orP; right.
+  by rewrite -IH.
+- case/orP; last first.
+    rewrite -IH //.
+    by move =>->; rewrite orbT.
+  rewrite in_fsetD.
+  rewrite -IH //.
+  move/andP => [Hd Hf].
+  case Hia: (i == a); first by rewrite orbC orbT.
+  move/negP: Hia; case.
+  move: Hf.
+  case Haa: (a \in domf f); first by rewrite (in_fnd Haa) /= fsetU0 in_fset1.
+  move/negP/negP: Haa => Haa.
+  by rewrite (not_fnd Haa).
+Qed.
+
+Lemma updf_update :
+  forall (i : I) (h : i \in domf f),
+    i \in s -> updf.[? i] = Some (upd i f.[h]).
+Proof.
+move => i h Hi.
+rewrite /updf.
+rewrite fnd_cat.
+case: ifP; last first. 
+  move/negP.
+  case.
+  by rewrite -domf_s_updf'.
+move => Hi'.
+exact: updf'_update.
+Qed.
+
+Lemma updf_update' :
+  forall (i : I) (h : i \in domf f),
+    i \notin s -> updf.[? i] = Some f.[h].
+Proof.
+move => i h Hi.
+rewrite /updf.
+rewrite fnd_cat.
+case: ifP; last first. 
+  move/negP/negP.
+  rewrite -domf_s_updf' // => Hs.
+  by rewrite in_fnd.
+move/updf'_s.
+by move/negP: Hi.
+Qed.
+
+Lemma updf_domf : domf f = domf updf.
+Proof.
+apply/fsetP => x; apply/idP/idP.
+  move => Hx.
+  rewrite /updf domf_cat in_fsetU.
+  by apply/orP; left.
+rewrite /updf domf_cat in_fsetU; case/orP => Hx //.
+exact: updf'_domf.
+Qed.
     
-End CheckAllFmap.
+End AllFmap.
