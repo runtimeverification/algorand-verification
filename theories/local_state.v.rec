@@ -1,0 +1,40 @@
+(* Remember to re-run
+   python2 scripts/extract_record_notation.py theories/local_state.v.rec UState > theories/local_state.v
+   after editing this file!
+   Running `make theories/local_state.v` should take care of this for you. *)
+
+From mathcomp.ssreflect
+Require Import all_ssreflect.
+
+Require Import Coq.Reals.Reals.
+
+Section LocalState.
+
+Variable Value : Type.
+Variable Step : Type.
+Variable Msg : Type.
+Variable PropRecord : Type.
+Variable Vote : Type.
+
+Record UState :=
+  mkUState {
+    corrupt       : bool;
+    round         : nat;
+    period        : nat;
+    step          : Step;
+    timer         : R;
+    deadline      : option R;
+    p_start       : R;
+    rec_msgs      : seq Msg;
+    cert_may_exist: bool;
+    prev_certvals : seq Value;
+    proposals     : nat -> nat -> seq PropRecord;
+    blocks        : nat -> nat -> seq Value;
+    softvotes     : nat -> nat -> seq Vote;
+    certvotes     : nat -> nat -> seq Vote;
+    certvals      : nat -> nat -> seq Value;
+    nextvotes_open: nat -> nat -> nat -> seq Vote;
+    nextvotes_val : nat -> nat -> nat -> seq Vote
+  }.
+
+End LocalState.

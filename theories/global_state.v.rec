@@ -1,7 +1,7 @@
 (* Remember to re-run
-   python2 scripts/extract_record_notation.py theories/GlobalState.v.rec GState > theories/GlobalState.v
+   python2 scripts/extract_record_notation.py theories/global_state.v.rec GState > theories/global_state.v
    after editing this file!
-   Running `make theories/GlobalState.v` should take care of this for you. *)
+   Running `make theories/global_state.v` should take care of this for you. *)
 
 From mathcomp.ssreflect
 Require Import all_ssreflect.
