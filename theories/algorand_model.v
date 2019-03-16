@@ -276,6 +276,7 @@ Record UState :=
     blocks        : nat -> nat -> seq Value;
     (* A sequence of softvotes seen for the given round/period *)     
     softvotes     : nat -> nat -> seq Vote;
+    (* Need to maintain steps (??) *)
     (* A sequence of certvotes seen for the given round/period *)     
     certvotes     : nat -> nat -> seq Vote;
     (* A sequence of bottom-nextvotes seen for the given round/period/step *) 
@@ -490,6 +491,7 @@ Inductive Credential :=
 (* Note: This abstract away how credential values are
    interpreted (which is a piece of detail that may not be
    relevant to the model at this stage) *)
+(* generalize to round/periods/step *)
 Variable committee_cred : credType -> Prop.
 
 Definition comm_cred_step (u : UState) r p k : Prop :=
@@ -610,8 +612,8 @@ Definition soft_weight (v:Value) (u:UState) : nat :=
 (* The sequence of values with high enough softvotes in a given user state for given round and period *) 
 (* i.e. the sequence of values in softvotes having votes greater than or equal to the threshold *)
 Definition certvals (u:UState) r p : seq Value :=
-  [seq v <- vote_values (u.(softvotes) r p) | (soft_weight v u) > tau_s] .
-
+  [seq v <- vote_values (u.(softvotes) r p) | (soft_weight v u) >= tau_s] .
+(* invariant: size should be <= 1 *)
 
 (* The sequence of values certified for in the last period as seen by the given user *)
 (* This corresponds to prev_certvals field in the automaton model *)
@@ -619,18 +621,27 @@ Definition prev_certvals (u:UState) : seq Value :=
   let p := u.(period) in
     if p > 1 then certvals u u.(round) (p - 1) else [::] .
 
-(* Whether the user has already certified a value (based on enough nextvotes) in the previous period 
-   of the current round (for some step during that period) *)
-(* This corresponds to cert_may_exist field in the automaton model *)
-(* Note: the step s is not specified in the automaton model so the assumption here is that 
-   step s is existentially quantified *)
-Definition cert_may_exist (u:UState) : Prop :=
-  let p := u.(period) in
-    exists v s, size [seq x <- u.(nextvotes_val) u.(round) (p - 1) s | matchValue x v] > tau_v .
-
 (* Whether the user has seen enough votes for bottom in the given round/period/step *)
 Definition nextvoted_bottom (u:UState) r p s : Prop :=
   size (u.(nextvotes_open) r p s) >= tau_b .
+
+(* Whether the user has seen enough votes for a value in the given round/period/step *)
+Definition nextvoted_val (u:UState) r p s : Prop :=
+  exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
+
+(* Whether the user has already certified a value (based on enough nextvotes) in the previous period 
+   of the current round (for some step during that period) *)
+(* This corresponds to cert_may_exist field in the automaton model *)
+(* Notes: - the step s is not specified in the automaton model so the assumption here is that 
+            step s is existentially quantified
+          - the second condition (nextvoted_bottom is never true in the current period) was added 
+            based on recent discussion
+*)
+Definition cert_may_exist (u:UState) : Prop :=
+  let p := u.(period) in
+  let r := u.(round) in
+    exists s, nextvoted_val u r (p - 1) s 
+    /\ forall s, ~ nextvoted_bottom u r p s.
 
 (** Step 1: Proposing propositions and user state update **)
 
