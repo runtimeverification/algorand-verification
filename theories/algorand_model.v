@@ -238,7 +238,7 @@ Definition Vote := (UserId * Value)%type.
 
 (* Constructors for the different steps in a period
 *)
-Inductive Step :=
+Inductive StepName :=
   | Proposing
   | Softvoting
   | Certvoting
@@ -258,10 +258,10 @@ Record UState :=
     round         : nat;
     (* The user's current period (starts at 1) *)
     period        : nat;
-    (* The user's current step *)
-    step          : Step;
     (* The user's current step counter (starts at 1) *)
-    step_count    : nat;
+    step          : nat;
+    (* The user's current step name (Proposing, Softvoting, ... etc) *)
+    step_name     : StepName;
     (* The user's current timer value (since the beginning of the current period) *)
     timer         : R;
     (* The user's next deadline time value (relative to beginning of first round) *)
@@ -304,7 +304,7 @@ Record UState :=
     round          := u.(round);
     period         := u.(period);
     step           := u.(step);
-    step_count     := u.(step_count);
+    step_name      := u.(step_name);
     timer          := u.(timer);
     deadline       := u.(deadline);
     p_start        := u.(p_start);
@@ -318,14 +318,14 @@ Record UState :=
    |}.
  *)
 
-Definition update_step (u : UState) step' count' : UState :=
+Definition update_step (u : UState) step_name' step' : UState :=
   {|
     id             := u.(id);
     corrupt        := u.(corrupt);
     round          := u.(round);
     period         := u.(period);
     step           := step';
-    step_count     := count';
+    step_name      := step_name';
     timer          := u.(timer);
     deadline       := u.(deadline);
     p_start        := u.(p_start);
@@ -345,7 +345,7 @@ Definition update_timer (u : UState) timer' : UState :=
     round          := u.(round);
     period         := u.(period);
     step           := u.(step);
-    step_count     := u.(step_count);
+    step_name      := u.(step_name);
     timer          := timer';
     deadline       := u.(deadline);
     p_start        := u.(p_start);
@@ -365,7 +365,7 @@ Definition update_deadline (u : UState) deadline' : UState :=
     round          := u.(round);
     period         := u.(period);
     step           := u.(step);
-    step_count     := u.(step_count);
+    step_name      := u.(step_name);
     timer          := u.(timer);
     deadline       := deadline';
     p_start        := u.(p_start);
@@ -431,8 +431,8 @@ Definition advance_period (u : UState) : UState :=
     corrupt        := u.(corrupt);
     round          := u.(round);
     period         := u.(period) + 1;
-    step           := Proposing;
-    step_count     := 1;
+    step           := 1;
+    step_name      := Proposing;
     timer          := 0%R;
     deadline       := Some 0%R;
     p_start        := u.(p_start) + u.(timer); 
@@ -451,8 +451,8 @@ Definition advance_round (u : UState) : UState :=
     corrupt        := u.(corrupt);
     round          := u.(round) + 1;
     period         := 1;
-    step           := Proposing;
-    step_count     := 1;
+    step           := 1;
+    step_name      := Proposing;
     timer          := 0%R;
     deadline       := Some 0%R;
     p_start        := u.(p_start) + u.(timer);
@@ -595,7 +595,7 @@ Definition valid_round_period (u : UState) r p : Prop :=
 
 (* Does the given step match the one stored in the user state? *)
 Definition valid_step (u : UState) s : Prop :=
-  u.(step) = s .
+  u.(step_name) = s .
 
 (* Is the vote x for this value v? *)
 Definition matchValue (x : Vote) (v : Value) : bool :=
@@ -767,11 +767,11 @@ Definition certvote_result (pre : UState) : UState :=
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote1_val_ok (pre : UState) (v : Value) r p c : Prop :=
+Definition nextvote1_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
   valid_step pre Nextvoting /\
-  Nat.Even c /\ c >= 4 /\
-  comm_cred_step pre r p c /\ (* Note: we use c even here instead of 5 *)
+  Nat.Even s /\ s >= 4 /\
+  comm_cred_step pre r p s /\ (* Note: we use c even here instead of 5 *)
   pre.(timer) = (lambda + big_lambda)%R /\
   v \in certvals pre r p . 
 
@@ -779,14 +779,14 @@ Definition nextvote1_val_ok (pre : UState) (v : Value) r p c : Prop :=
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote1_open_ok (pre : UState) (v : Value) r p c : Prop :=
+Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
   valid_step pre Nextvoting /\
-  Nat.Even c /\ c >= 4 /\
-  comm_cred_step pre r p c /\
+  Nat.Even s /\ s >= 4 /\
+  comm_cred_step pre r p s /\
   pre.(timer) = (lambda + big_lambda)%R /\
   nilp (certvals pre r p) /\
-  (p = 1 \/ (p > 1 /\ nextvoted_bottom pre r (p - 1) c )) /\
+  (p = 1 \/ (p > 1 /\ nextvoted_bottom pre r (p - 1) s )) /\
   ~ cert_may_exist pre . (* extra? *)
 
 (* First nextvoting step preconditions *)
@@ -811,11 +811,11 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p c : Prop :=
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote2_val_ok (pre : UState) (v : Value) r p c : Prop :=
+Definition nextvote2_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
   valid_step pre Nextvoting /\
-  Nat.Odd c /\ c >= 5 /\
-  comm_cred_step pre r p c /\ 
+  Nat.Odd s /\ s >= 5 /\
+  comm_cred_step pre r p s /\ 
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
   v \in certvals pre r p . 
 
@@ -823,11 +823,11 @@ Definition nextvote2_val_ok (pre : UState) (v : Value) r p c : Prop :=
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote2_open_ok (pre : UState) (v : Value) r p c : Prop :=
+Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
   valid_step pre Nextvoting /\
-  Nat.Odd c /\ c >= 5 /\
-  comm_cred_step pre r p c /\ (* TODO: the step value here should be different from the above case *)
+  Nat.Odd s /\ s >= 5 /\
+  comm_cred_step pre r p s /\ (* TODO: the step value here should be different from the above case *)
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
   nilp (certvals pre r p) /\
   p > 1 /\ nextvoted_bottom pre r (p - 1) 5 /\
@@ -836,17 +836,17 @@ Definition nextvote2_open_ok (pre : UState) (v : Value) r p c : Prop :=
 (* [TODO: What about the case when no certvals and not nextvoted_bottom? => timeout?] *)
 (* [TODO: Timeout] *)
 
-(* Nextvoting step state update for odd c >= 5 (all cases) *)
-Definition nextvote1_result (pre : UState) (c : nat) : UState :=
+(* Nextvoting step state update for odd step s >= 5 (all cases) *)
+Definition nextvote1_result (pre : UState) s : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda + (INR c - 3) * L / 2)%R))
-    Nextvoting (c + 1) .
+    (update_deadline pre (Some (lambda + big_lambda + (INR s - 3) * L / 2)%R))
+    Nextvoting (s + 1) .
 
-(* Nextvoting step state update for even c >= 4 (all cases) *)
-Definition nextvote2_result (pre : UState) (c : nat) : UState :=
+(* Nextvoting step state update for even step s >= 4 (all cases) *)
+Definition nextvote2_result (pre : UState) s : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda + (INR c - 4) * L / 2)%R))
-    Nextvoting (c + 1) .
+    (update_deadline pre (Some (lambda + big_lambda + (INR s - 4) * L / 2)%R))
+    Nextvoting (s + 1) .
 
 (** Advancing period propositions and user state update **)
 
@@ -927,23 +927,23 @@ Inductive UTransition : u_transition_type := (***)
   (* Even Steps >= 4: First Finishing Step - i has not cert-voted some v *)
   | nextvote1_open : forall (pre : UState) v r p c,
       nextvote1_open_ok pre v r p c ->
-      (None, pre) ~> (nextvote1_result pre pre.(step_count), [:: (Nextvote_Open, next_val v 5, r, p, pre.(id))]) (* use bottom instead? *)
+      (None, pre) ~> (nextvote1_result pre pre.(step), [:: (Nextvote_Open, next_val v 5, r, p, pre.(id))]) (* use bottom instead? *)
   (* Even Steps >= 4: First Finishing Step - i has cert-voted some v *)
   | nextvote1_val : forall (pre : UState) v r p c,
       nextvote1_val_ok pre v r p c ->
-      (None, pre) ~> (nextvote1_result pre pre.(step_count), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
+      (None, pre) ~> (nextvote1_result pre pre.(step), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
   (* Even Steps >= 4: First Finishing Step - special case of using stv *)
   | nextvote1_stv : forall (pre : UState) v r p c,
       nextvote1_stv_ok pre v r p c ->
-      (None, pre) ~> (nextvote1_result pre pre.(step_count), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
+      (None, pre) ~> (nextvote1_result pre pre.(step), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
   (* Odd Steps >= 5: Second Finishing Step - i has cert-voted some v *)
   | nextvote2_val : forall (pre : UState) v r p c,
       nextvote2_val_ok pre v r p c ->
-      (None, pre) ~> (nextvote2_result pre pre.(step_count), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
+      (None, pre) ~> (nextvote2_result pre pre.(step), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
   (* Odd Steps >= 5: Second Finishing Step - special case of using stv *)
   | nextvote2_open : forall (pre : UState) v r p c,
       nextvote2_open_ok pre v r p c ->
-      (None, pre) ~> (nextvote2_result pre pre.(step_count), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
+      (None, pre) ~> (nextvote2_result pre pre.(step), [:: (Nextvote_Val, step_val 4, r, p, pre.(id))])
   (* Advance period (based on too many bottom-value votes) *)
   | adv_period_open : forall (pre : UState) v r p c,
       adv_period_open_ok pre v r p c ->
