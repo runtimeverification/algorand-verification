@@ -283,6 +283,10 @@ Record UState :=
     nextvotes_open: nat -> nat -> nat -> seq Vote;
     (* A sequence of value-nextvotes seen for the given round/period/step *) 
     nextvotes_val : nat -> nat -> nat -> seq Vote;
+    (* A flag for a given round and period indicating whether the preconditions
+       of certvoting in step 3 were satisfied at the time of step 3, regardless
+       of whether the user was actually in the committee of that step *)
+    has_certvoted : nat -> nat -> bool;
     (* A sequence of values with high enough softvotes for for the given round/period *) 
     (* i.e. the set of values in softvotes r p having more votes than the threshold *)
     (* No longer used: replaced by the function certvals *)
@@ -315,6 +319,7 @@ Record UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
    |}.
  *)
 
@@ -336,6 +341,7 @@ Definition update_step (u : UState) step_name' step' : UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
   |}.
 
 Definition update_timer (u : UState) timer' : UState :=
@@ -356,6 +362,7 @@ Definition update_timer (u : UState) timer' : UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
   |}.
 
 Definition update_deadline (u : UState) deadline' : UState :=
@@ -376,31 +383,30 @@ Definition update_deadline (u : UState) deadline' : UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
    |}.
 
-(* No longer needed
-Definition set_cert_may_exist (u : UState) : UState :=
+Definition set_has_certvoted (u : UState) r' p' b' : UState :=
   {|
     id             := u.(id);
     corrupt        := u.(corrupt);
     round          := u.(round);
     period         := u.(period);
     step           := u.(step);
+    step_name      := u.(step_name);
     timer          := u.(timer);
     deadline       := u.(deadline);
     p_start        := u.(p_start);
     rec_msgs       := u.(rec_msgs);
-    cert_may_exist := u.(cert_may_exist);
-    prev_certvals  := prev_certvals';
     proposals      := u.(proposals);
     blocks         := u.(blocks);
     softvotes      := u.(softvotes);
     certvotes      := u.(certvotes);
-    certvals       := u.(certvals);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := fun r p => if (r, p) == (r', p') then b' else u.(has_certvoted) r p;
    |}.
-*)
+
 (* No longer needed
 Definition update_prev_certvals (u : UState) prev_certvals' : UState :=
   {|
@@ -422,6 +428,7 @@ Definition update_prev_certvals (u : UState) prev_certvals' : UState :=
     certvals       := u.(certvals);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
    |}.
 *)
 
@@ -443,6 +450,7 @@ Definition advance_period (u : UState) : UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
    |}.
 
 Definition advance_round (u : UState) : UState :=
@@ -463,6 +471,7 @@ Definition advance_round (u : UState) : UState :=
     certvotes      := u.(certvotes);
     nextvotes_open := u.(nextvotes_open);
     nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
    |}.
 
 (* The credential of a User at a round-period-step triple *)
@@ -594,7 +603,7 @@ Definition valid_round_period (u : UState) r p : Prop :=
   u.(round) = r /\ u.(period) = p .
 
 (* Does the given step match the one stored in the user state? *)
-Definition valid_step (u : UState) s : Prop :=
+Definition valid_step_name (u : UState) s : Prop :=
   u.(step_name) = s .
 
 (* Is the vote x for this value v? *)
@@ -653,7 +662,7 @@ Definition cert_may_exist (u:UState) : Prop :=
 Definition propose_ok (pre : UState) v r p : Prop :=
   pre.(timer) = 0%R /\
   valid_round_period pre r p /\
-  valid_step pre Proposing /\
+  valid_step_name pre Proposing /\
   leader_cred_step pre r p 1 /\
   ~ cert_may_exist pre /\
   valid v.
@@ -666,7 +675,7 @@ Definition propose_ok (pre : UState) v r p : Prop :=
 Definition repropose_ok (pre : UState) v r p : Prop :=
   pre.(timer) = 0%R /\ 
   valid_round_period pre r p /\ p > 1 /\
-  valid_step pre Proposing /\
+  valid_step_name pre Proposing /\
   leader_cred_step pre r p 1 /\
   v \in prev_certvals pre.
 
@@ -675,7 +684,7 @@ Definition repropose_ok (pre : UState) v r p : Prop :=
 Definition no_propose_ok (pre : UState) r p : Prop :=
   pre.(timer) = 0%R /\ 
   valid_round_period pre r p /\
-  valid_step pre Proposing /\
+  valid_step_name pre Proposing /\
   ~ leader_cred_step pre r p 1.
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
@@ -697,7 +706,7 @@ Definition propose_result (pre : UState) : UState :=
 Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_round_period pre r p /\
-  valid_step pre Softvoting /\
+  valid_step_name pre Softvoting /\
   comm_cred_step pre r p 2 /\
   ~ cert_may_exist pre /\ 
   ~ pre.(proposals) r p = [::] . (* so a leader can be identified *)
@@ -710,7 +719,7 @@ Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
 Definition softvote_repr_ok (pre : UState) (v : Value) r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_round_period pre r p /\ p > 1 /\ 
-  valid_step pre Softvoting /\
+  valid_step_name pre Softvoting /\
   comm_cred_step pre r p 2 /\
   v \in prev_certvals pre.
 
@@ -732,11 +741,15 @@ Definition softvote_result (pre : UState) : UState :=
 (* Certvoting step preconditions *)
 (* The successful case *)
 (* Notes: - Note that this applies for all period values *)
-(*        - Corresponds (roughly) to transitions cert_softvotes and certvote in the automaton model *)
+(*        - Corresponds (roughly) to transitions cert_softvotes and certvote in
+            the automaton model 
+          - The condition comm_cred_step is checked outside of this proposition
+            to allow distinguishing the two cases of has_certvoted when
+            defining the transitions later *)
 Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
   valid_round_period pre r p /\  
-  valid_step pre Certvoting /\
-  comm_cred_step pre r p 3 /\
+  valid_step_name pre Certvoting /\
+  (* comm_cred_step pre r p 3 /\ *)
   (pre.(timer) > 2 * lambda)%R /\ (pre.(timer) < lambda + big_lambda)%R /\
   ~ cert_may_exist pre /\
   valid b /\ correct_hash v b /\
@@ -749,16 +762,17 @@ Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
 (*        - The Algorand2 description does not explicitly specify what happens in this case
 *) 
 Definition no_certvote_ok (pre : UState) r p : Prop :=
-  valid_round_period pre r p /\ 
-  valid_step pre Certvoting /\
-  (~ comm_cred_step pre r p 1 \/  
-    ( (pre.(timer) >= lambda + big_lambda)%R /\ nilp (certvals pre r p) ) 
-  ) .
+  valid_round_period pre r p /\
+  valid_step_name pre Certvoting /\
+  (pre.(timer) >= lambda + big_lambda)%R /\
+  nilp (certvals pre r p).
 
-(* Certvoting step's resulting user state (for both cases) *)
-Definition certvote_result (pre : UState) : UState :=
+(* Certvoting step's resulting user state (both cases) *)
+Definition certvote_result (pre : UState) b : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda)%R)) (* the deadline is already this value *)
+    (update_deadline 
+      (set_has_certvoted pre pre.(round) pre.(period) b) 
+      (Some (lambda + big_lambda)%R)) (* the deadline is already this value *)
     Nextvoting 4.
 
 (** Even Steps >= 4: Nextvoting1 propositions and user state update **)
@@ -769,11 +783,11 @@ Definition certvote_result (pre : UState) : UState :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
 Definition nextvote1_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   Nat.Even s /\ s >= 4 /\
   comm_cred_step pre r p s /\ (* Note: we use c even here instead of 5 *)
   pre.(timer) = (lambda + big_lambda)%R /\
-  v \in certvals pre r p . 
+  v \in certvals pre r p.
 
 (* First nextvoting step preconditions *)
 (* The bottom-value case *)
@@ -781,7 +795,7 @@ Definition nextvote1_val_ok (pre : UState) (v : Value) r p s : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
 Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   Nat.Even s /\ s >= 4 /\
   comm_cred_step pre r p s /\
   pre.(timer) = (lambda + big_lambda)%R /\
@@ -795,7 +809,7 @@ Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) *)
 Definition nextvote1_stv_ok (pre : UState) (v : Value) r p c : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   Nat.Even c /\ c >= 4 /\
   nilp (certvals pre r p) /\
   p > 1 /\ ~ nextvoted_bottom pre r (p - 1) c /\
@@ -813,7 +827,7 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p c : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
 Definition nextvote2_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   Nat.Odd s /\ s >= 5 /\
   comm_cred_step pre r p s /\ 
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
@@ -825,7 +839,7 @@ Definition nextvote2_val_ok (pre : UState) (v : Value) r p s : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
 Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   Nat.Odd s /\ s >= 5 /\
   comm_cred_step pre r p s /\ (* TODO: the step value here should be different from the above case *)
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
@@ -854,7 +868,7 @@ Definition nextvote2_result (pre : UState) s : UState :=
 (* Notes: - Corresponds to transition advance_period_open in the automaton model *)
 Definition adv_period_open_ok (pre : UState) (v : Value) r p c : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   (* pre.(timer) = (lambda + big_lambda)%R /\ *)
   nextvoted_bottom pre r p c . 
 
@@ -862,7 +876,7 @@ Definition adv_period_open_ok (pre : UState) (v : Value) r p c : Prop :=
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p c : Prop :=
   valid_round_period pre r p /\ 
-  valid_step pre Nextvoting /\
+  valid_step_name pre Nextvoting /\
   (* pre.(timer) = (lambda + big_lambda)%R /\ *)
   size [seq x <- (pre.(nextvotes_val) r p c) | matchValue x v]  >= tau_v .
 
@@ -915,15 +929,19 @@ Inductive UTransition : u_transition_type := (***)
       softvote_new_ok pre v r p ->
       (None, pre) ~> (softvote_result pre, 
           [:: (Softvote, val (Some v), r, p, pre.(id))]) (* v needs to come from pre *)
-  (* Step 3: Certifying Step [success] *)
-  | certvote : forall (pre : UState) v b r p,
-      certvote_ok pre v b r p ->
-      (None, pre) ~> (certvote_result pre, 
+  (* Step 3: Certifying Step [success while being a committee member] *)
+  | certvote1 : forall (pre : UState) v b r p,
+      certvote_ok pre v b r p -> comm_cred_step pre r p 3 ->
+        (None, pre) ~> (certvote_result pre true, 
           [:: (Certvote, val (Some v), r, p, pre.(id))])
+  (* Step 3: Certifying Step [success while NOT being a committee member] *)
+  | certvote2 : forall (pre : UState) v b r p,
+      certvote_ok pre v b r p -> ~ comm_cred_step pre r p 3 ->
+        (None, pre) ~> (certvote_result pre true, [::])
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall (pre : UState) r p,
       no_certvote_ok pre r p ->
-      (None, pre) ~> (certvote_result pre, [::])
+      (None, pre) ~> (certvote_result pre false, [::])
   (* Even Steps >= 4: First Finishing Step - i has not cert-voted some v *)
   | nextvote1_open : forall (pre : UState) v r p c,
       nextvote1_open_ok pre v r p c ->
