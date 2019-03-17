@@ -785,9 +785,9 @@ Definition nextvote1_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_round_period pre r p /\ 
   valid_step_name pre Nextvoting /\
   Nat.Even s /\ s >= 4 /\
-  comm_cred_step pre r p s /\ (* Note: we use c even here instead of 5 *)
+  comm_cred_step pre r p s /\ (* Note: we use s even here instead of 5 *)
   pre.(timer) = (lambda + big_lambda)%R /\
-  v \in certvals pre r p.
+  pre.(has_certvoted) r p.
 
 (* First nextvoting step preconditions *)
 (* The bottom-value case *)
@@ -799,7 +799,7 @@ Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
   Nat.Even s /\ s >= 4 /\
   comm_cred_step pre r p s /\
   pre.(timer) = (lambda + big_lambda)%R /\
-  nilp (certvals pre r p) /\
+  ~ pre.(has_certvoted) r p /\
   (p = 1 \/ (p > 1 /\ nextvoted_bottom pre r (p - 1) s )) /\
   ~ cert_may_exist pre . (* extra? *)
 
@@ -811,7 +811,7 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p c : Prop :=
   valid_round_period pre r p /\ 
   valid_step_name pre Nextvoting /\
   Nat.Even c /\ c >= 4 /\
-  nilp (certvals pre r p) /\
+  ~ pre.(has_certvoted) r p /\
   p > 1 /\ ~ nextvoted_bottom pre r (p - 1) c /\
   comm_cred_step pre r p c /\ (* required (?) *)
   pre.(timer) = (lambda + big_lambda)%R .
@@ -843,7 +843,7 @@ Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
   Nat.Odd s /\ s >= 5 /\
   comm_cred_step pre r p s /\ (* TODO: the step value here should be different from the above case *)
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
-  nilp (certvals pre r p) /\
+  ~ pre.(has_certvoted) r p /\
   p > 1 /\ nextvoted_bottom pre r (p - 1) 5 /\
   ~ cert_may_exist pre . (* extra? *)
 
