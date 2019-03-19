@@ -231,7 +231,7 @@ Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
    values along with a boolean indicating whether this is
    a proposal (true) or a reproposal (false)
 *)
-Definition PropRecord := (Value * Value * bool)%type.
+Definition PropRecord := (ExValue * Value * bool)%type.
 
 (* A vote is a pair of UserID and Value *)
 Definition Vote := (UserId * Value)%type.
@@ -853,6 +853,42 @@ Definition certify_ok (pre : UState) (v b : Value) r p : Prop :=
 (* State update *)
 Definition certify_result (pre : UState) : UState := advance_round pre.
 
+(* TODO: changed PropRecord type so first arg is ExValue *)
+(* TODO: second arg in message is ExValue, need Value out *)
+(* TODO: nextvotes_open is just UserId according to Victor's model *)
+(* TODO: nextvotes_open/val don't take in step according to Victor's model *)
+Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
+  let type := msg.1.1.1.1 in
+  let ev := msg.1.1.1.2 in
+  let: sender := msg.2 in
+  match ev with
+  | val (Some v) =>
+    let: vote := (sender, v) in
+    match type with
+    | Proposal =>
+      let: prop := (step_val c, v, true) in
+      let: proposals' :=
+         fun r' p' =>
+           if r' == r
+           then pre.(proposals) r' p'
+           else pre.(proposals) r' p' in
+      (*{[ pre with proposals := proposals' ]}*)
+    | Reproposal =>
+      let: prop := (step_val c, v, false) in
+      let: proposals' := prop :: pre.(proposals) r p in pre
+    | Softvote =>
+      let: softvotes' := vote :: pre.(softvotes) r p in pre
+    | Certvote =>
+      let: certvotes' := vote :: pre.(certvotes) r p in pre
+    | Nextvote_Open =>
+      let: nextvotes_open' := vote :: pre.(nextvotes_open) r p s in pre
+    | Nextvote_Val =>
+      let: nextvotes_open' := vote :: pre.(nextvotes_val) r p s in pre
+    | Blocks =>
+      let: blocks' := v :: pre.(blocks) r p in pre
+    end
+   | _ => pre
+  end.
 
 (** The inductive definition of the user state transition relation **)
 
@@ -931,6 +967,9 @@ Inductive UTransition : u_transition_type := (***)
   | certify : forall (pre : UState) v b r p,
       certify_ok pre v b r p ->
       (None, pre) ~> (certify_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
+  (* Deliver - only transition that consumes messages *)
+  | deliver : forall (pre : UState) msg c r p s,
+      (Some msg, pre) ~> (deliver_result pre msg c r p s, [::])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 
