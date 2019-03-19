@@ -871,7 +871,7 @@ Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
          fun r' p' =>
            if r' == r
            then pre.(proposals) r' p'
-           else pre.(proposals) r' p' in
+           else pre.(proposals) r' p' in pre
       (*{[ pre with proposals := proposals' ]}*)
     | Reproposal =>
       let: prop := (step_val c, v, false) in
