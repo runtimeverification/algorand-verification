@@ -605,11 +605,11 @@ Definition prev_certvals (u:UState) : seq Value :=
     if p > 1 then certvals u u.(round) (p - 1) else [::] .
 
 (* Whether the user has seen enough votes for bottom in the given round/period/step *)
-Definition nextvoted_bottom (u:UState) r p s : Prop :=
+Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
   size (u.(nextvotes_open) r p s) >= tau_b .
 
 (* Whether the user has seen enough votes for a value in the given round/period/step *)
-Definition nextvoted_val (u:UState) r p s : Prop :=
+Definition nextvote_val_quorum (u:UState) r p s : Prop :=
   exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
 
 (* Whether the user has already certified a value (based on enough nextvotes) in the previous period 
@@ -617,14 +617,14 @@ Definition nextvoted_val (u:UState) r p s : Prop :=
 (* This corresponds to cert_may_exist field in the automaton model *)
 (* Notes: - the step s is not specified in the automaton model so the assumption here is that 
             step s is existentially quantified
-          - the second condition (nextvoted_bottom is never true in the current period) was added 
+          - the second condition (nextvote_bottom_quorum is never true in the current period) was added 
             based on recent discussion
 *)
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
-    exists s, nextvoted_val u r (p - 1) s 
-    /\ forall s, ~ nextvoted_bottom u r p s.
+    exists s, nextvote_val_quorum u r (p - 1) s 
+    /\ forall s, ~ nextvote_bottom_quorum u r p s.
 
 (** Step 1: Proposing propositions and user state update **)
 
@@ -763,7 +763,7 @@ Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
   comm_cred_step pre r p s /\
   pre.(timer) = (lambda + big_lambda)%R /\
   ~ pre.(has_certvoted) r p /\
-  (p = 1 \/ (p > 1 /\ nextvoted_bottom pre r (p - 1) s )) /\
+  (p = 1 \/ (p > 1 /\ nextvote_bottom_quorum pre r (p - 1) s )) /\
   ~ cert_may_exist pre . (* extra? *)
 
 (* First nextvoting step preconditions *)
@@ -774,7 +774,7 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
   Nat.Even s /\ s >= 4 /\
   ~ pre.(has_certvoted) r p /\
-  p > 1 /\ ~ nextvoted_bottom pre r (p - 1) s /\
+  p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
   comm_cred_step pre r p s /\ (* required (?) *)
   pre.(timer) = (lambda + big_lambda)%R .
 
@@ -805,10 +805,10 @@ Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
   comm_cred_step pre r p s /\ (* TODO: the step value here should be different from the above case *)
   (pre.(timer) >= lambda + big_lambda)%R /\ (pre.(timer) < lambda + big_lambda + L)%R /\
   ~ pre.(has_certvoted) r p /\
-  p > 1 /\ nextvoted_bottom pre r (p - 1) 5 /\
+  p > 1 /\ nextvote_bottom_quorum pre r (p - 1) 5 /\
   ~ cert_may_exist pre . (* extra? *)
 
-(* [TODO: What about the case when no certvals and not nextvoted_bottom? => timeout?] *)
+(* [TODO: What about the case when no certvals and not nextvote_bottom_quorum? => timeout?] *)
 (* [TODO: Timeout] *)
 
 (* Nextvoting step state update for odd step s >= 5 (all cases) *)
@@ -829,7 +829,7 @@ Definition nextvote2_result (pre : UState) s : UState :=
 (* Notes: - Corresponds to transition advance_period_open in the automaton model *)
 Definition adv_period_open_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
-  nextvoted_bottom pre r p s . 
+  nextvote_bottom_quorum pre r p s . 
 
 (* Preconditions -- The proper value case *)
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
