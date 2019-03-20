@@ -231,7 +231,7 @@ Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
    values along with a boolean indicating whether this is
    a proposal (true) or a reproposal (false)
 *)
-Definition PropRecord := (ExValue * Value * bool)%type.
+Definition PropRecord := (Value * Value * bool)%type.
 
 (* A vote is a pair of UserID and Value *)
 Definition Vote := (UserId * Value)%type.
@@ -853,11 +853,13 @@ Definition certify_ok (pre : UState) (v b : Value) r p : Prop :=
 (* State update *)
 Definition certify_result (pre : UState) : UState := advance_round pre.
 
-(* TODO: changed PropRecord type so first arg is ExValue *)
-(* TODO: second arg in message is ExValue, need Value out *)
+(* Definition deliver_ok (pre : UState) msg c *)
+
+(* TODO: PropRecord type? *)
+(* TODO: second arg in message is ExValue, need Value out, better way to do this? *)
 (* TODO: nextvotes_open is just UserId according to Victor's model *)
 (* TODO: nextvotes_open/val don't take in step according to Victor's model *)
-Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
+Definition deliver_result (pre : UState) (msg : Msg) r p s : UState :=
   let type := msg.1.1.1.1 in
   let ev := msg.1.1.1.2 in
   let: sender := msg.2 in
@@ -866,26 +868,51 @@ Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
     let: vote := (sender, v) in
     match type with
     | Proposal =>
-      let: prop := (step_val c, v, true) in
+      (* let: prop := (c, v, true) in *)
       let: proposals' :=
          fun r' p' =>
-           if r' == r
-           then pre.(proposals) r' p'
+           if (r, p) == (r', p')
+           then pre.(proposals) r p
            else pre.(proposals) r' p' in pre
       (*{[ pre with proposals := proposals' ]}*)
     | Reproposal =>
-      let: prop := (step_val c, v, false) in
-      let: proposals' := prop :: pre.(proposals) r p in pre
+      (* let: prop := (c, v, false) in *)
+      let: proposals' :=
+         fun r' p' =>
+           if (r, p) == (r', p')
+           then pre.(proposals) r p
+           else pre.(proposals) r' p' in pre
+      (*{[ pre with proposals := proposals' ]}*)
     | Softvote =>
-      let: softvotes' := vote :: pre.(softvotes) r p in pre
+      let: softovtes' :=
+         fun r' p' =>
+           if (r, p) == (r', p')
+           then vote :: pre.(softvotes) r p
+           else pre.(softvotes) r' p' in pre
     | Certvote =>
-      let: certvotes' := vote :: pre.(certvotes) r p in pre
+      let: certvotes' :=
+         fun r' p' =>
+           if (r, p) == (r', p')
+           then vote :: pre.(certvotes) r p
+           else pre.(certvotes) r' p' in pre
     | Nextvote_Open =>
-      let: nextvotes_open' := vote :: pre.(nextvotes_open) r p s in pre
+      let: nextvotes_open' :=
+         fun r' p' s' =>
+           if (r, p, s) == (r', p', s')
+           then vote :: pre.(nextvotes_open) r p s
+           else pre.(nextvotes_open) r' p' s' in pre
     | Nextvote_Val =>
-      let: nextvotes_open' := vote :: pre.(nextvotes_val) r p s in pre
+      let: nextvotes_val' :=
+         fun r' p' s' =>
+           if (r, p, s) == (r', p', s')
+           then vote :: pre.(nextvotes_val) r p s
+           else pre.(nextvotes_val) r' p' s' in pre
     | Blocks =>
-      let: blocks' := v :: pre.(blocks) r p in pre
+      let: blocks' :=
+         fun r' p' =>
+           if (r, p) == (r', p')
+           then v :: pre.(blocks) r p
+           else pre.(blocks) r' p' in pre
     end
    | _ => pre
   end.
@@ -968,8 +995,8 @@ Inductive UTransition : u_transition_type := (***)
       certify_ok pre v b r p ->
       (None, pre) ~> (certify_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
   (* Deliver - only transition that consumes messages *)
-  | deliver : forall (pre : UState) msg c r p s,
-      (Some msg, pre) ~> (deliver_result pre msg c r p s, [::])
+  | deliver : forall (pre : UState) msg r p s,
+      (Some msg, pre) ~> (deliver_result pre msg r p s, [::])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 
