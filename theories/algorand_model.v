@@ -227,11 +227,27 @@ Record Msg :=
  *)
 Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
 
+(* The credential of a User at a round-period-step triple *)
+(* Note: We abstract away the random value produced by an Oracle *)
+(* and the fact that credentials are interpreted as integer *)
+(* values. Instead, we model the type of credentials as an *)
+(* abstract totally ordered type. *)
+
+Variable credType : orderType tt.
+
+Variable credential : UserId -> nat -> nat -> nat -> credType.
+
+(*
+Inductive Credential :=
+  | cred : UserId -> nat -> nat -> nat -> Credential.
+*)
+
 (* A proposal/preproposal record is a triple consisting of two
    values along with a boolean indicating whether this is
    a proposal (true) or a reproposal (false)
 *)
-Definition PropRecord := (Value * Value * bool)%type.
+
+Definition PropRecord := (credType * Value * bool)%type.
 
 (* A vote is a pair of UserID and Value *)
 Definition Vote := (UserId * Value)%type.
@@ -383,6 +399,158 @@ Definition update_deadline (u : UState) deadline' : UState :=
     has_certvoted  := u.(has_certvoted);
    |}.
 
+Definition update_rec_msgs (u : UState) rec_msgs' : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := rec_msgs';
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_proposals (u : UState) r' p' prop : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := fun r p => if (r, p) == (r', p')
+                                 then prop :: u.(proposals) r p
+                                 else u.(proposals) r p;
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_blocks (u : UState) r' p' block : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := u.(proposals);
+    blocks         := fun r p => if (r, p) == (r', p')
+                                 then block :: u.(blocks) r p
+                                 else u.(blocks) r p;
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_softvotes (u : UState) r' p' sv : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := fun r p => if (r, p) == (r', p')
+                                 then sv :: u.(softvotes) r p
+                                 else u.(softvotes) r p;
+    certvotes      := u.(certvotes);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_certvotes (u : UState) r' p' cv : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := fun r p => if (r, p) == (r', p')
+                                 then cv :: u.(certvotes) r p
+                                 else u.(certvotes) r p;
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
+                                   then nvo :: u.(nextvotes_open) r p s
+                                   else u.(nextvotes_open) r p s;
+    nextvotes_val  := u.(nextvotes_val);
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
+Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
+  {|
+    id             := u.(id);
+    corrupt        := u.(corrupt);
+    round          := u.(round);
+    period         := u.(period);
+    step           := u.(step);
+    timer          := u.(timer);
+    deadline       := u.(deadline);
+    p_start        := u.(p_start);
+    rec_msgs       := u.(rec_msgs);
+    proposals      := u.(proposals);
+    blocks         := u.(blocks);
+    softvotes      := u.(softvotes);
+    certvotes      := u.(certvotes);
+    nextvotes_open := u.(nextvotes_open);
+    nextvotes_val  := fun r p s => if (r, p, s) == (r', p', s')
+                                   then nvv :: u.(nextvotes_val) r p s
+                                   else u.(nextvotes_val) r p s;
+    has_certvoted  := u.(has_certvoted);
+   |}.
+
 Definition set_has_certvoted (u : UState) r' p' b' : UState :=
   {|
     id             := u.(id);
@@ -442,21 +610,6 @@ Definition advance_round (u : UState) : UState :=
     nextvotes_val  := u.(nextvotes_val);
     has_certvoted  := u.(has_certvoted);
    |}.
-
-(* The credential of a User at a round-period-step triple *)
-(* Note: We abstract away the random value produced by an Oracle *)
-(* and the fact that credentials are interpreted as integer *)
-(* values. Instead, we model the type of credentials as an *)
-(* abstract totally ordered type. *)
-
-Variable credType : orderType tt. 
-
-Variable credential : UserId -> nat -> nat -> nat -> credType.
-
-(*
-Inductive Credential :=
-  | cred : UserId -> nat -> nat -> nat -> Credential.
-*)
 
 (* A proposition for whether a given credential qualifies its
    owner to be a committee member *)
@@ -853,68 +1006,27 @@ Definition certify_ok (pre : UState) (v b : Value) r p : Prop :=
 (* State update *)
 Definition certify_result (pre : UState) : UState := advance_round pre.
 
-(* Definition deliver_ok (pre : UState) msg c *)
-
-(* TODO: PropRecord type? *)
 (* TODO: second arg in message is ExValue, need Value out, better way to do this? *)
 (* TODO: nextvotes_open is just UserId according to Victor's model *)
 (* TODO: nextvotes_open/val don't take in step according to Victor's model *)
-Definition deliver_result (pre : UState) (msg : Msg) r p s : UState :=
-  let type := msg.1.1.1.1 in
-  let ev := msg.1.1.1.2 in
+Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
+  let: pre' := update_rec_msgs pre (msg :: pre.(rec_msgs)) in
+  let: type := msg.1.1.1.1 in
+  let: ev := msg.1.1.1.2 in
   let: sender := msg.2 in
   match ev with
   | val (Some v) =>
     let: vote := (sender, v) in
     match type with
-    | Proposal =>
-      (* let: prop := (c, v, true) in *)
-      let: proposals' :=
-         fun r' p' =>
-           if (r, p) == (r', p')
-           then pre.(proposals) r p
-           else pre.(proposals) r' p' in pre
-      (*{[ pre with proposals := proposals' ]}*)
-    | Reproposal =>
-      (* let: prop := (c, v, false) in *)
-      let: proposals' :=
-         fun r' p' =>
-           if (r, p) == (r', p')
-           then pre.(proposals) r p
-           else pre.(proposals) r' p' in pre
-      (*{[ pre with proposals := proposals' ]}*)
-    | Softvote =>
-      let: softovtes' :=
-         fun r' p' =>
-           if (r, p) == (r', p')
-           then vote :: pre.(softvotes) r p
-           else pre.(softvotes) r' p' in pre
-    | Certvote =>
-      let: certvotes' :=
-         fun r' p' =>
-           if (r, p) == (r', p')
-           then vote :: pre.(certvotes) r p
-           else pre.(certvotes) r' p' in pre
-    | Nextvote_Open =>
-      let: nextvotes_open' :=
-         fun r' p' s' =>
-           if (r, p, s) == (r', p', s')
-           then vote :: pre.(nextvotes_open) r p s
-           else pre.(nextvotes_open) r' p' s' in pre
-    | Nextvote_Val =>
-      let: nextvotes_val' :=
-         fun r' p' s' =>
-           if (r, p, s) == (r', p', s')
-           then vote :: pre.(nextvotes_val) r p s
-           else pre.(nextvotes_val) r' p' s' in pre
-    | Blocks =>
-      let: blocks' :=
-         fun r' p' =>
-           if (r, p) == (r', p')
-           then v :: pre.(blocks) r p
-           else pre.(blocks) r' p' in pre
+    | Proposal => set_proposals pre' r p (c, v, true)
+    | Reproposal => set_proposals pre' r p (c, v, false)
+    | Softvote => set_softvotes pre' r p vote
+    | Certvote => set_certvotes pre' r p vote
+    | Nextvote_Open => set_nextvotes_open pre' r p s vote
+    | Nextvote_Val => set_nextvotes_val pre' r p s vote
+    | Blocks => set_blocks pre' r p v
     end
-   | _ => pre
+   | _ => pre'
   end.
 
 (** The inductive definition of the user state transition relation **)
@@ -995,8 +1107,8 @@ Inductive UTransition : u_transition_type := (***)
       certify_ok pre v b r p ->
       (None, pre) ~> (certify_result pre, [:: (Certvote, val (Some v), r, p, pre.(id))])
   (* Deliver - only transition that consumes messages *)
-  | deliver : forall (pre : UState) msg r p s,
-      (Some msg, pre) ~> (deliver_result pre msg r p s, [::])
+  | deliver : forall (pre : UState) msg c r p s,
+      (Some msg, pre) ~> (deliver_result pre msg c r p s, [::])
 where "x ~> y" := (UTransition x y) : type_scope .
 
 
