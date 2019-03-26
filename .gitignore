@@ -13,6 +13,7 @@
 *.o
 *.vio
 *.vo
+build/
 .coq-native/
 .csdp.cache
 .lia.cache
