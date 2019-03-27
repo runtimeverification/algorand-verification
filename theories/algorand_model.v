@@ -17,6 +17,8 @@ Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
 Require Import Interval.Interval_tactic.
 
+Require Import Relation_Operators.
+
 From Algorand
 Require Import boolp Rstruct fmap_ext.
 
@@ -1261,5 +1263,34 @@ Qed.
 Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
 
 Definition greachable (g0 g : GState) : Prop := exists2 p, path gtransition g0 p & g = last g0 p.
+
+(* classic definition of reachable global state *)
+
+Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition g0 g.
+
+(* definitions are equivalent in our setting *)
+
+Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
+Proof.
+move => g0 g; case => x.
+move: g0 g.
+elim: x => /=; first by move => g0 g Ht ->; exact: rt1n_refl.
+move => g1 p IH g0 g.
+move/andP => [Hg Hp] Hgg.
+have IH' := IH _ _ Hp Hgg.
+move: IH'; apply: rt1n_trans.
+by move: Hg; move/asboolP.
+Qed.
+
+Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g.
+Proof.
+move => g0 g.
+elim; first by move => x; exists [::].
+move => x y z Hxy Hc.
+case => p Hp Hl.
+exists (y :: p) => //=.
+apply/andP.
+by split => //; apply/asboolP.
+Qed.
 
 End AlgoModel.
