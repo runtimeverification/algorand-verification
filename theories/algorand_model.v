@@ -1290,4 +1290,12 @@ apply/andP.
 by split => //; apply/asboolP.
 Qed.
 
+
+(* LIVENESS *)
+
+Lemma prop_a : forall u u' r B,
+  (Proposal, val (Some B), r, 1, u.(id)) \in u'.(rec_msgs) ->
+  B \in certvals u r 1.
+Admitted.
+
 End AlgoModel.
