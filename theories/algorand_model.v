@@ -270,8 +270,8 @@ Inductive StepName :=
     Note: again we may end up not using all of these fields (and there may
     be others we may want to add later)
     Note: We probably don't need to maintain deadline in the user state as
-    it is a function of the current step. Also, deadline no longer needs to
-    be an option type(?).
+    it is a function of the current step.
+    Note: deadline is no longer an option type.
 **)
 Record UState :=
   mkUState {
@@ -290,8 +290,8 @@ Record UState :=
     (* step_name     : StepName; *)
     (* The user's current timer value (since the beginning of the current period) *)
     timer         : R;
-    (* The user's next deadline time value (relative to beginning of first round) *)
-    deadline      : option R;
+    (* The user's next deadline time value (since the beginning of the current period) *)
+    deadline      : R;
     (* The (local) time at which the user's current period started (i.e. local clock = p_start + timer *)
     p_start       : R;
     (* unused -- will probably be dropped *)
@@ -588,7 +588,7 @@ Definition advance_period (u : UState) : UState :=
     period         := u.(period) + 1;
     step           := 1;
     timer          := 0%R;
-    deadline       := Some 0%R;
+    deadline       := 0%R;
     p_start        := u.(p_start) + u.(timer);
     rec_msgs       := u.(rec_msgs);
     proposals      := u.(proposals);
@@ -608,7 +608,7 @@ Definition advance_round (u : UState) : UState :=
     period         := 1;
     step           := 1;
     timer          := 0%R;
-    deadline       := Some 0%R;
+    deadline       := 0%R;
     p_start        := u.(p_start) + u.(timer);
     rec_msgs       := u.(rec_msgs);
     proposals      := u.(proposals);
@@ -824,7 +824,7 @@ Definition no_propose_ok (pre : UState) r p : Prop :=
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
 Definition propose_result (pre : UState) : UState :=
   update_step
-    (update_deadline pre (Some (2 * lambda)%R))
+    (update_deadline pre (2 * lambda)%R)
     2.
 
 (** Step 2: Softvoting propositions and user state update **)
@@ -860,7 +860,7 @@ Definition softvote_repr_ok (pre : UState) (v : Value) r p : Prop :=
 (* The softvoting step (new or reproposal) post-state *)
 Definition softvote_result (pre : UState) : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda)%R))
+    (update_deadline pre (lambda + big_lambda)%R)
     3.
 
 (** Step 3: Certvoting propositions and user state update **)
@@ -896,7 +896,7 @@ Definition certvote_result (pre : UState) b : UState :=
   update_step
     (update_deadline
       (set_has_certvoted pre pre.(round) pre.(period) b)
-      (Some (lambda + big_lambda)%R)) (* Note: the deadline should already be this value *)
+      (lambda + big_lambda)%R) (* Note: the deadline should already be this value *)
     4.
 
 (** Even Steps >= 4: Nextvoting1 propositions and user state update **)
@@ -940,7 +940,7 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p s : Prop :=
 (* Nextvoting step state update for odd step s >= 5 (all cases) *)
 Definition nextvote1_result (pre : UState) s : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda + (INR s - 3) * L / 2)%R))
+    (update_deadline pre (lambda + big_lambda + (INR s - 3) * L / 2)%R)
     (s + 1) .
 
 
@@ -976,7 +976,7 @@ Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
 (* Nextvoting step state update for even step s >= 4 (all cases) *)
 Definition nextvote2_result (pre : UState) s : UState :=
   update_step
-    (update_deadline pre (Some (lambda + big_lambda + (INR s - 4) * L / 2)%R))
+    (update_deadline pre (lambda + big_lambda + (INR s - 4) * L / 2)%R)
     (s + 1) .
 
 (** Advancing period propositions and user state update **)
@@ -1034,14 +1034,11 @@ Definition next_deadline k : R :=
 (* Note: This captures the timeout transitions in the automaton model in addition
          to timing out in the repeated steps *)
 Definition timeout_ok (pre : UState) : Prop :=
-  match pre.(deadline) with
-  | Some r => pre.(step) > 1 /\ Nat.odd pre.(step) /\ (pre.(timer) >= r)%R
-  | _ => False
-  end.
+  let s := pre.(step) in s > 1 /\ odd s /\ (pre.(timer) >= pre.(deadline))%R.
 
 Definition timeout_result (pre : UState) : UState :=
   let s := pre.(step) in
-  update_step (update_deadline pre (Some (next_deadline s))) (s + 1) .
+  update_step (update_deadline pre (next_deadline s)) (s + 1) .
 
 
 (** Message delivery transitions **)
@@ -1161,7 +1158,7 @@ where "x ~> y" := (UTransition x y) : type_scope .
 Definition g_transition_type := relation GState .
 
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
-  fun u => if u.(deadline) is Some d then Rleb (u.(timer) + pos increment) d else true.
+  fun u => Rleb (u.(timer) + pos increment) u.(deadline).
 
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   update_timer u (u.(timer) + pos increment)%R.
@@ -1241,7 +1238,7 @@ where "x ~~> y" := (GTransition x y) : type_scope .
 Definition user_timers_valid : pred UState :=
   fun u =>
     (Rleb u.(p_start) u.(timer) &&
-    if u.(deadline) is Some d then Rleb u.(timer) d else true).
+     Rleb u.(timer) u.(deadline) ).
 
 (*
 Lemma tick_preserves_timers : forall pre,
