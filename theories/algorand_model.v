@@ -237,6 +237,10 @@ Variable credType : orderType tt.
 
 Variable credential : UserId -> nat -> nat -> nat -> credType.
 
+Hypothesis credentials_different :
+  forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
+  u <> u' -> credential u r p s <> credential u' r' p' s'.
+
 (*
 Inductive Credential :=
   | cred : UserId -> nat -> nat -> nat -> Credential.
