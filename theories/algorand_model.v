@@ -18,7 +18,7 @@ Require Import Coq.Relations.Relation_Definitions.
 Require Import Interval.Interval_tactic.
 
 From Algorand
-Require Import Rstruct fmap_ext.
+Require Import boolp Rstruct fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -1255,5 +1255,11 @@ Proof.
   destruct deadline0;intuition auto using Rle_pos_r;constructor.
 Qed.
 *)
+
+(* definition of reachable global state via paths *)
+
+Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
+
+Definition greachable (g0 g : GState) : Prop := exists2 p, path gtransition g0 p & g = last g0 p.
 
 End AlgoModel.
