@@ -1047,7 +1047,8 @@ Definition timeout_result (pre : UState) : UState :=
 (* TODO: nextvotes_open is just UserId according to Victor's model *)
 (* TODO: nextvotes_open/val don't take in step according to Victor's model *)
 Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
-  let: pre' := update_rec_msgs pre (msg :: pre.(rec_msgs)) in
+  (* TODO: rec_msgs will be removed *)
+  (* let: pre' := update_rec_msgs pre (msg :: pre.(rec_msgs)) in *)
   let: type := msg.1.1.1.1 in
   let: ev := msg.1.1.1.2 in
   let: sender := msg.2 in
@@ -1055,15 +1056,15 @@ Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
   | val (Some v) =>
     let: vote := (sender, v) in
     match type with
-    | Proposal => set_proposals pre' r p (sender, c, v, true)
-    | Reproposal => set_proposals pre' r p (sender, c, v, false)
-    | Softvote => set_softvotes pre' r p vote
-    | Certvote => set_certvotes pre' r p vote
-    | Nextvote_Open => set_nextvotes_open pre' r p s vote
-    | Nextvote_Val => set_nextvotes_val pre' r p s vote
-    | Blocks => set_blocks pre' r p v
+    | Proposal => set_proposals pre r p (sender, c, v, true)
+    | Reproposal => set_proposals pre r p (sender, c, v, false)
+    | Softvote => set_softvotes pre r p vote
+    | Certvote => set_certvotes pre r p vote
+    | Nextvote_Open => set_nextvotes_open pre r p s vote
+    | Nextvote_Val => set_nextvotes_val pre r p s vote
+    | Blocks => set_blocks pre r p v
     end
-   | _ => pre'
+   | _ => pre
   end.
 
 (** The inductive definition of the user state transition relation **)
