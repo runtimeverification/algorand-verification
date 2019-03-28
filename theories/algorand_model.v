@@ -253,7 +253,7 @@ Inductive Credential :=
    a proposal (true) or a reproposal (false)
 *)
 
-Definition PropRecord := (credType * Value * bool)%type.
+Definition PropRecord := (UserId * credType * Value * bool)%type.
 
 (* A vote is a pair of UserID and Value *)
 Definition Vote := (UserId * Value)%type.
@@ -1055,8 +1055,8 @@ Definition deliver_result (pre : UState) (msg : Msg) c r p s : UState :=
   | val (Some v) =>
     let: vote := (sender, v) in
     match type with
-    | Proposal => set_proposals pre' r p (c, v, true)
-    | Reproposal => set_proposals pre' r p (c, v, false)
+    | Proposal => set_proposals pre' r p (sender, c, v, true)
+    | Reproposal => set_proposals pre' r p (sender, c, v, false)
     | Softvote => set_softvotes pre' r p vote
     | Certvote => set_certvotes pre' r p vote
     | Nextvote_Open => set_nextvotes_open pre' r p s vote
@@ -1293,9 +1293,9 @@ Qed.
 
 (* LIVENESS *)
 
-Lemma prop_a : forall u u' r B,
-  (Proposal, val (Some B), r, 1, u.(id)) \in u'.(rec_msgs) ->
-  B \in certvals u r 1.
+Lemma prop_a : forall u c r v,
+  (u.(id), c, v, true) \in u.(proposals) r 1 ->
+  v \in certvals u r 1.
 Admitted.
 
 End AlgoModel.
