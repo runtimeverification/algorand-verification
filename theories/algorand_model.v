@@ -778,27 +778,26 @@ Definition cert_may_exist (u:UState) : Prop :=
    credential (reproposal records are ignored) *)
 Fixpoint least_record (prs : seq PropRecord) : option PropRecord :=
   match prs with
-  | [::]                       => None
-  | [:: (cr, v, false)]        => None
-  | [:: (cr, v, true)]         => Some (cr, v, true)
-  | [:: (cr, v, false) & prs'] => least_record prs'
-  | [:: (cr, v, true) & prs']  =>
+  | [::]                          => None
+  | [:: (i, cr, v, false)]        => None
+  | [:: (i, cr, v, true)]         => Some (i, cr, v, true)
+  | [:: (i, cr, v, false) & prs'] => least_record prs'
+  | [:: (i, cr, v, true) & prs']  =>
   	  match least_record prs' with
-  	  | None => Some (cr, v, true)
-  	  | Some (_, _, false) => Some (cr, v, true)
-  	  | Some (cr', v', true) =>
-      if (cr' < cr)%O then Some (cr', v', true) else Some (cr, v, true)
+  	  | None => Some (i, cr, v, true)
+  	  | Some (_,_, _, false) => Some (i, cr, v, true)
+  	  | Some (i', cr', v', true) =>
+      if (cr' < cr)%O then Some (i', cr', v', true) else Some (i, cr, v, true)
     	end
   end.
 
-(* Returns the value proposed by the current potential leader as given by the
-   sequence of proposal records *)
+(* Returns whether the given value is the current potential leader value *)
 Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
   let opr := least_record prs in
   match opr with
   | None => False 
-  | Some (_, _, false) => False
-  | Some (cr, v', true) => v = v'
+  | Some (_,_, _, false) => False
+  | Some (i, cr, v', true) => v = v'
   end.
 
 (** Step 1: Proposing propositions and user state update **)
@@ -1072,12 +1071,13 @@ Definition timeout_result (pre : UState) : UState :=
 
 Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState :=
   let type := msg.1.1.1.1 in
+  let id := msg.2 in
   let ev := msg.1.1.1.2 in
   match ev with
   | val v =>
     match type with
-    | Proposal => set_proposals pre r p (c, v, true)
-    | Reproposal => set_proposals pre r p (c, v, false)
+    | Proposal => set_proposals pre r p (id, c, v, true)
+    | Reproposal => set_proposals pre r p (id, c, v, false)
     | Block => set_blocks pre r p v
     | _ => pre
     end
