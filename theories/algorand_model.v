@@ -1415,10 +1415,18 @@ Qed.
 
 (* LIVENESS *)
 
-Lemma prop_a : forall u c r v,
-  (u.(id), c, v, true) \in u.(proposals) r 1 ->
-  v \in certvals u r 1.
-Admitted.
+Definition cert_users (g : GState) v r p :=
+  [seq uid <- (domf g.(users)) | if g.(users).[? uid] is Some ustate
+                                 then v \in certvals ustate r p
+                                 else false
+  ].
 
+Lemma prop_a : forall g0 g uid ustate c r v,
+  greachable g0 g ->
+  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
+  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  size (cert_users g v r 1) > tau_c.
+Proof.
+  Admitted.
 
 End AlgoModel.
