@@ -795,7 +795,7 @@ Fixpoint least_record (prs : seq PropRecord) : option PropRecord :=
 Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
   let opr := least_record prs in
   match opr with
-  | None => False 
+  | None => False
   | Some (_,_, _, false) => False
   | Some (i, cr, v', true) => v = v'
   end.
@@ -1303,13 +1303,19 @@ Definition tick_update increment pre :=
   pre.(update_now (pre.(now) + pos increment)%R)
   .(update_users (tick_users increment pre)).
 
-Definition send_broadcast (targets:{fset UserId}) (deadline : R)
-           (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
-  catf_with msetU prev_msgs [fmap x : targets => [mset (deadline, msg)]].
+Definition msg_deadline (msg : Msg) now : R :=
+  match msg.1.1.1.1 with
+  | Block => (now + lambda + big_lambda)%R
+  | _ => (now + lambda)%R
+  end.
 
-Definition send_broadcasts (targets:{fset UserId}) (deadline : R)
+Definition send_broadcast (targets:{fset UserId}) (now : R)
+           (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
+  catf_with msetU prev_msgs [fmap x : targets => [mset (msg_deadline msg now, msg)]].
+
+Definition send_broadcasts (targets:{fset UserId}) (now : R)
            (prev_msgs:MsgPool) (msgs: seq Msg) : MsgPool :=
-  foldl (send_broadcast targets deadline) prev_msgs msgs.
+  foldl (send_broadcast targets now) prev_msgs msgs.
 
 (* Computes the global state after a message delivery,
    given the result of the user transition *)
@@ -1323,9 +1329,34 @@ Arguments delivery_result : clear implicits.
 
 Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
-  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
+  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) pre.(now)
                                pre.(msg_in_transit) sent in
   pre.(update_users users').(update_msgs_in_transit msgs').
+
+Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
+  let cur_deadline := fst msg in
+  let max_deadline := msg_deadline (snd msg) now in
+  let new_deadline := (Rmin cur_deadline max_deadline) in
+  (msgs `|` [mset (new_deadline, msg.2)])%mset.
+
+Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
+  foldl (reset_deadline now) mset0 msgs .
+
+Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
+  \big[(@catf _ _)/[fmap]]_(i <- domf msgpool)
+   (if msgpool.[? i] is Some msgs then [fmap].[i <- reset_user_msg_delays msgs now] else [fmap]).
+
+Definition partitioned pre : bool := pre.(network_partition).
+
+Definition unpartitioned pre : bool := ~~ partitioned pre.
+
+Definition make_partitioned (pre:GState) : GState :=
+  (flip_partition_flag pre).
+
+Definition recover_from_partitioned pre : GState :=
+  let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
+    update_msgs_in_transit msgpool' (flip_partition_flag pre) .
+
 
 (* The global transition relation *)
 
@@ -1347,6 +1378,12 @@ Inductive GTransition : g_transition_type :=
     forall ustate_post sent,
       (None,ustate_pre) ~> (ustate_post,sent) ->
       pre ~~> step_result pre uid ustate_post sent
+| enter_partition : forall pre,
+    unpartitioned pre ->
+    pre ~~> make_partitioned pre
+| exit_partition : forall pre,
+    partitioned pre ->
+    pre ~~> recover_from_partitioned pre
 where "x ~~> y" := (GTransition x y) : type_scope .
 
 (* We might also think of an initial state S and a schedule of events X
