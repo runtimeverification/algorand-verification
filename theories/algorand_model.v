@@ -20,7 +20,7 @@ Require Import Interval.Interval_tactic.
 Require Import Relation_Operators.
 
 From Algorand
-Require Import boolp Rstruct fmap_ext.
+Require Import boolp Rstruct R_util fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -51,63 +51,6 @@ We generally list the assumptions made in this version of the model so far:
 
 **
 **)
-
-(* Union two fmaps, using a combining function when both have a value for a key *)
-Definition catf_with {V : Type} (f : V -> V -> V) {K:choiceType} : {fmap K -> V} -> {fmap K -> V} -> {fmap K -> V}.
-  refine (fun m1 m2 => [fmap x : (domf m1 `|` domf m2) => _]).
-  (*  SearchAbout fnd. *)
-  change (if true then V else unit).
-  replace true with (m1.[? val x] || m2.[?val x]).
-  Focus 2.
-  pose proof (valP x).
-  rewrite in_fsetU in H.
-  rewrite fndSome; rewrite fndSome.
-  assumption.
-  refine(
-                match m1.[? val x] as r1, m2.[? val x] as r2 return if r1 || r2 then V else unit with
-                | Some v1, Some v2 => f v1 v2
-                | Some v1, None => v1
-                | None, Some v2 => v2
-                | None, None => tt
-                end).
-Defined.
-
-(* Some proofs about the model use lemmas that
-   do not refer to model types, and only show
-   properties of library types *)
-Section UtilLemmas.
-Lemma Forall_map : forall A B (f : A -> B) (P : B -> Prop) l,
-    List.Forall (fun a => P (f a)) l -> List.Forall P (map f l).
-Proof.
-  intros A B f P.
-  induction l.
-  simpl.
-  intro. constructor.
-  simpl.
-  inversion 1; subst.
-  constructor;solve[auto].
-Qed.
-
-Lemma Forall_impl2 : forall A (P Q R : A -> Prop),
-    (forall a, P a -> Q a -> R a) ->
-    forall l, List.Forall P l -> List.Forall Q l -> List.Forall R l.
-Proof.
-  intros A P Q R Himpl.
-  induction l.
-  intros;constructor.
-  inversion 1;subst. inversion 1;subst. constructor;solve[auto].
-Qed.
-
-Lemma Rle_pos_r : forall x y p,
-    (x <= y -> x <= y + pos p)%R.
-Proof.
-  intros x y p Hxy.
-  apply Rle_trans with (y + 0)%R.
-  rewrite Rplus_0_r;assumption.
-  clear x Hxy.
-  apply Rplus_le_compat_l, Rlt_le, cond_pos.
-Qed.
-End UtilLemmas.
 
 Section AlgoModel.
 
@@ -1273,8 +1216,6 @@ Inductive UTransition : u_transition_type :=
   *)
 where "x ~> y" := (UTransition x y) : type_scope .
 
-
-
 (* Global transition relation type *)
 Definition g_transition_type := relation GState .
 
@@ -1309,27 +1250,28 @@ Definition msg_deadline (msg : Msg) now : R :=
   | _ => (now + lambda)%R
   end.
 
-Definition send_broadcast (targets:{fset UserId}) (now : R)
-           (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
-  catf_with msetU prev_msgs [fmap x : targets => [mset (msg_deadline msg now, msg)]].
+Definition merge_msg_deadline (now : R) (msg : Msg) (u : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
+  msetU [mset (msg_deadline msg now, msg)] v.
 
-Definition send_broadcasts (targets:{fset UserId}) (now : R)
-           (prev_msgs:MsgPool) (msgs: seq Msg) : MsgPool :=
-  foldl (send_broadcast targets now) prev_msgs msgs.
+Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
+  updf prev_msgs targets (merge_msg_deadline now msg).
+
+Definition send_broadcasts (deadline : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
+  foldl (send_broadcast deadline targets) prev_msgs msgs.
 
 (* Computes the global state after a message delivery,
    given the result of the user transition *)
 Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transit)) delivered ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
-  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) (pre.(now)+lambda)%R
+  let msgs' := send_broadcasts (pre.(now)+lambda)%R (domf (pre.(users)) `\ uid)
                      pre.(msg_in_transit).[uid <- user_msgs'] sent in
   pre.(update_users users').(update_msgs_in_transit msgs').
 Arguments delivery_result : clear implicits.
 
 Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
-  let msgs' := send_broadcasts (domf (pre.(users)) `\ uid) pre.(now)
+  let msgs' := send_broadcasts (pre.(now))%R (domf (pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
   pre.(update_users users').(update_msgs_in_transit msgs').
 
@@ -1356,7 +1298,6 @@ Definition make_partitioned (pre:GState) : GState :=
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
     update_msgs_in_transit msgpool' (flip_partition_flag pre) .
-
 
 (* The global transition relation *)
 
@@ -1398,21 +1339,6 @@ Definition user_timers_valid : pred UState :=
     (Rleb u.(p_start) u.(timer) &&
      Rleb u.(timer) u.(deadline) ).
 
-(*
-Lemma tick_preserves_timers : forall pre,
-    List.Forall user_timers_valid pre.(users) ->
-    forall increment, tick_ok increment pre ->
-    List.Forall user_timers_valid (tick_result increment pre).(users).
-Proof.
-  destruct pre as [? ? users ?];unfold tick_ok;simpl;clear.
-  intros Htimers_valid increment Hcan_advance.
-  apply Forall_map. revert Htimers_valid Hcan_advance.
-  apply Forall_impl2. clear. intro u.
-  destruct u;simpl;clear.
-  destruct deadline0;intuition auto using Rle_pos_r;constructor.
-Qed.
-*)
-
 (* definition of reachable global state via paths *)
 
 Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
@@ -1447,8 +1373,6 @@ exists (y :: p) => //=.
 apply/andP.
 by split => //; apply/asboolP.
 Qed.
-
-
 
 (* LIVENESS *)
 

@@ -9,6 +9,7 @@ theories/algorand_model.v
 theories/boolp.v
 theories/reals.v
 theories/Rstruct.v
+theories/R_util.v
 theories/fmap_ext.v
 theories/global_state.v
 theories/local_state.v
