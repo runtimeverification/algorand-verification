@@ -22,6 +22,9 @@ Require Import Relation_Operators.
 From Algorand
 Require Import boolp Rstruct R_util fmap_ext.
 
+From Algorand
+Require Import local_state global_state.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -184,11 +187,6 @@ Hypothesis credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
 
-(*
-Inductive Credential :=
-  | cred : UserId -> nat -> nat -> nat -> Credential.
-*)
-
 (* A proposal/preproposal record is a triple consisting of two
    values along with a boolean indicating whether this is
    a proposal (true) or a reproposal (false)
@@ -205,330 +203,73 @@ Inductive StepName :=
   | Proposing
   | Softvoting
   | Certvoting
-  | Nextvoting .
+  | Nextvoting.
 
-(** And now the state of a user
-    Note: again we may end up not using all of these fields (and there may
-    be others we may want to add later)
-    Note: We probably don't need to maintain deadline in the user state as
-    it is a function of the current step.
-    Note: deadline is no longer an option type.
-**)
-Record UState :=
-  mkUState {
-    (* The user's unique identifier *)
-    (* TODO: to be removed *)
-    id            : UserId;
-    (* A flag indicating whether the user is controlled by the attacker *)
-    (* TODO: to be removed *)
-    corrupt       : bool;
-    (* The user's current round (starts at 1) *)
-    round         : nat;
-    (* The user's current period (starts at 1) *)
-    period        : nat;
-    (* The user's current step counter (starts at 1) *)
-    step          : nat;
-    (* The user's current step name (Proposing, Softvoting, ... etc) *)
-    (* No longer needed -- replaced with a function *)
-    (* step_name     : StepName; *)
-    (* The user's current timer value (since the beginning of the current period) *)
-    timer         : R;
-    (* The user's next deadline time value (since the beginning of the current period) *)
-    deadline      : R;
-    (* The (local) time at which the user's current period started (i.e. local clock = p_start + timer *)
-    p_start       : R;
-    (* unused -- will probably be dropped *)
-    (* rec_msgs      : seq Msg; *)
-    (* A sequence of proposal/reproposal records for the given round/period *)
-    proposals     : nat -> nat -> seq PropRecord;
-    (* A sequence of values seen for the given round/period *)
-    blocks        : nat -> nat -> seq Value;
-    (* A sequence of softvotes seen for the given round/period *)
-    softvotes     : nat -> nat -> seq Vote;
-    (* Need to maintain steps (??) *)
-    (* A sequence of certvotes seen for the given round/period *)
-    certvotes     : nat -> nat -> seq Vote;
-    (* A sequence of bottom-nextvotes seen for the given round/period/step *)
-    nextvotes_open: nat -> nat -> nat -> seq UserId;
-    (* A sequence of value-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote;
-    (* A flag for a given round and period indicating whether the preconditions
-       of certvoting in step 3 were satisfied at the time of step 3, regardless
-       of whether the user was actually in the committee of that step *)
-    has_certvoted : nat -> nat -> bool;
-    (* A sequence of values with high enough softvotes for for the given round/period *)
-    (* i.e. the set of values in softvotes r p having more votes than the threshold *)
-    (* No longer used: replaced by the function certvals *)
-    (*   certvals      : nat -> nat -> seq Value; *)
-    (* A sequence of values certified for in the last period *)
-    (* (so prev_certvals = (certvals current_round previous_period)) *)
-    (* No longer used: replaced by the function prev_certvals *)
-    (*   prev_certvals : seq Value; *)
-    (* A flag indicating whether the user has already certified a value in the previous period (current round) *)
-    (* (i.e. whether prev_certvals of last period is non-empty) *)
-    (* No longer used: replaced by the function cert_may_exist *)
-    (*   cert_may_exist: bool; *)
-  }.
+Definition UState := local_state.UState UserId Value PropRecord Vote.
 
-(*
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
- *)
+Notation id         := (local_state.id UserId Value PropRecord Vote).
+Notation corrupt         := (local_state.corrupt UserId Value PropRecord Vote).
+Notation round         := (local_state.round UserId Value PropRecord Vote).
+Notation period        := (local_state.period UserId Value PropRecord Vote).
+Notation step          := (local_state.step UserId Value PropRecord Vote).
+Notation timer         := (local_state.timer UserId Value PropRecord Vote).
+Notation deadline      := (local_state.deadline UserId Value PropRecord Vote).
+Notation p_start       := (local_state.p_start UserId Value PropRecord Vote).
+Notation proposals     := (local_state.proposals UserId Value PropRecord Vote).
+Notation blocks        := (local_state.blocks UserId Value PropRecord Vote).
+Notation softvotes     := (local_state.softvotes UserId Value PropRecord Vote).
+Notation certvotes     := (local_state.certvotes UserId Value PropRecord Vote).
+Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
+Notation nextvotes_val := (local_state.nextvotes_val UserId Value PropRecord Vote).
+Notation has_certvoted := (local_state.has_certvoted UserId Value PropRecord Vote).
 
-Definition update_step (u : UState) step' : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := step';
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-  |}.
-
-Definition update_timer (u : UState) timer' : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := timer';
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-  |}.
-
-Definition update_deadline (u : UState) deadline' : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := deadline';
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
-
-Definition set_proposals (u : UState) r' p' prop : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := fun r p => if (r, p) == (r', p')
+Definition set_proposals u r' p' prop : UState :=
+ {[ u with proposals := fun r p => if (r, p) == (r', p')
                                  then prop :: u.(proposals) r p
-                                 else u.(proposals) r p;
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+                                 else u.(proposals) r p ]}.
 
 Definition set_blocks (u : UState) r' p' block : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := fun r p => if (r, p) == (r', p')
+ {[ u with blocks := fun r p => if (r, p) == (r', p')
                                  then block :: u.(blocks) r p
-                                 else u.(blocks) r p;
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+                                 else u.(blocks) r p ]}.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := fun r p => if (r, p) == (r', p')
+  {[ u with softvotes := fun r p => if (r, p) == (r', p')
                                  then sv :: u.(softvotes) r p
-                                 else u.(softvotes) r p;
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+                                 else u.(softvotes) r p ]}.
 
-Definition set_certvotes (u : UState) r' p' cv : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := fun r p => if (r, p) == (r', p')
-                                 then cv :: u.(certvotes) r p
-                                 else u.(certvotes) r p;
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+Definition set_certvotes (u : UState) r' p' sv : UState :=
+  {[ u with certvotes := fun r p => if (r, p) == (r', p')
+                                 then sv :: u.(certvotes) r p
+                                 else u.(certvotes) r p ]}.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
+  {[ u with nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
                                    then nvo :: u.(nextvotes_open) r p s
-                                   else u.(nextvotes_open) r p s;
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+                                   else u.(nextvotes_open) r p s ]}.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := fun r p s => if (r, p, s) == (r', p', s')
+  {[ u with nextvotes_val := fun r p s => if (r, p, s) == (r', p', s')
                                    then nvv :: u.(nextvotes_val) r p s
-                                   else u.(nextvotes_val) r p s;
-    has_certvoted  := u.(has_certvoted);
-   |}.
+                                   else u.(nextvotes_val) r p s ]}.
 
 Definition set_has_certvoted (u : UState) r' p' b' : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period);
-    step           := u.(step);
-    timer          := u.(timer);
-    deadline       := u.(deadline);
-    p_start        := u.(p_start);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := fun r p => if (r, p) == (r', p') then b' else u.(has_certvoted) r p;
-   |}.
+  {[ u with has_certvoted := fun r p => if (r, p) == (r', p') then b' else u.(has_certvoted) r p ]}.
 
 Definition advance_period (u : UState) : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round);
-    period         := u.(period) + 1;
-    step           := 1;
-    timer          := 0%R;
-    deadline       := 0%R;
-    p_start        := u.(p_start) + u.(timer);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+  {[ {[ {[ {[ {[ u with period := u.(period) + 1 ]}
+                with step := 1 ]}
+             with timer := 0%R ]}
+          with deadline := 0%R ]}
+       with p_start := u.(p_start) + u.(timer) ]}.
 
 Definition advance_round (u : UState) : UState :=
-  {|
-    id             := u.(id);
-    corrupt        := u.(corrupt);
-    round          := u.(round) + 1;
-    period         := 1;
-    step           := 1;
-    timer          := 0%R;
-    deadline       := 0%R;
-    p_start        := u.(p_start) + u.(timer);
-    proposals      := u.(proposals);
-    blocks         := u.(blocks);
-    softvotes      := u.(softvotes);
-    certvotes      := u.(certvotes);
-    nextvotes_open := u.(nextvotes_open);
-    nextvotes_val  := u.(nextvotes_val);
-    has_certvoted  := u.(has_certvoted);
-   |}.
+  {[ {[ {[ {[ {[ {[ u with round := u.(round) + 1 ]}
+                   with period := 1 ]}
+                with step := 1 ]}
+             with timer := 0%R ]}
+          with deadline := 0%R ]}
+       with p_start := u.(p_start) + u.(timer) ]}.
 
 (* A proposition for whether a given credential qualifies its
    owner to be a committee member *)
@@ -779,9 +520,8 @@ Definition no_propose_ok (pre : UState) r p : Prop :=
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
 Definition propose_result (pre : UState) : UState :=
-  update_step
-    (update_deadline pre (2 * lambda)%R)
-    2.
+  {[ {[ pre with deadline := (2 * lambda)%R ]}
+       with step := 2 ]}.
 
 (** Step 2: Softvoting propositions and user state update **)
 
@@ -819,7 +559,7 @@ Definition softvote_repr_ok (pre : UState) (v : Value) r p : Prop :=
          (to avoid timing out while certvoting is already enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
 Definition softvote_result (pre : UState) : UState :=
-  update_step pre 3.
+  {[ pre with step := 3 ]}.
 (*  update_step
     (update_deadline pre (next_deadline pre.(step))
     3.
@@ -859,11 +599,9 @@ Definition no_certvote_ok (pre : UState) r p : Prop :=
 
 (* Certvoting step's resulting user state (both cases) *)
 Definition certvote_result (pre : UState) b : UState :=
-  update_step
-    (update_deadline
-      (set_has_certvoted pre pre.(round) pre.(period) b)
-      (lambda + big_lambda)%R)
-    4.
+  {[ {[ (set_has_certvoted pre pre.(round) pre.(period) b)
+             with step := 4 ]}
+             with deadline := (lambda + big_lambda)%R ]}.
 
 (** Even Steps >= 4: Nextvoting1 propositions and user state update **)
 
@@ -905,7 +643,7 @@ Definition nextvote1_stv_ok (pre : UState) (v : Value) r p s : Prop :=
 
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
 Definition nextvote1_result (pre : UState) s : UState :=
-  update_step pre (s + 1) .
+  {[ pre with step := (s + 1) ]}.
 (*  update_step
     (update_deadline pre (lambda + big_lambda + (INR s - 4) * L / 2)%R)
     (s + 1) .
@@ -940,9 +678,8 @@ Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
 
 (* Nextvoting step state update for odd steps s >= 5 (all cases) *)
 Definition nextvote2_result (pre : UState) s : UState :=
-  update_step
-    (update_deadline pre (lambda + big_lambda + (INR s - 3) * L / 2)%R)
-    (s + 1) .
+  {[ {[ pre with step := (s + 1) ]}
+       with deadline := (lambda + big_lambda + (INR s - 3) * L / 2)%R ]}.
 
 (** Advancing period propositions and user state update **)
 
@@ -1007,8 +744,8 @@ Definition timeout_ok (pre : UState) : Prop :=
 (* Note: In case of timing out a certvote step (3), the has_certvoted flag is
          false already (reset as a result of failing at the beginning of step 3) *)
 Definition timeout_result (pre : UState) : UState :=
-  let s := pre.(step) in
-    update_step (update_deadline pre (next_deadline s)) (s + 1) .
+  {[ {[ pre with deadline := next_deadline pre.(step) ]}
+       with step := pre.(step) + 1 ]}.
 
 (** Message delivery transitions **)
 
@@ -1223,7 +960,7 @@ Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u => Rleb (u.(timer) + pos increment) u.(deadline).
 
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
-  update_timer u (u.(timer) + pos increment)%R.
+  {[ u with timer := (u.(timer) + pos increment)%R ]}.
 
 Definition tick_ok_users increment (pre:GState) : bool :=
   \big[andb/true]_(uid <- domf pre.(users))
