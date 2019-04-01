@@ -20,9 +20,13 @@ Variable Msg : choiceType.
 
 Record GState :=
   mkGState {
+    (* The current global time value *)
     now : R ;
+    (* A flag indicating whether the network is currently partitioned *)
     network_partition : bool ;
+    (* The global set of users as a finite map of user ids to user states *)
     users : @finmap_of UserId UState (Phant _) ;
+    (* A multiset of messages in transit *)
     msg_in_transit : @finmap_of UserId (@multiset_of _ (Phant (R * Msg))) (Phant _)
   }.
 

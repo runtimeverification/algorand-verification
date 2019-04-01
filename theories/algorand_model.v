@@ -295,55 +295,15 @@ Definition leader_cred_step (u : UState) r p s : Prop :=
 Hypothesis leader_is_comm_member :
   forall cr : credType, leader_cred cr -> committee_cred cr .
 
+Notation now         := (global_state.now UserId UState [choiceType of Msg]).
+Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
+Notation users         := (global_state.users UserId UState [choiceType of Msg]).
+Notation msg_in_transit  := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
 
-(** The global state **)
-Record GState :=
-  mkGState {
-    (* The current global time value *)
-    now               : R;
-    (* A flag indicating whether the network is currently partitioned *)
-    network_partition : bool;
-    (* The global set of users as a finite map of user ids to user states *)
-    users             : {fmap UserId -> UState};
-    (* A multiset of messages in transit *)
-    msg_in_transit    : MsgPool;
-  }.
-
-(*
-  {| now := g.(now);
-     network_partition := g.(network_partition);
-     users := g.(users);
-     msg_in_transit := g.(msg_in_transit)
-  |}.
- *)
-
-Definition update_now (now' : R) (g : GState) : GState :=
-  {| now := now';
-     network_partition := g.(network_partition);
-     users := g.(users);
-     msg_in_transit := g.(msg_in_transit)
-  |}.
-
-Definition update_users (users' : {fmap UserId -> UState}) (g : GState) : GState :=
-  {| now := g.(now);
-     network_partition := g.(network_partition);
-     users := users';
-     msg_in_transit := g.(msg_in_transit)
-  |}.
-
-Definition update_msgs_in_transit (msgs' : MsgPool) (g : GState) : GState :=
-  {| now := g.(now);
-     network_partition := g.(network_partition);
-     users := g.(users);
-     msg_in_transit := msgs'
-  |}.
+Definition GState := global_state.GState UserId UState [choiceType of Msg].
 
 Definition flip_partition_flag (g : GState) : GState :=
-  {| now := g.(now);
-     network_partition := ~~ g.(network_partition);
-     users := g.(users);
-     msg_in_transit := g.(msg_in_transit)
-  |}.
+  {[ g with network_partition := ~~ g.(network_partition) ]}.
 
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
@@ -977,9 +937,9 @@ Definition tick_users increment pre : {fmap UserId -> UState} :=
   \big[(@catf _ _)/[fmap]]_(i <- domf pre.(users))
    (if pre.(users).[? i] is Some us then [fmap].[i <- user_advance_timer increment us] else [fmap]).
 
-Definition tick_update increment pre :=
-  pre.(update_now (pre.(now) + pos increment)%R)
-  .(update_users (tick_users increment pre)).
+Definition tick_update increment pre : GState :=
+  {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
+       with users := tick_users increment pre ]}.
 
 Definition msg_deadline (msg : Msg) now : R :=
   match msg.1.1.1.1 with
@@ -1002,15 +962,15 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
   let msgs' := send_broadcasts (pre.(now)+lambda)%R (domf (pre.(users)) `\ uid)
-                     pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  pre.(update_users users').(update_msgs_in_transit msgs').
+                              pre.(msg_in_transit).[uid <- user_msgs'] sent in
+  {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 Arguments delivery_result : clear implicits.
 
 Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let msgs' := send_broadcasts (pre.(now))%R (domf (pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
-  pre.(update_users users').(update_msgs_in_transit msgs').
+  {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 
 Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
   let cur_deadline := fst msg in
@@ -1034,7 +994,7 @@ Definition make_partitioned (pre:GState) : GState :=
 
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
-    update_msgs_in_transit msgpool' (flip_partition_flag pre) .
+  {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
 
 (* The global transition relation *)
 

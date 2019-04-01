@@ -1,7 +1,7 @@
 (* Remember to re-run
-   python2 scripts/extract_record_notation.py theories/GlobalState.v.rec GState > theories/GlobalState.v
+   python2 scripts/extract_record_notation.py theories/global_state.v.rec GState > theories/global_state.v
    after editing this file!
-   Running `make theories/GlobalState.v` should take care of this for you. *)
+   Running `make theories/global_state.v` should take care of this for you. *)
 
 From mathcomp.ssreflect
 Require Import all_ssreflect.
@@ -20,9 +20,13 @@ Variable Msg : choiceType.
 
 Record GState :=
   mkGState {
+    (* The current global time value *)
     now : R ;
+    (* A flag indicating whether the network is currently partitioned *)
     network_partition : bool ;
+    (* The global set of users as a finite map of user ids to user states *)
     users : @finmap_of UserId UState (Phant _) ;
+    (* A multiset of messages in transit *)
     msg_in_transit : @finmap_of UserId (@multiset_of _ (Phant (R * Msg))) (Phant _)
   }.
 
