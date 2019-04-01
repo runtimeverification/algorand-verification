@@ -923,19 +923,41 @@ Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   {[ u with timer := (u.(timer) + pos increment)%R ]}.
 
 Definition tick_ok_users increment (pre:GState) : bool :=
-  \big[andb/true]_(uid <- domf pre.(users))
-   (* we can't use codomf without making UState a choiceType *)
-   (if pre.(users).[? uid] is Some ustate then user_can_advance_timer increment ustate else true).
+  allf (user_can_advance_timer increment) pre.(users).
+
+Lemma tick_ok_usersP : forall increment (g : GState),
+  reflect
+    (forall (uid : UserId) (h : uid \in domf g.(users)), user_can_advance_timer increment g.(users).[h])
+    (tick_ok_users increment g).
+Proof.
+move => increment g.
+exact: allfP.
+Qed.
+
 Definition tick_ok_msgs (increment:posreal) (pre:GState) : bool :=
   let target_time := (pre.(now) + pos increment)%R in
   \big[andb/true]_(user_msgs <- codomf pre.(msg_in_transit))
-    \big[andb/true]_(m <- enum_mset user_msgs) Rleb target_time (fst m).
+   \big[andb/true]_(m <- (enum_mset user_msgs)) Rleb target_time (fst m).
+
 Definition tick_ok (increment:posreal) (pre:GState) : bool :=
   tick_ok_users increment pre && tick_ok_msgs increment pre.
 
 Definition tick_users increment pre : {fmap UserId -> UState} :=
-  \big[(@catf _ _)/[fmap]]_(i <- domf pre.(users))
-   (if pre.(users).[? i] is Some us then [fmap].[i <- user_advance_timer increment us] else [fmap]).
+  updf pre.(users) (domf pre.(users)) (fun _ us => user_advance_timer increment us).
+
+Lemma tick_users_domf : forall increment pre,
+  domf pre.(users) = domf (tick_users increment pre).
+Proof.
+move => increment pre.
+by rewrite -updf_domf.
+Qed.
+
+Lemma tick_users_upd : forall increment pre uid (h : uid \in domf pre.(users)),
+  (tick_users increment pre).[? uid] = Some (user_advance_timer increment pre.(users).[h]).
+Proof.
+move => increment pre uid h.
+by rewrite updf_update.
+Qed.
 
 Definition tick_update increment pre : GState :=
   {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
