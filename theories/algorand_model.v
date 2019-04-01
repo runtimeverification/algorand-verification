@@ -563,27 +563,28 @@ Definition certvote_result (pre : UState) b : UState :=
              with step := 4 ]}
              with deadline := (lambda + big_lambda)%R ]}.
 
-(** Even Steps >= 4: Nextvoting1 propositions and user state update **)
+(** Steps >= 4: Nextvoting1 propositions and user state update **)
 
 (* First nextvoting step preconditions *)
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote1_val_ok (pre : UState) (v : Value) r p s : Prop :=
+Definition nextvote_val_ok (pre : UState) (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda)%R /\
   valid_rps pre r p Nextvoting /\
-  Nat.Even s /\ s >= 4 /\
-  comm_cred_step pre r p s /\ (* Note: we use s even here instead of 5 *)
+  valid_block_and_hash pre b v r p /\
+  (* Nat.Even s /\ *) s >= 4 /\
+  comm_cred_step pre r p s /\
   pre.(has_certvoted) r p.
 
 (* First nextvoting step preconditions *)
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
+Definition nextvote_open_ok (pre : UState) (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda)%R /\
   valid_rps pre r p Nextvoting /\
-  Nat.Even s /\ s >= 4 /\
+  (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step pre r p s /\
   ~ pre.(has_certvoted) r p /\
   (p = 1 \/ (p > 1 /\ nextvote_bottom_quorum pre r (p - 1) s )) /\
@@ -593,48 +594,21 @@ Definition nextvote1_open_ok (pre : UState) (v : Value) r p s : Prop :=
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
 (*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) *)
-Definition nextvote1_stv_ok (pre : UState) (v : Value) r p s : Prop :=
+Definition nextvote_stv_ok (pre : UState) (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda)%R /\
   valid_rps pre r p Nextvoting /\
-  Nat.Even s /\ s >= 4 /\
+  (*Nat.Even s /\ *) s >= 4 /\
   ~ pre.(has_certvoted) r p /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
   comm_cred_step pre r p s. (* required (?) *)
 
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
-Definition nextvote1_result (pre : UState) s : UState :=
+Definition nextvote_result (pre : UState) s : UState :=
   {[ pre with step := (s + 1) ]}.
 (*  update_step
     (update_deadline pre (lambda + big_lambda + (INR s - 4) * L / 2)%R)
     (s + 1) .
 *)
-
-(** Odd Steps >= 5: Nextvoting2 propositions and user state update **)
-
-(* Second nextvoting step (Step 5.1) preconditions *)
-(* The proper-value case *)
-(* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote2_val_ok (pre : UState) (v b : Value) r p s : Prop :=
-  (lambda + big_lambda <= pre.(timer) < lambda + big_lambda + L)%R /\
-  valid_rps pre r p Nextvoting /\
-  Nat.Odd s /\ s >= 5 /\
-  comm_cred_step pre r p s /\
-  valid_block_and_hash pre b v r p /\
-  v \in certvals pre r p .
-
-(* Second nextvoting step (Step 5.2) preconditions *)
-(* The bottom-value case *)
-(* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
-Definition nextvote2_open_ok (pre : UState) (v : Value) r p s : Prop :=
-  (lambda + big_lambda <= pre.(timer) < lambda + big_lambda + L)%R /\
-  valid_rps pre r p Nextvoting /\
-  Nat.Odd s /\ s >= 5 /\
-  comm_cred_step pre r p s /\ (* TODO: the step value here should be different from the above case *)
-  ~ pre.(has_certvoted) r p /\
-  p > 1 /\ nextvote_bottom_quorum pre r (p - 1) 5 /\
-  ~ cert_may_exist pre . (* extra? *)
 
 (* Nextvoting step state update for odd steps s >= 5 (all cases) *)
 Definition nextvote2_result (pre : UState) s : UState :=
@@ -784,27 +758,20 @@ Inductive UTransition : u_transition_type :=
       no_certvote_ok pre r p ->
       (None, pre) ~> (certvote_result pre false, [::])
 
-  (* Even Steps >= 4: First Finishing Step - i has not cert-voted some v *)
-  | nextvote1_open : forall (pre : UState) v r p s,
-      nextvote1_open_ok pre v r p s ->
-      (None, pre) ~> (nextvote1_result pre s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
-  (* Even Steps >= 4: First Finishing Step - i has cert-voted some v *)
-  | nextvote1_val : forall (pre : UState) v r p s,
-      nextvote1_val_ok pre v r p s ->
-      (None, pre) ~> (nextvote1_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
-  (* Even Steps >= 4: First Finishing Step - special case of using stv *)
-  | nextvote1_stv : forall (pre : UState) v r p s,
-      nextvote1_stv_ok pre v r p s ->
-      (None, pre) ~> (nextvote1_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
+  (* Step 4: First Finishing Step - i has cert-voted some v *)
+  | nextvote_val : forall (pre : UState) v b r p s,
+      nextvote_val_ok pre v b r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
 
-  (* Odd Steps >= 5: Second Finishing Step - i has not cert-voted some v *)
-  | nextvote2_open : forall (pre : UState) v r p s,
-      nextvote2_open_ok pre v r p s ->
-      (None, pre) ~> (nextvote2_result pre s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
-  (* Odd Steps >= 5: Second Finishing Step - i has cert-voted some v *)
-  | nextvote2_val : forall (pre : UState) v b r p s,
-      nextvote2_val_ok pre v b r p s ->
-      (None, pre) ~> (nextvote2_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
+  (* Step 4: First Finishing Step - i has not cert-voted some v *)
+  | nextvote_open : forall (pre : UState) v r p s,
+      nextvote_open_ok pre v r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
+
+  (* Even Steps >= 4: First Finishing Step - special case of using stv *)
+  | nextvote_stv : forall (pre : UState) v r p s,
+      nextvote_stv_ok pre v r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
 
   (** Deliver messages and possibly trigger actions urgently **)
 
@@ -812,7 +779,7 @@ Inductive UTransition : u_transition_type :=
   | deliver_softvote : forall (pre : UState) r p s i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
         ~ certvote_ok pre' v b r p ->
-        ~ nextvote2_val_ok pre' v b r p s ->
+        ~ nextvote_val_ok pre' v b r p s ->
         (Some (Softvote, val v, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a softvote and certvote for the value [committee member case] *)
@@ -832,21 +799,21 @@ Inductive UTransition : u_transition_type :=
   (* Deliver a softvote and nextvote for the value *)
   | deliver_softvote_nextvote_val : forall (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        nextvote2_val_ok pre' v b r p s ->
+        nextvote_val_ok pre' v b r p s ->
         (* Note that this necessarily implies certvote_ok pre' v r p s cannot be true *)
         (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
 
   (* Deliver a nextvote for bottom while not triggering any internal action *)
   | deliver_nextvote_open : forall (pre : UState) r p s i v,
       let pre' := set_nextvotes_open pre r p s i in
-        ~ nextvote2_open_ok pre' v r p s ->
+        ~ nextvote_open_ok pre' v r p s ->
         ~ adv_period_open_ok pre' r p s ->
         (Some (Nextvote_Open, step_val s, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a nextvote for bottom and do the nextvote_open action *)
   | deliver_nextvote_open_nextvote : forall (pre : UState) r p s i v,
       let pre' := set_nextvotes_open pre r p s i in
-      	nextvote2_open_ok pre' v r p s ->
+      	nextvote_open_ok pre' v r p s ->
         ~ adv_period_open_ok pre' r p s ->
         (Some (Nextvote_Open, step_val s, r, p, i), pre) ~>
           (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
