@@ -318,6 +318,12 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (lambda < big_lambda < L)%R .
 
+(* additional time delay introduced by the adversary when the network is 
+   partitioned *)
+Variable rho : R.
+
+Hypothesis arbitrary_rho : (rho >= 0)%R .
+
 (* some other thresholds *)
 (* number of soft-votes needed to cert-vote *)
 Variable tau_s : nat.
@@ -334,7 +340,6 @@ Variable tau_v : nat.
 (* upper bound on the credential to be part of the committee for step s *)
 (* this is no longer needed!! *)
 (* Variable chi   : nat -> nat. *)
-
 
 (** Helper functions/propositions for the user-state-level trnasitions **)
 
@@ -930,6 +935,7 @@ Definition tick_update increment pre : GState :=
   {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
        with users := tick_users increment pre ]}.
 
+(* Computes the standard deadline of a message based on its type *)
 Definition msg_deadline (msg : Msg) now : R :=
   match msg.1.1.1.1 with
   | Block => (now + lambda + big_lambda)%R
@@ -955,32 +961,56 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 Arguments delivery_result : clear implicits.
 
+(* Computes the global state after an internal user-level transition
+   given the result of the user transition and the messages sent out *)
 Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let msgs' := send_broadcasts (pre.(now))%R (domf (pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
   {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 
+(* Resets the deadline of a message having an excessively high delay *)
 Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
   let cur_deadline := fst msg in
   let max_deadline := msg_deadline (snd msg) now in
   let new_deadline := (Rmin cur_deadline max_deadline) in
   (msgs `|` [mset (new_deadline, msg.2)])%mset.
 
+(* Recursively resets message deadlines of all the messages given *) 
 Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
   foldl (reset_deadline now) mset0 msgs .
 
+(* Constructs a message pool with all deadlines of messages having excessively 
+   high delays reset appropriately based on the message type *)
 Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
   \big[(@catf _ _)/[fmap]]_(i <- domf msgpool)
    (if msgpool.[? i] is Some msgs then [fmap].[i <- reset_user_msg_delays msgs now] else [fmap]).
 
-Definition partitioned pre : bool := pre.(network_partition).
+(* Postpones the deadline of a message (extending its delivery delay) *)
+Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
+  let ext_deadline := (fst msg + r)%R in
+  (msgs `|` [mset (ext_deadline, msg.2)])%mset.
 
-Definition unpartitioned pre : bool := ~~ partitioned pre.
+(* Recursively postpones the deadlines of all the messages given *)
+Definition extend_user_msg_delays r msgs : {mset R * Msg} :=
+  foldl (extend_deadline r) mset0 msgs .
 
+(* Constructs a message pool with all deadlines postponed by rho *)
+Definition extend_msg_deadlines (msgpool : MsgPool) : MsgPool :=
+  \big[(@catf _ _)/[fmap]]_(i <- domf msgpool)
+   (if msgpool.[? i] is Some msgs then [fmap].[i <- extend_user_msg_delays rho msgs] else [fmap]).
+
+(* Is the network in a partitioned/unpartitioned state? *)
+Definition is_partitioned pre : bool := pre.(network_partition).
+Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
+
+(* Computes the state resulting from getting partitioned *)
 Definition make_partitioned (pre:GState) : GState :=
-  (flip_partition_flag pre).
+  let msgpool' := extend_msg_deadlines pre.(msg_in_transit) in
+  {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
+(*  (flip_partition_flag pre). *)
 
+(* Computes the state resulting from recovering from a partition *)
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
   {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
@@ -1006,17 +1036,13 @@ Inductive GTransition : g_transition_type :=
       (None,ustate_pre) ~> (ustate_post,sent) ->
       pre ~~> step_result pre uid ustate_post sent
 | enter_partition : forall pre,
-    unpartitioned pre ->
+    is_unpartitioned pre ->
     pre ~~> make_partitioned pre
 | exit_partition : forall pre,
-    partitioned pre ->
+    is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
 where "x ~~> y" := (GTransition x y) : type_scope .
 
-(* We might also think of an initial state S and a schedule of events X
-   and comptue traces corresponding to S and X, and then showing properties
-   on them
-*)
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
