@@ -573,52 +573,52 @@ Definition certvote_result (pre : UState) b : UState :=
 (* First nextvoting step preconditions *)
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
+(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
+          - Updatesd to accommodate the 27March change
+ *)
 Definition nextvote_val_ok (pre : UState) (v b : Value) r p s : Prop :=
-  pre.(timer) = (lambda + big_lambda)%R /\
+  pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   valid_block_and_hash pre b v r p /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step pre r p s /\
-  pre.(has_certvoted) r p.
+  (* pre.(has_certvoted) r p. *)
+  v \in certvals pre r p.
 
 (* First nextvoting step preconditions *)
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) *)
+(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) 
+          - Updatesd to accommodate the 27March change
+*)
 Definition nextvote_open_ok (pre : UState) (v : Value) r p s : Prop :=
-  pre.(timer) = (lambda + big_lambda)%R /\
+  pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step pre r p s /\
-  ~ pre.(has_certvoted) r p /\
+  (* ~ pre.(has_certvoted) r p /\ *)
   (p = 1 \/ (p > 1 /\ nextvote_bottom_quorum pre r (p - 1) s )) /\
   ~ cert_may_exist pre . (* extra? *)
 
 (* First nextvoting step preconditions *)
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
-(*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) *)
+(*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) 
+          - Updatesd to accommodate the 27March change
+*)
 Definition nextvote_stv_ok (pre : UState) (v : Value) r p s : Prop :=
-  pre.(timer) = (lambda + big_lambda)%R /\
+  pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (*Nat.Even s /\ *) s >= 4 /\
-  ~ pre.(has_certvoted) r p /\
+  ~ v \in certvals pre r p /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
   comm_cred_step pre r p s. (* required (?) *)
 
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
+(* Note: Updatesd to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
-  {[ pre with step := (s + 1) ]}.
-(*  update_step
-    (update_deadline pre (lambda + big_lambda + (INR s - 4) * L / 2)%R)
-    (s + 1) .
-*)
-
-(* Nextvoting step state update for odd steps s >= 5 (all cases) *)
-Definition nextvote2_result (pre : UState) s : UState :=
-  {[ {[ pre with step := (s + 1) ]}
-       with deadline := (lambda + big_lambda + (INR s - 3) * L / 2)%R ]}.
+  {[ {[ pre with step := (s + 1) ]} 
+            with deadline := (lambda + big_lambda + (INR s - 3) * L)%R]}.
 
 (** Advancing period propositions and user state update **)
 
@@ -657,6 +657,7 @@ Definition certify_result (pre : UState) : UState := advance_round pre.
 (* The timer deadline value for the NEXT step following the given step value *)
 (* Note: k is zero-based and hence the apparent difference from the algorand paper.
          The computed deadline values are exactly as given in the paper. *)
+(* Note: Updatesd to accommodate the 27March change *)
 Definition next_deadline k : R :=
   match k with
   (* deadline for step 1 *)
@@ -665,23 +666,19 @@ Definition next_deadline k : R :=
   | 1 => (2 * lambda)%R
   (* deadline for step 3 *)
   | 2 => (lambda + big_lambda)%R
-  | n => if odd n
-         (* deadlines for steps 4, 6, ... *)
-         then (lambda + big_lambda + (INR n - 3) * L / 2)%R
-         (* deadlines for steps 5, 7, ... *)
-         else (lambda + big_lambda + (INR n - 2) * L / 2)%R
+  (* deadlines for steps 4, 5, 6, ... *)
+  | n => (lambda + big_lambda + (INR n - 3) * L)%R
   end.
 
 (* A user timeouts if a deadline is reached while waiting for some external messages
-   (i.e. while observing softvotes or nextvotes in odd steps >= 3) *)
+   (i.e. while observing softvotes in step 3) *)
 (* Note: This captures the timeout transitions in the automaton model in addition
          to timing out in the repeated steps *)
+(* Note: Updatesd to accommodate the 27March change *)
 Definition timeout_ok (pre : UState) : Prop :=
-  let s := pre.(step) in s > 1 /\ odd s /\ (pre.(timer) >= pre.(deadline))%R.
+  pre.(step) = 3 /\ (pre.(timer) >= pre.(deadline))%R.
 
 (* On a timeout, move on to the next step and update the deadline *)
-(* Note: In case of timing out a certvote step (3), the has_certvoted flag is
-         false already (reset as a result of failing at the beginning of step 3) *)
 Definition timeout_result (pre : UState) : UState :=
   {[ {[ pre with deadline := next_deadline pre.(step) ]}
        with step := pre.(step) + 1 ]}.
@@ -763,17 +760,17 @@ Inductive UTransition : u_transition_type :=
       no_certvote_ok pre r p ->
       (None, pre) ~> (certvote_result pre false, [::])
 
-  (* Step 4: First Finishing Step - i has cert-voted some v *)
+  (* Steps >= 4: Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall (pre : UState) v b r p s,
       nextvote_val_ok pre v b r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
 
-  (* Step 4: First Finishing Step - i has not cert-voted some v *)
+  (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
   | nextvote_open : forall (pre : UState) v r p s,
       nextvote_open_ok pre v r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
 
-  (* Even Steps >= 4: First Finishing Step - special case of using stv *)
+  (* Steps >= 4: Finishing Step - special case of using stv *)
   | nextvote_stv : forall (pre : UState) v r p s,
       nextvote_stv_ok pre v r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
@@ -781,47 +778,50 @@ Inductive UTransition : u_transition_type :=
   (** Deliver messages and possibly trigger actions urgently **)
 
   (* Deliver a softvote while not triggering any internal action *)
-  | deliver_softvote : forall (pre : UState) r p s i v b,
+  | deliver_softvote : forall (pre : UState) r p i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
         ~ certvote_ok pre' v b r p ->
-        ~ nextvote_val_ok pre' v b r p s ->
+        (* ~ nextvote_val_ok pre' v b r p s -> *)
         (Some (Softvote, val v, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a softvote and certvote for the value [committee member case] *)
   | deliver_softvote_certvote1 : forall (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' v b r p -> comm_cred_step pre r p s ->
-        (* Note that this necessarily implies nextvote2_val_ok pre' r p s cannot be true *)
         (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, pre.(id))])
 
   (* Deliver a softvote and certvote for the value [non-committee member case] *)
   | deliver_softvote_certvote2 : forall (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' v b r p -> ~ comm_cred_step pre r p s ->
-        (* Note that this necessarily implies nextvote2_val_ok pre' r p s cannot be true *)
         (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [::])
 
   (* Deliver a softvote and nextvote for the value *)
+  (* No longer needed after the 27March change *)
+  (*
   | deliver_softvote_nextvote_val : forall (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         nextvote_val_ok pre' v b r p s ->
         (* Note that this necessarily implies certvote_ok pre' v r p s cannot be true *)
         (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
-
+  *)
+  
   (* Deliver a nextvote for bottom while not triggering any internal action *)
-  | deliver_nextvote_open : forall (pre : UState) r p s i v,
+  | deliver_nextvote_open : forall (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
-        ~ nextvote_open_ok pre' v r p s ->
+        (* ~ nextvote_open_ok pre' v r p s -> *)
         ~ adv_period_open_ok pre' r p s ->
         (Some (Nextvote_Open, step_val s, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a nextvote for bottom and do the nextvote_open action *)
-  | deliver_nextvote_open_nextvote : forall (pre : UState) r p s i v,
+  (* No longer needed after the 27March change *)
+  (*
+    | deliver_nextvote_open_nextvote : forall (pre : UState) r p s i v,
       let pre' := set_nextvotes_open pre r p s i in
       	nextvote_open_ok pre' v r p s ->
         ~ adv_period_open_ok pre' r p s ->
         (Some (Nextvote_Open, step_val s, r, p, i), pre) ~>
-          (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
+          (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))]) *)
 
   (* Deliver a nextvote for bottom and advance the period *)
   (* Note: Advancing the period takes precedence over nextvote2_open actions *)
@@ -862,27 +862,11 @@ Inductive UTransition : u_transition_type :=
 
   (** Generic timeout action **)
 
-  (* Timeout transitions -- Applies to odd steps > 1 *)
+  (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
   | timeout : forall (pre : UState),
       timeout_ok pre ->
       (None, pre) ~> (timeout_result pre, [::])
 
-  (* Advance period (based on too many bottom-value votes) *)
-  (* NOTE: Has now been replaced by deliver_nextvote_open_adv_prd triggered by receiving a certvote *)
-  (* | adv_period_open : forall (pre : UState) v r p s,
-      adv_period_open_ok pre v r p s ->
-      (None, pre) ~> (adv_period_result pre, [::]) *)
-  (* Advance period (based on enough non-bottom-value votes) *)
-  (* NOTE: Has now been replaced by deliver_nextvote_val_adv_prd triggered by receiving a certvote *)
-  (* | adv_period_val : forall (pre : UState) v r p s,
-      adv_period_val_ok pre v r p s ->
-      (None, pre) ~> (adv_period_result pre, [::]) *)
-  (* Advance rounds - TODO: no broadcast in the automaton model *)
-  (* NOTE: Has now been replaced by deliver_certvote_adv_rnd triggered by receiving a certvote *)
-  (*| certify : forall (pre : UState) v b r p,
-      certify_ok pre v b r p ->
-      (None, pre) ~> (certify_result pre, [:: (Certvote, val v, r, p, pre.(id))])
-  *)
 where "x ~> y" := (UTransition x y) : type_scope .
 
 (* Global transition relation type *)
