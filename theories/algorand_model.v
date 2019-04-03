@@ -1330,6 +1330,32 @@ Definition cert_users (g : GState) v r p :=
                                  else false
   ].
 
+Definition unique_stv_bot (g : GState) p :=
+  all
+    (fun uid => if g.(users).[? uid] is Some ustate
+                then ustate.(stv) p == None
+                else false)
+    (domf g.(users)).
+
+Definition all_honest_stv (g : GState) p v :=
+  all
+    (fun uid => if g.(users).[? uid] is Some ustate
+                then if ustate.(corrupt) == false
+                     then ustate.(stv) p == Some v
+                     else true
+                else false)
+    (domf g.(users)).
+
+Definition all_honest_stv_or_bot (g : GState) p v :=
+  all
+    (fun uid => if g.(users).[? uid] is Some ustate
+                then if ustate.(corrupt) == false
+                     then if ustate.(stv) p == None
+                          then true else ustate.(stv) p == Some v
+                     else true
+                else false)
+    (domf g.(users)).
+
 Lemma prop_a : forall g0 g uid ustate c r v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
@@ -1345,6 +1371,34 @@ Lemma prop_b : forall g0 g uid ustate c r b v,
   (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) <= tau_c.
 Proof.
+Admitted.
+
+Lemma prop_c : forall g0 g uid ustate c r v p s,
+  greachable g0 g ->
+  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
+  leader_cred_step ustate r p s ->
+  unique_stv_bot g p ->
+  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  size (cert_users g v r 1) > tau_c.
+Admitted.
+
+Lemma prop_e : forall g0 g r b v p,
+  greachable g0 g ->
+  p >= 2 ->
+  all_honest_stv g p v ->
+  valid b /\ correct_hash v b ->
+  (* TODO: need to filter by just honest users in cert_users? *)
+  size (cert_users g v r p) > tau_c.
+Admitted.
+
+Lemma prop_g : forall g0 g r b v p,
+  greachable g0 g ->
+  p >= 2 ->
+  all_honest_stv_or_bot g p v ->
+  valid b /\ correct_hash v b ->
+  (* TODO: need to filter by just honest users in cert_users? *)
+  (* TODO: timely produced? *)
+  size (cert_users g v r p) > tau_c.
 Admitted.
 
 End AlgoModel.
