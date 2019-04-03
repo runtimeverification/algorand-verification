@@ -1084,6 +1084,15 @@ Lemma prop_a : forall g0 g uid ustate c r v,
   (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) > tau_c.
 Proof.
-  Admitted.
+Admitted.
+
+Lemma prop_b : forall g0 g uid ustate c r b v,
+  greachable g0 g ->
+  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
+  ~ valid_block_and_hash ustate b v r 1 ->
+  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  size (cert_users g v r 1) <= tau_c.
+Proof.
+Admitted.
 
 End AlgoModel.
