@@ -32,6 +32,8 @@ Record UState :=
     p_start       : R;
     (* A sequence of proposal/reproposal records for the given round/period *)
     proposals     : nat -> nat -> seq PropRecord;
+    (* Starting value *)
+    stv           : nat -> option Value;
     (* A sequence of values seen for the given round/period *)
     blocks        : nat -> nat -> seq Value;
     (* A sequence of softvotes seen for the given round/period *)

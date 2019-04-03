@@ -215,6 +215,7 @@ Notation step          := (local_state.step UserId Value PropRecord Vote).
 Notation timer         := (local_state.timer UserId Value PropRecord Vote).
 Notation deadline      := (local_state.deadline UserId Value PropRecord Vote).
 Notation p_start       := (local_state.p_start UserId Value PropRecord Vote).
+Notation stv           := (local_state.stv UserId Value PropRecord Vote).
 Notation proposals     := (local_state.proposals UserId Value PropRecord Vote).
 Notation blocks        := (local_state.blocks UserId Value PropRecord Vote).
 Notation softvotes     := (local_state.softvotes UserId Value PropRecord Vote).
