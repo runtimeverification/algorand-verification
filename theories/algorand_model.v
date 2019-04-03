@@ -576,7 +576,7 @@ Definition certvote_result (pre : UState) b : UState :=
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
-          - Updatesd to accommodate the 27March change
+          - Updated to accommodate the 27March change
  *)
 Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -591,7 +591,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) 
-          - Updatesd to accommodate the 27March change
+          - Updated to accommodate the 27March change
 *)
 Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -606,7 +606,7 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
 (*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) 
-          - Updatesd to accommodate the 27March change
+          - Updated to accommodate the 27March change
 *)
 Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -617,7 +617,7 @@ Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   comm_cred_step uid r p s. (* required (?) *)
 
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
-(* Note: Updatesd to accommodate the 27March change *)
+(* Note: Updated to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
   {[ {[ pre with step := (s + 1) ]} 
             with deadline := (lambda + big_lambda + (INR s - 3) * L)%R]}.
@@ -659,7 +659,7 @@ Definition certify_result (pre : UState) : UState := advance_round pre.
 (* The timer deadline value for the NEXT step following the given step value *)
 (* Note: k is zero-based and hence the apparent difference from the algorand paper.
          The computed deadline values are exactly as given in the paper. *)
-(* Note: Updatesd to accommodate the 27March change *)
+(* Note: Updated to accommodate the 27March change *)
 Definition next_deadline k : R :=
   match k with
   (* deadline for step 1 *)
@@ -676,7 +676,7 @@ Definition next_deadline k : R :=
    (i.e. while observing softvotes in step 3) *)
 (* Note: This captures the timeout transitions in the automaton model in addition
          to timing out in the repeated steps *)
-(* Note: Updatesd to accommodate the 27March change *)
+(* Note: Updated to accommodate the 27March change *)
 Definition timeout_ok (pre : UState) : Prop :=
   pre.(step) = 3 /\ (pre.(timer) >= pre.(deadline))%R.
 
