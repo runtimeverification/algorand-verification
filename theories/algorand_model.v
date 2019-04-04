@@ -1070,6 +1070,46 @@ apply/andP.
 by split => //; apply/asboolP.
 Qed.
 
+(* Sensible states *)
+(* This notion specifiies what states can be considered valid states. The idea
+   is that we only consider execution traces that begin at sensible states,
+   since sensibility is preserved by the transition system (to be shown), the
+   set of reachable states will also be sensible (to be shown). This means that
+   it is not important which specific state is assumed as the initial state as
+   long as the state is sensible.
+   Note: the transditional operational notion of an initial state is a now a 
+   special case of sensibility *)
+Definition sensible_ustate (us : UState) : Prop := 
+  (us.(p_start) >= 0)%R /\
+  (us.(p_start) <= us.(timer) <= us.(deadline))%R /\
+  us.(deadline) = next_deadline(us.(step) - 1) .
+
+Definition sensible_gstate (gs : GState) : Prop :=
+  (gs.(now) >= 0)%R /\
+  ~ gs.(users) = [fmap] /\
+  domf gs.(msg_in_transit) `<=` domf gs.(users) /\
+  forall uid (k:uid \in gs.(users)), sensible_ustate gs.(users).[k] /\
+  domf (gs.(msg_in_transit)) `<=` domf gs.(users). (* needed? *)
+  (* more constraints if we add corrupt users map and total message history *)
+
+(* The user transition relation preserves sensibility of user states *)
+Lemma utr_preserves_sensibility : forall us us' m ms,
+  sensible_ustate us -> (m, us) ~> (us', ms) ->
+  sensible_ustate us'.
+Admitted.
+
+(* The global transition relation preserves sensibility of global states *)
+Lemma gtr_preserves_sensibility : forall gs gs',
+  sensible_gstate gs -> gs ~~> gs' -> 
+  sensible_gstate gs'.
+Admitted. 
+
+(* Generalization of preservation of sensibility to paths *)
+Lemma greachable_preserves_sensibility : forall g0 g, 
+  greachable g0 g -> sensible_gstate g0 -> sensible_gstate g.
+Admitted.
+
+
 (* SAFETY *)
 
 (* To show there is not a fork in a particular round,
