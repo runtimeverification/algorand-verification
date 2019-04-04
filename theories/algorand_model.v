@@ -1070,6 +1070,67 @@ apply/andP.
 by split => //; apply/asboolP.
 Qed.
 
+(* SAFETY *)
+
+(* To show there is not a fork in a particular round,
+   we will take a history that extends before any honest
+   node started that round *)
+Definition user_before_round r (u : UState) : Prop :=
+  u.(round) < r
+  /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(blocks) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s))
+  /\ (forall r' p, r <= r' -> negb (u.(has_certvoted) r' p)).
+
+Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
+  forall i (Hi : i \in g.(users)),
+    negb (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
+
+Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
+  forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
+  forall deadline msg, (deadline,msg) \in mailbox ->
+     let: (_,_,r',_,u) := msg in
+     r' > r ->
+     match g.(users).[? u] return Prop with
+     | None => True
+     | Some ustate => ustate.(corrupt)
+     end.
+
+Definition state_before_round r (g:GState) : Prop :=
+  honest_users_before_round r g
+  /\ honest_messages_before_round r g.
+
+Definition user_honest (uid:UserId) (g:GState) : bool :=
+  match g.(users).[? uid] with
+  | Some ustate => negb (ustate.(corrupt))
+  | None => false
+  end.
+
+(* A message from an honest user was actually sent in the trace *)
+(* Use this to relate an honest user having received a quorum of messages
+   to some honest user having sent those messages *)
+(* Hopefully the statement can be cleaned up *)
+Lemma recved_honest_sent : forall r g0 g1 path_seq pending,
+    state_before_round r g0 ->
+    path gtransition g0 path_seq ->
+    g1 = last g0 path_seq ->
+    forall uid (key_msg : uid \in g1.(msg_in_transit)),
+      pending \in g1.(msg_in_transit).[key_msg] ->
+    let (_,pending_msg) := pending in
+    let: (_,_,r',_,sender) := pending_msg in
+    user_honest sender g1 ->
+    r < r' ->
+    exists prefix_len (gmid1 gmid2:GState),
+      gmid1 = last g0 (take prefix_len path_seq) /\
+      gmid2 = last g0 (take (prefix_len.+1) path_seq) /\
+      exists key_msg pending ustate_post sent,
+           gmid2 = delivery_result gmid1 sender key_msg pending ustate_post sent
+        /\ pending_msg \in sent.
+Admitted.
+
 (* LIVENESS *)
 
 Definition cert_users (g : GState) v r p :=
