@@ -1132,11 +1132,11 @@ Definition user_before_round r (u : UState) : Prop :=
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s))
-  /\ (forall r' p, r <= r' -> negb (u.(has_certvoted) r' p)).
+  /\ (forall r' p, r <= r' -> ~~ (u.(has_certvoted) r' p)).
 
 Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
   forall i (Hi : i \in g.(users)),
-    negb (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
+    ~~ (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
 
 Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
   forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
@@ -1153,10 +1153,7 @@ Definition state_before_round r (g:GState) : Prop :=
   /\ honest_messages_before_round r g.
 
 Definition user_honest (uid:UserId) (g:GState) : bool :=
-  match g.(users).[? uid] with
-  | Some ustate => negb (ustate.(corrupt))
-  | None => false
-  end.
+  if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
