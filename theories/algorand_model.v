@@ -926,7 +926,7 @@ Definition msg_deadline (msg : Msg) now : R :=
   | _ => (now + lambda)%R
   end.
 
-Definition merge_msg_deadline (now : R) (msg : Msg) (u : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
+Definition merge_msg_deadline (now : R) (msg : Msg) (_ : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
   msetU [mset (msg_deadline msg now, msg)] v.
 
 Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
@@ -967,8 +967,20 @@ Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
 (* Constructs a message pool with all deadlines of messages having excessively 
    high delays reset appropriately based on the message type *)
 Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
-  \big[(@catf _ _)/[fmap]]_(i <- domf msgpool)
-   (if msgpool.[? i] is Some msgs then [fmap].[i <- reset_user_msg_delays msgs now] else [fmap]).
+  updf msgpool (domf msgpool) (fun _ msgs => reset_user_msg_delays msgs now).
+
+Lemma reset_msg_delays_domf : forall (msgpool : MsgPool) now,
+   domf msgpool = domf (reset_msg_delays msgpool now).
+Proof. by move => msgpool pre; rewrite -updf_domf. Qed.
+
+Lemma reset_msg_delays_upd : forall (msgpool : MsgPool) now uid (h : uid \in domf msgpool),
+  (reset_msg_delays msgpool now).[? uid] = Some (reset_user_msg_delays msgpool.[h] now).
+Proof.
+move => msgpool now uid h.
+have Hu := updf_update _ h.
+have Hu' := Hu (domf msgpool) _ h.
+by rewrite Hu'.
+Qed.
 
 (* Postpones the deadline of a message (extending its delivery delay) *)
 Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
@@ -977,12 +989,22 @@ Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R *
 
 (* Recursively postpones the deadlines of all the messages given *)
 Definition extend_user_msg_delays r msgs : {mset R * Msg} :=
-  foldl (extend_deadline r) mset0 msgs .
+  foldl (extend_deadline r) mset0 msgs.
 
 (* Constructs a message pool with all deadlines postponed by rho *)
 Definition extend_msg_deadlines (msgpool : MsgPool) : MsgPool :=
-  \big[(@catf _ _)/[fmap]]_(i <- domf msgpool)
-   (if msgpool.[? i] is Some msgs then [fmap].[i <- extend_user_msg_delays rho msgs] else [fmap]).
+  updf msgpool (domf msgpool) (fun _ msgs => extend_user_msg_delays rho msgs).
+
+Lemma extend_msg_deadlines_domf : forall msgpool,
+  domf msgpool = domf (extend_msg_deadlines msgpool).
+Proof. by move => msgpool; rewrite -updf_domf. Qed.
+
+Lemma extend_msg_deadlines_updf : forall msgpool uid (h : uid \in domf msgpool),
+  (extend_msg_deadlines msgpool).[? uid] = Some (extend_user_msg_delays rho msgpool.[h]).
+Proof.
+move => msgpool uid h.
+by rewrite updf_update.
+Qed.
 
 (* Is the network in a partitioned/unpartitioned state? *)
 Definition is_partitioned pre : bool := pre.(network_partition).
@@ -1025,8 +1047,7 @@ Inductive GTransition : g_transition_type :=
 | exit_partition : forall pre,
     is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
-where "x ~~> y" := (GTransition x y) : type_scope .
-
+where "x ~~> y" := (GTransition x y) : type_scope.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
