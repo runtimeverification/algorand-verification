@@ -1107,8 +1107,17 @@ Admitted.
 (* Generalization of preservation of sensibility to paths *)
 Lemma greachable_preserves_sensibility : forall g0 g, 
   greachable g0 g -> sensible_gstate g0 -> sensible_gstate g.
-Admitted.
-
+Proof.
+move => g0 g [p Hp] Hg.
+elim: p g0 g Hg Hp => /= [g g0 Hg|]; first by rewrite Hg.
+move => g p IH g1 g0 Hl.
+move/andP => [Ht Hp] Hs.
+move/IH: Hp => Hp.
+move/Hp: Hl; apply.
+move: Ht.
+move/asboolP.
+exact: gtr_preserves_sensibility.
+Qed.
 
 (* SAFETY *)
 
