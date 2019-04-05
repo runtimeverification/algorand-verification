@@ -17,7 +17,6 @@ Variable Vote : Type.
 
 Record UState :=
   mkUState {
-    id : UserId;
     corrupt       : bool;
     (* The user's current round (starts at 1) *)
     round         : nat;

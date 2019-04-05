@@ -207,7 +207,7 @@ Inductive StepName :=
 
 Definition UState := local_state.UState UserId Value PropRecord Vote.
 
-Notation id         := (local_state.id UserId Value PropRecord Vote).
+(* Notation id         := (local_state.id UserId Value PropRecord Vote). *)
 Notation corrupt         := (local_state.corrupt UserId Value PropRecord Vote).
 Notation round         := (local_state.round UserId Value PropRecord Vote).
 Notation period        := (local_state.period UserId Value PropRecord Vote).
@@ -276,24 +276,26 @@ Definition advance_round (u : UState) : UState :=
 (* Note: This abstract away how credential values are
    interpreted (which is a piece of detail that may not be
    relevant to the model at this stage) *)
-(* generalize to round/periods/step *)
 Variable committee_cred : credType -> Prop.
 
-(* TODO: remove leader credential *)
-Definition comm_cred_step (u : UState) r p s : Prop :=
-  committee_cred (credential u.(id) r p s) .
+Definition comm_cred_step uid r p s : Prop :=
+  committee_cred (credential uid r p s) .
 
+(*
 (* Similarly, a proposition for whether a given credential qualifies its
    owner to be a potential leader *)
 Variable leader_cred : credType -> Prop.
 
+
 Definition leader_cred_step (u : UState) r p s : Prop :=
   leader_cred (credential u.(id) r p s) .
+  
 
 (* The basic requirement that a potential leader for a particular round-period-step
    must by defintion be a committee member as well for that round-period-step *)
 Hypothesis leader_is_comm_member :
   forall cr : credType, leader_cred cr -> committee_cred cr .
+*)
 
 Notation now         := (global_state.now UserId UState [choiceType of Msg]).
 Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
@@ -456,10 +458,10 @@ Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
    the case when p > 1 with the previous period voting for bottom.
    Just as in Victor's model, the fact that the last period's winning
    vote was for a value is captured by the predicate cert_may_exist *)
-Definition propose_ok (pre : UState) v b r p : Prop :=
+Definition propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\
-  leader_cred_step pre r p 1 /\
+  comm_cred_step uid r p 1 /\
   ~ cert_may_exist pre /\
   valid b /\ correct_hash v b .
 
@@ -468,19 +470,19 @@ Definition propose_ok (pre : UState) v b r p : Prop :=
    period's winning vote was for a value v *)
 (* Note also that we do not distinguish values from their hashes (for now),
    and so the check that v = hash(B) is not used *)
-Definition repropose_ok (pre : UState) v b r p : Prop :=
+Definition repropose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\ p > 1 /\
-  leader_cred_step pre r p 1 /\
+  comm_cred_step uid r p 1 /\
   v \in prev_certvals pre /\
   valid b /\ correct_hash v b .
 
 (* The no-propose step preconditions *)
 (* Note that this applies regardless of whether p = 1 *)
-Definition no_propose_ok (pre : UState) r p : Prop :=
+Definition no_propose_ok (pre : UState) uid r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\
-  ~ leader_cred_step pre r p 1.
+  ~ comm_cred_step uid r p 1.
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
@@ -497,10 +499,10 @@ Definition propose_result (pre : UState) : UState :=
           -  The Algorand2 description includes an additional constraint
             about whether the value is a period-1 value or not
             [TODO: TBA in the specs of the transition relation below] *)
-Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
+Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\
-  comm_cred_step pre r p 2 /\
+  comm_cred_step uid r p 2 /\
   ~ cert_may_exist pre /\
   potential_leader_value v (pre.(proposals) r p) .
   (* ~ pre.(proposals) r p = [::] . (* so a leader can be identified *) *)
@@ -510,10 +512,10 @@ Definition softvote_new_ok (pre : UState) (v : Value) r p : Prop :=
    period's winning vote was for a value v *)
 (* Notes: - the automaton model includes an additional condition that is not
             explicitly given in the description [TODO: investigate]  *)
-Definition softvote_repr_ok (pre : UState) (v : Value) r p : Prop :=
+Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\ p > 1 /\
-  comm_cred_step pre r p 2 /\
+  comm_cred_step uid r p 2 /\
   v \in prev_certvals pre.
 
 (* TODO: The Softvoting-conflict step preconditions *)
@@ -576,12 +578,12 @@ Definition certvote_result (pre : UState) b : UState :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
           - Updatesd to accommodate the 27March change
  *)
-Definition nextvote_val_ok (pre : UState) (v b : Value) r p s : Prop :=
+Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   valid_block_and_hash pre b v r p /\
   (* Nat.Even s /\ *) s >= 4 /\
-  comm_cred_step pre r p s /\
+  comm_cred_step uid r p s /\
   (* pre.(has_certvoted) r p. *)
   v \in certvals pre r p.
 
@@ -591,11 +593,11 @@ Definition nextvote_val_ok (pre : UState) (v b : Value) r p s : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) 
           - Updatesd to accommodate the 27March change
 *)
-Definition nextvote_open_ok (pre : UState) (v : Value) r p s : Prop :=
+Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (* Nat.Even s /\ *) s >= 4 /\
-  comm_cred_step pre r p s /\
+  comm_cred_step uid r p s /\
   (* ~ pre.(has_certvoted) r p /\ *)
   (p = 1 \/ (p > 1 /\ nextvote_bottom_quorum pre r (p - 1) s )) /\
   ~ cert_may_exist pre . (* extra? *)
@@ -606,13 +608,13 @@ Definition nextvote_open_ok (pre : UState) (v : Value) r p s : Prop :=
 (*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) 
           - Updatesd to accommodate the 27March change
 *)
-Definition nextvote_stv_ok (pre : UState) (v : Value) r p s : Prop :=
+Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (*Nat.Even s /\ *) s >= 4 /\
   ~ v \in certvals pre r p /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
-  comm_cred_step pre r p s. (* required (?) *)
+  comm_cred_step uid r p s. (* required (?) *)
 
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
 (* Note: Updatesd to accommodate the 27March change *)
@@ -719,41 +721,41 @@ Inductive UTransition : u_transition_type :=
   	  *)
 
   (* Step 1: Block Proposal *)
-  | propose : forall (pre : UState) v b r p,
-      propose_ok pre v b r p ->
+  | propose : forall (pre : UState) uid v b r p,
+      propose_ok pre uid v b r p ->
       (None, pre) ~> (propose_result pre,
-          [:: (Proposal, val v, r, p, pre.(id)) ;
-              (Block, val b, r, p, pre.(id))])
+          [:: (Proposal, val v, r, p, uid) ;
+              (Block, val b, r, p, uid)])
   (* Step 1: Block Proposal [Reproposal] *)
-  | repropose : forall (pre : UState) v b r p,
-      repropose_ok pre v b r p ->
+  | repropose : forall (pre : UState) uid v b r p,
+      repropose_ok pre uid v b r p ->
       (None, pre) ~> (propose_result pre,
-          [:: (Reproposal, repr_val v pre.(id) p, r, p, pre.(id)) ;
-              (Block, val b, r, p, pre.(id))])
+          [:: (Reproposal, repr_val v uid p, r, p, uid) ;
+              (Block, val b, r, p, uid)])
   (* Step 1: Block Proposal [failure] *)
-  | no_propose : forall (pre : UState) r p,
-      no_propose_ok pre r p ->
+  | no_propose : forall (pre : UState) uid r p,
+      no_propose_ok pre uid r p ->
       (None, pre) ~> (propose_result pre, [::])
 
   (* Step 2: Filtering Step [new value] *)
-  | softvote_new : forall (pre : UState) v r p,
-      softvote_new_ok pre v r p ->
+  | softvote_new : forall (pre : UState) uid v r p,
+      softvote_new_ok pre uid v r p ->
       (None, pre) ~> (softvote_result pre,
-          [:: (Softvote, val v, r, p, pre.(id))])
+          [:: (Softvote, val v, r, p, uid)])
   (* Step 2: Filtering Step [old value] *)
-  | softvote_repr : forall (pre : UState) v r p,
-      softvote_repr_ok pre v r p ->
+  | softvote_repr : forall (pre : UState) uid v r p,
+      softvote_repr_ok pre uid v r p ->
       (None, pre) ~> (softvote_result pre,
-          [:: (Softvote, val v, r, p, pre.(id))])
+          [:: (Softvote, val v, r, p, uid)])
 
   (* Step 3: Certifying Step [success while being a committee member] *)
-  | certvote1 : forall (pre : UState) v b r p,
-      certvote_ok pre v b r p -> comm_cred_step pre r p 3 ->
+  | certvote1 : forall (pre : UState) uid v b r p,
+      certvote_ok pre v b r p -> comm_cred_step uid r p 3 ->
         (None, pre) ~> (certvote_result pre true,
-          [:: (Certvote, val v, r, p, pre.(id))])
+          [:: (Certvote, val v, r, p, uid)])
   (* Step 3: Certifying Step [success while NOT being a committee member] *)
-  | certvote2 : forall (pre : UState) v b r p,
-      certvote_ok pre v b r p -> ~ comm_cred_step pre r p 3 ->
+  | certvote2 : forall (pre : UState) uid v b r p,
+      certvote_ok pre v b r p -> ~ comm_cred_step uid r p 3 ->
         (None, pre) ~> (certvote_result pre true, [::])
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall (pre : UState) r p,
@@ -761,19 +763,19 @@ Inductive UTransition : u_transition_type :=
       (None, pre) ~> (certvote_result pre false, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
-  | nextvote_val : forall (pre : UState) v b r p s,
-      nextvote_val_ok pre v b r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
+  | nextvote_val : forall (pre : UState) uid v b r p s,
+      nextvote_val_ok pre uid v b r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
-  | nextvote_open : forall (pre : UState) v r p s,
-      nextvote_open_ok pre v r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))])
+  | nextvote_open : forall (pre : UState) uid v r p s,
+      nextvote_open_ok pre uid v r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
-  | nextvote_stv : forall (pre : UState) v r p s,
-      nextvote_stv_ok pre v r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
+  | nextvote_stv : forall (pre : UState) uid v r p s,
+      nextvote_stv_ok pre uid v r p s ->
+      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
   (** Deliver messages and possibly trigger actions urgently **)
 
@@ -785,15 +787,15 @@ Inductive UTransition : u_transition_type :=
         (Some (Softvote, val v, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a softvote and certvote for the value [committee member case] *)
-  | deliver_softvote_certvote1 : forall (pre : UState) r p s i v b,
+  | deliver_softvote_certvote1 : forall (pre : UState) uid r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' v b r p -> comm_cred_step pre r p s ->
-        (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, pre.(id))])
+        certvote_ok pre' v b r p -> comm_cred_step uid r p s ->
+        (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, uid)])
 
   (* Deliver a softvote and certvote for the value [non-committee member case] *)
-  | deliver_softvote_certvote2 : forall (pre : UState) r p s i v b,
+  | deliver_softvote_certvote2 : forall (pre : UState) uid r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' v b r p -> ~ comm_cred_step pre r p s ->
+        certvote_ok pre' v b r p -> ~ comm_cred_step uid r p s ->
         (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [::])
 
   (* Deliver a softvote and nextvote for the value *)
@@ -803,7 +805,7 @@ Inductive UTransition : u_transition_type :=
       let pre' := set_softvotes pre r p (i, v) in
         nextvote_val_ok pre' v b r p s ->
         (* Note that this necessarily implies certvote_ok pre' v r p s cannot be true *)
-        (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, pre.(id))])
+        (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
   *)
   
   (* Deliver a nextvote for bottom while not triggering any internal action *)
@@ -821,7 +823,7 @@ Inductive UTransition : u_transition_type :=
       	nextvote_open_ok pre' v r p s ->
         ~ adv_period_open_ok pre' r p s ->
         (Some (Nextvote_Open, step_val s, r, p, i), pre) ~>
-          (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, pre.(id))]) *)
+          (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, uid)]) *)
 
   (* Deliver a nextvote for bottom and advance the period *)
   (* Note: Advancing the period takes precedence over nextvote2_open actions *)
@@ -849,11 +851,11 @@ Inductive UTransition : u_transition_type :=
         (Some (Certvote, val v, r, p, i), pre) ~> (pre', [::])
 
   (* Deliver a certvote for value and advance the round *)
-  | deliver_certvote_adv_rnd : forall (pre : UState) v r p i,
+  | deliver_certvote_adv_rnd : forall (pre : UState) uid v r p i,
       let pre' := set_certvotes pre r p (i, v) in
         certify_ok pre' v r p ->
         (Some (Certvote, val v, r, p, i), pre) ~>
-        (certify_result pre', [:: (Certvote, val v, r, p, pre.(id))])
+        (certify_result pre', [:: (Certvote, val v, r, p, uid)])
 
   (* Deliver a message other than vote messages (i.e. Block, Proposal or Reproposal) *)
   | deliver_nonvote_msg : forall (pre : UState) msg c r p,
@@ -1037,7 +1039,6 @@ Inductive GTransition : g_transition_type :=
       pre ~~> delivery_result pre uid key_msg pending ustate_post sent
 | step_internal : forall pre uid (H:uid \in pre.(users)),
     let ustate_pre := pre.(users).[H] in
-    (* ustate_pre.(deadline) = Some (ustate_pre.(timer)) -> *)
     forall ustate_post sent,
       (None,ustate_pre) ~> (ustate_post,sent) ->
       pre ~~> step_result pre uid ustate_post sent
@@ -1209,7 +1210,7 @@ Definition cert_users (g : GState) v r p :=
 Lemma prop_a : forall g0 g uid ustate c r v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
-  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) > tau_c.
 Proof.
 Admitted.
@@ -1218,7 +1219,7 @@ Lemma prop_b : forall g0 g uid ustate c r b v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
   ~ valid_block_and_hash ustate b v r 1 ->
-  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) <= tau_c.
 Proof.
 Admitted.
