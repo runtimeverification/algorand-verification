@@ -1206,36 +1206,65 @@ Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
 Admitted.
 
 (* A user has certvoted a value for a given period along a given path *)
-Definition certvoted_in_path g0 g uid p : Prop := 
-  exists g1 g2 us1 us2 m v r id ms, 
+Definition certvoted_in_path g0 g p uid v : Prop := 
+  exists g1 g2 us1 us2 m r id ms, 
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\ 
   (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms).
 
-(* A user has certvoted exactly once for a given period along a given path *)
-Definition certvoted_once_in_path g0 g uid p : Prop := 
+(* A user has certvoted for one value exactly once for a given period along a given path *)
+Definition certvoted_once_in_path g0 g p uid : Prop := 
   exists g1 g2 us1 us2 m v r id ms, 
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\ 
   (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms) /\
-  ~ certvoted_in_path g0 g1 uid p /\ 
-  ~ certvoted_in_path g2 g uid p .
+  forall v', 
+    ~ certvoted_in_path g0 g1 p uid v' /\ 
+    ~ certvoted_in_path g2 g p uid v' .
 
 (* L1: An honest user cert-votes for at most one value in a period *)
 (* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period 
    :: If an honest user certvotes in a period (step 3) then he will never certvote again in that period *)
 Lemma no_two_certvotes_in_p : forall g1 g2 uid p,
-  certvoted_once_in_path g1 g2 uid p \/
-  ~ certvoted_in_path g1 g2 uid p.
+  certvoted_once_in_path g1 g2 p uid \/
+  forall v, ~ certvoted_in_path g1 g2 p uid v.
 Admitted.
 
 (** A similar bunch of defs and lemmas for softvoting **)
-(** Lucas**)
+(** Lucas **)
 
 
+(* A user has nextvoted bottom for a given period along a given path *)
+Definition nextvoted_open_in_path g0 g p uid : Prop := 
+  exists g1 g2 us1 us2 m v r id ms, 
+  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
+  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
+  us1.(period) = p /\ us2.(period) = p /\ 
+  (m, us1) ~> (us2, (Nextvote_Open, v, r, p, id) :: ms).
 
+(* A user has nextvoted a value for a given period along a given path *)
+Definition nextvoted_value_in_path g0 g p uid v : Prop := 
+  exists g1 g2 us1 us2 m r id ms, 
+  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
+  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
+  us1.(period) = p /\ us2.(period) = p /\ 
+  (m, us1) ~> (us2, (Nextvote_Val, v, r, p, id) :: ms).
+
+(* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
+*)
+Lemma certvote_excludes_nextvote_open_in_p : forall g1 g2 p uid v,
+  certvoted_in_path g1 g2 p uid v -> ~ nextvoted_open_in_path g1 g2 p uid .
+Admitted.
+
+(* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
+
+Lemma certvote_nextvote_value_in_p : forall g1 g2 p uid v v',
+  certvoted_in_path g1 g2 p uid v -> nextvoted_value_in_path g1 g2 p uid v' -> 
+  v = v'.
+Admitted.
+  
 (* To show there is not a fork in a particular round,
    we will take a history that extends before any honest
    node started that round *)
