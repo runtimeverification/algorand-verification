@@ -1143,6 +1143,99 @@ Qed.
 
 (* SAFETY *)
 
+(* Generates a condition on the step value corresponding to a step name *)
+Definition step_condition step_name n : Prop :=
+  match step_name with
+  | None => n = 0
+  | Some Proposing  => n = 1
+  | Some Softvoting => n = 2
+  | Some Certvoting => n = 3
+  | _ => n >= 4
+  end.
+
+(* The generated condition is correct *)
+Lemma step_value_name : forall n, step_condition (step_name n) n.
+Proof.
+clear. 
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+(* A certvoting step must have the value 3 *)
+Lemma certvoting_is_step_3 : forall n, step_name n = Some Certvoting -> n = 3 .
+Proof.
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+(* An honest user may cert-vote only at step 3 of a period *)
+(* Certvoting is enabled only at step 3 *)
+Lemma certvote_only_in_step3 : forall us v b r p,
+  certvote_ok us v b r p -> us.(step) = 3.
+Proof.
+move => us v b r p Hc.
+elim: Hc => tH [vH oH].
+elim: vH => rH [pH sH]. 
+by apply certvoting_is_step_3 in sH.
+Qed.  
+(*  (m, pre) ~> (post, (Certvote, v, r, p,id) :: ms) -> pre.(step) = 3. *)
+
+(* State u2 comes after state u1 in terms of round-period-step *)
+Definition ustate_after us1 us2 : Prop :=
+  us1.(round) <= us2.(round) 
+  /\ us1.(period) <= us2.(period) 
+  /\ us1.(step) <= us2.(step).
+
+(* A one-step user-level transition never decreases round-period-step *)
+Lemma utr_rps_non_decreasing : forall m us1 us2 ms,
+  (m, us1) ~> (us2, ms) -> ustate_after us1 us2.
+(*    us.(round) = us'.(round) -> us.(period) = us'.(period) -> 
+    us.(step) <= us'.(step). *)
+Admitted.
+
+(* A one-step global transition never decreases round-period-step of any user *)
+Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
+  g1 ~~> g2 -> 
+  g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
+  ustate_after us1 us2.
+Admitted.
+
+(* Generalization of non-decreasing round-period-step results to paths *)
+Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
+  greachable g1 g2 -> 
+  g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
+  ustate_after us1 us2.
+Admitted.
+
+(* A user has certvoted a value for a given period along a given path *)
+Definition certvoted_in_path g0 g uid p : Prop := 
+  exists g1 g2 us1 us2 m v r id ms, 
+  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
+  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
+  us1.(period) = p /\ us2.(period) = p /\ 
+  (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms).
+
+(* A user has certvoted exactly once for a given period along a given path *)
+Definition certvoted_once_in_path g0 g uid p : Prop := 
+  exists g1 g2 us1 us2 m v r id ms, 
+  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
+  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
+  us1.(period) = p /\ us2.(period) = p /\ 
+  (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms) /\
+  ~ certvoted_in_path g0 g1 uid p /\ 
+  ~ certvoted_in_path g2 g uid p .
+
+(* L1: An honest user cert-votes for at most one value in a period *)
+(* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period 
+   :: If an honest user certvotes in a period (step 3) then he will never certvote again in that period *)
+Lemma no_two_certvotes_in_p : forall g1 g2 uid p,
+  certvoted_once_in_path g1 g2 uid p \/
+  ~ certvoted_in_path g1 g2 uid p.
+Admitted.
+
+(** A similar bunch of defs and lemmas for softvoting **)
+(** Lucas**)
+
+
+
 (* To show there is not a fork in a particular round,
    we will take a history that extends before any honest
    node started that round *)
