@@ -1373,12 +1373,12 @@ Lemma prop_b : forall g0 g uid ustate c r b v,
 Proof.
 Admitted.
 
-Lemma prop_c : forall g0 g uid ustate c r v p s,
+Lemma prop_c : forall g0 g uid ustate r v p,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
-  leader_cred_step ustate r p s ->
+  (* leader_cred_step ustate r p s -> *)
   unique_stv_bot g p ->
-  (ustate.(id), c, v, true) \in ustate.(proposals) r 1 ->
+  (* (ustate.(id), c, v, true) \in ustate.(proposals) r 1 -> *)
   size (cert_users g v r 1) > tau_c.
 Admitted.
 
