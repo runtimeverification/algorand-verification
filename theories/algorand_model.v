@@ -1179,11 +1179,11 @@ by apply certvoting_is_step_3 in sH.
 Qed.  
 (*  (m, pre) ~> (post, (Certvote, v, r, p,id) :: ms) -> pre.(step) = 3. *)
 
-(* State u2 comes after state u1 in terms of round-period-step *)
+(* State us2 comes after state us1 in terms of round-period-step ordering *)
 Definition ustate_after us1 us2 : Prop :=
-  us1.(round) <= us2.(round) 
-  /\ us1.(period) <= us2.(period) 
-  /\ us1.(step) <= us2.(step).
+  us1.(round) < us2.(round) 
+  \/ (us1.(round) = us2.(round) /\ us1.(period) < us2.(period))
+  \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
 
 (* A one-step user-level transition never decreases round-period-step *)
 Lemma utr_rps_non_decreasing : forall m us1 us2 ms,
