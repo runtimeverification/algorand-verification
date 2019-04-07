@@ -1233,8 +1233,6 @@ Lemma no_two_certvotes_in_p : forall g1 g2 uid p,
   forall v, ~ certvoted_in_path g1 g2 p uid v.
 Admitted.
 
-(** A similar bunch of defs and lemmas for softvoting **)
-(** Lucas **)
 
 (* A user has softvoted a value for a given period along a given path *)
 Definition softvoted_in_path g0 g uid p : Prop := 
@@ -1251,13 +1249,14 @@ Definition softvoted_once_in_path g0 g uid p : Prop :=
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\ 
   (m, us1) ~> (us2, (Softvote, v, r, p,id) :: ms) /\
-  ~ softvoted_in_path g0 g1 uid p /\ 
-  ~ softvoted_in_path g2 g uid p .
+  forall v',
+    ~ softvoted_in_path g0 g1 uid v' /\ 
+    ~ softvoted_in_path g2 g uid p .
 
 (* L2: An honest user soft-votes for at most one value in a period *)
 Lemma no_two_softvotes_in_p : forall g1 g2 uid p,
   softvoted_once_in_path g1 g2 uid p \/
-  ~ softvoted_in_path g1 g2 uid p.
+  forall v, ~ softvoted_in_path g1 g2 uid v.
 Admitted.
 
 
