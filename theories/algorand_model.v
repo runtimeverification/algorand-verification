@@ -29,6 +29,8 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Require Import Lra.
+
 (** General Description of Assumptions in the Model
  **
 
@@ -310,6 +312,7 @@ Definition flip_partition_flag (g : GState) : GState :=
 
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
+Hypothesis lambda_pos : (lambda > 0)%R.
 
 (* block message delivery delay *)
 Variable big_lambda : R.
@@ -1054,6 +1057,56 @@ Inductive GTransition : g_transition_type :=
     pre ~~> recover_from_partitioned pre
 where "x ~~> y" := (GTransition x y) : type_scope.
 
+Inductive GLabel : Type :=
+| lbl_tick :  posreal -> GLabel
+| lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
+| lbl_step_internal : UserId -> seq Msg -> GLabel
+| lbl_enter_partition : GLabel
+| lbl_exit_partition : GLabel.
+
+Definition related_by (label : GLabel) (pre post : GState) : Prop :=
+  match label with
+  | lbl_tick increment => tick_ok increment pre /\ post = tick_update increment pre
+  | lbl_deliver user deadline msg sent =>
+    exists (key_mailbox : user \in pre.(msg_in_transit)),
+    (deadline,msg) \in pre.(msg_in_transit).[key_mailbox]
+    /\ exists (key_ustate : user \in pre.(users)) ustate_post,
+       let ustate_pre := pre.(users).[key_ustate] in
+       (Some msg,ustate_pre) ~> (ustate_post,sent)
+       /\ post = delivery_result pre user key_mailbox (deadline,msg) ustate_post sent
+  | lbl_step_internal user sent =>
+    exists (key_user : user \in pre.(users)) ustate_post,
+    (None,pre.(users).[key_user]) ~> (ustate_post,sent)
+    /\ post = step_result pre user ustate_post sent
+  | lbl_enter_partition =>
+    is_unpartitioned pre /\ post = make_partitioned pre
+  | lbl_exit_partition =>
+    is_partitioned pre /\ post = recover_from_partitioned pre
+  end.
+
+Lemma transitions_labeled: forall g1 g2,
+    GTransition g1 g2 <-> exists lbl, related_by lbl g1 g2.
+Proof.
+  split.
+  + (* forward - find label for transition *)
+    Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexists]].
+    destruct 1;simpl.
+    exists (lbl_tick increment);finish_case.
+    destruct pending as [deadline msg];exists (lbl_deliver uid deadline msg sent);finish_case.
+    exists (lbl_step_internal uid sent);finish_case.
+    exists (lbl_enter_partition);finish_case.
+    exists (lbl_exit_partition);finish_case.
+  + (* reverse - find transition from label *)
+    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
+Qed.
+
+Definition step_in_path (g1 g2 : GState) (path : seq GState) : Prop :=
+  exists n,
+    match drop n path with
+    | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
+    | _ => False
+    end.
+
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
 Definition user_timers_valid : pred UState :=
@@ -1096,6 +1149,14 @@ apply/andP.
 by split => //; apply/asboolP.
 Qed.
 
+(* This predicate says a particular step on the path
+   is consistent with the given transition label *)
+Definition step_at path ix lbl :=
+  match drop ix path with
+  | pre :: post :: _ => related_by lbl pre post
+  | _ => False
+  end.
+
 (* Sensible states *)
 (* This notion specifiies what states can be considered valid states. The idea
    is that we only consider execution traces that begin at sensible states,
@@ -1118,10 +1179,87 @@ Definition sensible_gstate (gs : GState) : Prop :=
   domf (gs.(msg_in_transit)) `<=` domf gs.(users). (* needed? *)
   (* more constraints if we add corrupt users map and total message history *)
 
+Lemma step_name_to_value: forall s n,
+    step_name s = n ->
+    match n with
+    | None => s = 0
+    | Some Proposing => s = 1
+    | Some Softvoting => s = 2
+    | Some Certvoting => s = 3
+    | Some Nextvoting => s >= 4
+    end.
+Proof.
+  intros;subst. do 4 (destruct s;try reflexivity).
+Qed.
+
+Lemma step_later_deadlines : forall s,
+    s > 3 -> next_deadline s = (lambda + big_lambda + (INR s - 3) * L)%R.
+  intros s H_s; clear -H_s.
+  unfold next_deadline.
+  do 3 (destruct s;[exfalso;apply not_false_is_true;assumption|]).
+  reflexivity.
+Qed.
+
 (* The user transition relation preserves sensibility of user states *)
 Lemma utr_preserves_sensibility : forall us us' m ms,
   sensible_ustate us -> (m, us) ~> (us', ms) ->
   sensible_ustate us'.
+Proof.
+  Ltac use_hyp H := unfold valid_rps in H;simpl in H; decompose record H.
+  Ltac tidy :=
+  match goal with
+    | [H: step_name ?step = _ |- _] => apply step_name_to_value in H;subst step
+    | [ |- context C [ next_deadline (?s + 1 - 1) ] ] =>
+      replace (s + 1 - 1) with s by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ)
+    | [ H : is_true (3 < ?s) |- context C [next_deadline ?s] ] =>
+      rewrite (step_later_deadlines H)
+  end.
+  intros us us' m ms H_sensible Hstep.
+  remember (m,us) as ustep_input eqn:H_input.
+  remember (us',ms) as ustep_output eqn:H_output.
+  destruct Hstep eqn:Hstep_record;
+    injection H_input;clear H_input;injection H_output;clear H_output;intros;subst us m us' ms;
+  match goal with
+  | [H_sensible : sensible_ustate ?s |- _] => is_var s;
+     destruct s;unfold sensible_ustate in * |- *;
+     decompose record H_sensible;clear H_sensible;simpl in * |- *
+  end;
+  match goal with
+  | [H: ?deadline = next_deadline _ |- _] => subst deadline
+  end;
+      try (
+    match goal with
+    | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
+    | [H: repropose_ok _ _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
+    | [H: no_propose_ok _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
+    | [H: softvote_new_ok _ _ _ _ _ |- _] => unfold softvote_new_ok in H; use_hyp H
+    | [H: softvote_repr_ok _ _ _ _ _ |- _] => unfold softvote_repr_ok in H; use_hyp H
+    | [H: certvote_ok _ _ _ _ _ |- _] => unfold certvote_ok in H; use_hyp H
+    | [H: no_certvote_ok _ _ _ |- _] => unfold no_certvote_ok in H; use_hyp H
+    | [H: nextvote_val_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_val_ok in H; use_hyp H
+    | [H: nextvote_open_ok _ _ _ _ _ _ |- _] => unfold nextvote_open_ok in H; use_hyp H
+    | [H: nextvote_stv_ok _ _ _ _ _ _ |- _] => unfold nextvote_stv_ok in H; use_hyp H
+    | [H: set_softvotes _ _ _ _ |- _] => unfold set_softvotes in H; use_hyp H
+    | [H: timeout_ok _ |- _] => unfold timout_ok in H; use_hyp H
+    | _ => idtac
+    end;
+    repeat tidy;intuition lra).
+   (* bad deadline  results *)
+  admit.
+  admit.
+   (* bad p_start after advancing round or period *)
+  admit.
+  admit.
+  admit.
+  (* deliver nonvote msg needs some custom steps *)
+  destruct msg as [[[[mtype ex_val] ?] ?] ?];
+    destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
+  (* timeout - needs a lemma about next_deadline being monotone *)
+  unfold timeout_ok in t. use_hyp t.
+  intuition try lra.
+  admit. (* timer montone *)
+  replace (step + 1 - 1) with step by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ).
+  reflexivity.
 Admitted.
 
 (* The global transition relation preserves sensibility of global states *)
@@ -1469,6 +1607,82 @@ Admitted.
 Lemma certvote_nextvote_value_in_p : forall g1 g2 p uid v v',
   certvoted_in_path g1 g2 p uid v -> nextvoted_value_in_path g1 g2 p uid v' ->
   v = v'.
+Admitted.
+
+Definition received_next_vote u voter round period step value path : Prop :=
+  exists n msg_deadline, step_at path n
+    (lbl_deliver u msg_deadline
+                 ((match value with
+                   | Some v => (Nextvote_Val,next_val v step)
+                   | None => (Nextvote_Open,step_val step)
+                   end),round,period,voter) [::]).
+
+(* L5.0 A node enters period p > 0 only if it received t_H next-votes for
+   the same value from some step s of period p-1 *)
+Lemma period_advance_only_by_next_votes :
+  forall (g0 g1 g2: GState) (path:seq GState) uid r p
+         (u_key1:uid \in g1.(users)) (u_key2:uid \in g2.(users)),
+    g1.(users).[u_key1].(period) < p ->
+    g2.(users).[u_key2].(round) = r ->
+    g2.(users).[u_key2].(period) = p ->
+    gtransition g1 g2 ->
+    step_in_path g1 g2 path ->
+    exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
+      #| next_voters | >= tau_b
+      /\ forall voter, voter \in next_voters ->
+       committee_cred (credential voter r p s)
+       /\ received_next_vote uid voter r p s v path.
+Admitted.
+
+(* L5.1 Any set of t_H committee  members must include at least one honest node *)
+Definition honest_after (r p s:nat) uid path :=
+  exists n,
+    match ohead (drop n path) with
+    | None => False
+    | Some gstate =>
+      match gstate.(users).[? uid] with
+      | None => False
+      | Some ustate => ~ustate.(corrupt)
+       /\ (ustate.(round) > r
+       \/ ((ustate.(round) = r) /\
+          (ustate.(period) > p
+           \/ (ustate.(period) = p /\ ustate.(step) > s))))
+      end
+    end.
+
+Hypothesis quorum_has_honest :
+  forall (round period step:nat) path (voters: {fset UserId}),
+  #|voters| >= tau_b ->
+  (forall voter, voter \in voters -> committee_cred (credential voter round period step)) ->
+
+  exists (honest_voter:UserId), honest_voter \in voters
+     /\ honest_after round period step honest_voter path.
+
+(* L5 An honest node can enter period p'>1 only if at least one honest
+      note entered period p'-1 *)
+Definition honest_in_period (r p:nat) uid path :=
+  exists n,
+    match ohead (drop n path) with
+    | None => False
+    | Some gstate =>
+      match gstate.(users).[? uid] with
+      | None => False
+      | Some ustate =>
+        ~ustate.(corrupt) /\ ustate.(round) = r /\ ustate.(period) = p
+      end
+    end.
+
+Lemma adv_period_from_honest_in_prev :
+  forall (g0 g1 g2: GState) (path:seq GState) uid r p
+         (u_key1:uid \in g1.(users)) (u_key2:uid \in g2.(users)),
+    p > 0 ->
+    g1.(users).[u_key1].(period) < p ->
+    g2.(users).[u_key2].(period) = p ->
+    g2.(users).[u_key2].(round) = r ->
+    gtransition g1 g2 ->
+    step_in_path g1 g2 path ->
+    exists honest_prev,
+      honest_in_period r (p.-1) honest_prev path.
 Admitted.
 
 (* To show there is not a fork in a particular round,
