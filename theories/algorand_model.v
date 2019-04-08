@@ -1235,23 +1235,23 @@ Admitted.
 
 
 (* A user has softvoted a value for a given period along a given path *)
-Definition softvoted_in_path g0 g uid p : Prop := 
-  exists g1 g2 us1 us2 m v r id ms, 
+Definition softvoted_in_path g0 g p uid v : Prop :=
+  exists g1 g2 us1 us2 m r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\ 
   (m, us1) ~> (us2, (Softvote, v, r, p,id) :: ms).
 
 (* A user has softvoted exactly once for a given period along a given path *)
-Definition softvoted_once_in_path g0 g uid p : Prop := 
-  exists g1 g2 us1 us2 m v r id ms, 
+Definition softvoted_once_in_path g0 g p uid : Prop :=
+  exists g1 g2 us1 us2 m v r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Softvote, v, r, p,id) :: ms) /\
   forall v',
-    ~ softvoted_in_path g0 g1 uid v' /\ 
-    ~ softvoted_in_path g2 g uid p .
+    ~ softvoted_in_path g0 g1 p uid v' /\
+    ~ softvoted_in_path g2 g p uid v' .
 
 (* L2: An honest user soft-votes for at most one value in a period *)
 Lemma no_two_softvotes_in_p : forall g1 g2 uid p,
