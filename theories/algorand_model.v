@@ -290,7 +290,7 @@ Variable leader_cred : credType -> Prop.
 
 Definition leader_cred_step (u : UState) r p s : Prop :=
   leader_cred (credential u.(id) r p s) .
-  
+
 
 (* The basic requirement that a potential leader for a particular round-period-step
    must by defintion be a committee member as well for that round-period-step *)
@@ -321,7 +321,7 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (lambda < big_lambda < L)%R .
 
-(* additional time delay introduced by the adversary when the network is 
+(* additional time delay introduced by the adversary when the network is
    partitioned *)
 Variable rho : R.
 
@@ -591,7 +591,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
 (* First nextvoting step preconditions *)
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint) 
+(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
           - Updated to accommodate the 27March change
 *)
 Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
@@ -606,7 +606,7 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
 (* First nextvoting step preconditions *)
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
-(*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly) 
+(*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly)
           - Updated to accommodate the 27March change
 *)
 Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
@@ -620,7 +620,7 @@ Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
 (* Nextvoting step state update for even steps s >= 4 (all cases) *)
 (* Note: Updated to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
-  {[ {[ pre with step := (s + 1) ]} 
+  {[ {[ pre with step := (s + 1) ]}
             with deadline := (lambda + big_lambda + (INR s - 3) * L)%R]}.
 
 (** Advancing period propositions and user state update **)
@@ -764,17 +764,20 @@ Inductive UTransition : u_transition_type :=
       (None, pre) ~> (certvote_result pre false, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
-  | nextvote_val : forall (pre : UState) uid v b r p s,
+  | nextvote_val : forall (pre : UState) uid v b r p,
+      let s := pre.(step) in
       nextvote_val_ok pre uid v b r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
-  | nextvote_open : forall (pre : UState) uid v r p s,
+  | nextvote_open : forall (pre : UState) uid v r p,
+      let s := pre.(step) in
       nextvote_open_ok pre uid v r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
-  | nextvote_stv : forall (pre : UState) uid v r p s,
+  | nextvote_stv : forall (pre : UState) uid v r p,
+      let s := pre.(step) in
       nextvote_stv_ok pre uid v r p s ->
       (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
@@ -808,7 +811,7 @@ Inductive UTransition : u_transition_type :=
         (* Note that this necessarily implies certvote_ok pre' v r p s cannot be true *)
         (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
   *)
-  
+
   (* Deliver a nextvote for bottom while not triggering any internal action *)
   | deliver_nextvote_open : forall (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
@@ -963,11 +966,11 @@ Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R 
   let new_deadline := (Rmin cur_deadline max_deadline) in
   (msgs `|` [mset (new_deadline, msg.2)])%mset.
 
-(* Recursively resets message deadlines of all the messages given *) 
+(* Recursively resets message deadlines of all the messages given *)
 Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
   foldl (reset_deadline now) mset0 msgs .
 
-(* Constructs a message pool with all deadlines of messages having excessively 
+(* Constructs a message pool with all deadlines of messages having excessively
    high delays reset appropriately based on the message type *)
 Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
   updf msgpool (domf msgpool) (fun _ msgs => reset_user_msg_delays msgs now).
@@ -1100,9 +1103,9 @@ Qed.
    set of reachable states will also be sensible (to be shown). This means that
    it is not important which specific state is assumed as the initial state as
    long as the state is sensible.
-   Note: the transditional operational notion of an initial state is a now a 
+   Note: the transditional operational notion of an initial state is a now a
    special case of sensibility *)
-Definition sensible_ustate (us : UState) : Prop := 
+Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
   (us.(p_start) <= us.(timer) <= us.(deadline))%R /\
   us.(deadline) = next_deadline(us.(step) - 1) .
@@ -1123,12 +1126,12 @@ Admitted.
 
 (* The global transition relation preserves sensibility of global states *)
 Lemma gtr_preserves_sensibility : forall gs gs',
-  sensible_gstate gs -> gs ~~> gs' -> 
+  sensible_gstate gs -> gs ~~> gs' ->
   sensible_gstate gs'.
-Admitted. 
+Admitted.
 
 (* Generalization of preservation of sensibility to paths *)
-Lemma greachable_preserves_sensibility : forall g0 g, 
+Lemma greachable_preserves_sensibility : forall g0 g,
   greachable g0 g -> sensible_gstate g0 -> sensible_gstate g.
 Proof.
 move => g0 g [p Hp] Hg.
@@ -1157,7 +1160,19 @@ Definition step_condition step_name n : Prop :=
 (* The generated condition is correct *)
 Lemma step_value_name : forall n, step_condition (step_name n) n.
 Proof.
-clear. 
+clear.
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+(* A proposing step must have the value 1 *)
+Lemma proposing_is_step_1 : forall n, step_name n = Some Proposing -> n = 1 .
+Proof.
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+(* A softvoting step must have the value 2 *)
+Lemma softvoting_is_step_2 : forall n, step_name n = Some Softvoting -> n = 2 .
+Proof.
 do 4! [ case => /= ; first by [] ] ; by [].
 Qed.
 
@@ -1167,6 +1182,13 @@ Proof.
 do 4! [ case => /= ; first by [] ] ; by [].
 Qed.
 
+(* A nextvoting step must have a value >= 4 *)
+Lemma nextvoting_is_step_ge4 : forall n, step_name n = Some Nextvoting -> n >= 4 .
+Proof.
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+
 (* An honest user may cert-vote only at step 3 of a period *)
 (* Certvoting is enabled only at step 3 *)
 Lemma certvote_only_in_step3 : forall us v b r p,
@@ -1174,59 +1196,207 @@ Lemma certvote_only_in_step3 : forall us v b r p,
 Proof.
 move => us v b r p Hc.
 elim: Hc => tH [vH oH].
-elim: vH => rH [pH sH]. 
+elim: vH => rH [pH sH].
 by apply certvoting_is_step_3 in sH.
-Qed.  
+Qed.
 (*  (m, pre) ~> (post, (Certvote, v, r, p,id) :: ms) -> pre.(step) = 3. *)
 
 (* State us2 comes after state us1 in terms of round-period-step ordering *)
 Definition ustate_after us1 us2 : Prop :=
-  us1.(round) < us2.(round) 
+  us1.(round) < us2.(round)
   \/ (us1.(round) = us2.(round) /\ us1.(period) < us2.(period))
   \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
 
 (* A one-step user-level transition never decreases round-period-step *)
 Lemma utr_rps_non_decreasing : forall m us1 us2 ms,
   (m, us1) ~> (us2, ms) -> ustate_after us1 us2.
-(*    us.(round) = us'.(round) -> us.(period) = us'.(period) -> 
-    us.(step) <= us'.(step). *)
-Admitted.
+Proof.
+move => m us1 us2 ms utrH.
+inversion_clear utrH.
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply softvoting_is_step_2 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply softvoting_is_step_2 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+
+  elim: H => tH [vH [vbH [svH oH]]].
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
+  rewrite addn1. by [].
+
+  elim: H => tH [vH [vbH [svH oH]]].
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
+  rewrite addn1. by [].
+
+  elim: H => tH [vH [vbH [svH oH]]].
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
+  rewrite addn1. by [].
+
+  replace pre' with (set_softvotes us1 r p (i, v)); last by [].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  elim: H => tH [vH oH].
+  elim: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+
+  replace pre' with (set_nextvotes_open us1 r p s i); last by [].
+  unfold set_softvotes => /=. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+
+  elim: H => vH oH.
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  right. left. split ; first by [].
+  rewrite addn1. by [].
+
+  replace pre' with (set_nextvotes_val us1 r p s (i, v)); last by [].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+
+  elim: H => vH oH.
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  right. left. split ; first by [].
+  rewrite addn1. by [].
+
+  replace pre' with (set_certvotes us1 r p (i, v)); last by [].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+
+  unfold ustate_after => /=.
+  left. rewrite addn1. by [].
+  destruct msg.1.1.1.2 eqn:E.
+  destruct msg.1.1.1.1 eqn:E'.
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+
+  elim: H => vH oH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by [].
+Qed.
+
 
 (* A one-step global transition never decreases round-period-step of any user *)
 Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
-  g1 ~~> g2 -> 
+  g1 ~~> g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
 Admitted.
 
 (* Generalization of non-decreasing round-period-step results to paths *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
-  greachable g1 g2 -> 
+  greachable g1 g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
 Admitted.
 
 (* A user has certvoted a value for a given period along a given path *)
-Definition certvoted_in_path g0 g p uid v : Prop := 
-  exists g1 g2 us1 us2 m r id ms, 
+Definition certvoted_in_path g0 g p uid v : Prop :=
+  exists g1 g2 us1 us2 m r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms).
 
 (* A user has certvoted for one value exactly once for a given period along a given path *)
-Definition certvoted_once_in_path g0 g p uid : Prop := 
-  exists g1 g2 us1 us2 m v r id ms, 
+Definition certvoted_once_in_path g0 g p uid : Prop :=
+  exists g1 g2 us1 us2 m v r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms) /\
-  forall v', 
-    ~ certvoted_in_path g0 g1 p uid v' /\ 
+  forall v',
+    ~ certvoted_in_path g0 g1 p uid v' /\
     ~ certvoted_in_path g2 g p uid v' .
 
 (* L1: An honest user cert-votes for at most one value in a period *)
-(* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period 
+(* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period
    :: If an honest user certvotes in a period (step 3) then he will never certvote again in that period *)
 Lemma no_two_certvotes_in_p : forall g1 g2 uid p,
   certvoted_once_in_path g1 g2 p uid \/
@@ -1239,7 +1409,7 @@ Definition softvoted_in_path g0 g p uid v : Prop :=
   exists g1 g2 us1 us2 m r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Softvote, v, r, p,id) :: ms).
 
 (* A user has softvoted exactly once for a given period along a given path *)
@@ -1252,12 +1422,6 @@ Definition softvoted_once_in_path g0 g p uid : Prop :=
   forall v',
     ~ softvoted_in_path g0 g1 p uid v' /\
     ~ softvoted_in_path g2 g p uid v' .
-
-(* A softvoting step must have the value 2 *)
-Lemma softvoting_is_step_2 : forall n, step_name n = Some Softvoting -> n = 2 .
-Proof.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
 
 (* An honest user may soft-vote only at step 2 of a period *)
 (* Softvoting is enabled only at step 2 *)
@@ -1279,19 +1443,19 @@ Admitted.
 
 
 (* A user has nextvoted bottom for a given period along a given path *)
-Definition nextvoted_open_in_path g0 g p uid : Prop := 
-  exists g1 g2 us1 us2 m v r id ms, 
+Definition nextvoted_open_in_path g0 g p uid : Prop :=
+  exists g1 g2 us1 us2 m v r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Nextvote_Open, v, r, p, id) :: ms).
 
 (* A user has nextvoted a value for a given period along a given path *)
-Definition nextvoted_value_in_path g0 g p uid v : Prop := 
-  exists g1 g2 us1 us2 m r id ms, 
+Definition nextvoted_value_in_path g0 g p uid v : Prop :=
+  exists g1 g2 us1 us2 m r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\ 
+  us1.(period) = p /\ us2.(period) = p /\
   (m, us1) ~> (us2, (Nextvote_Val, v, r, p, id) :: ms).
 
 (* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
@@ -1303,10 +1467,10 @@ Admitted.
 (* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
 
 Lemma certvote_nextvote_value_in_p : forall g1 g2 p uid v v',
-  certvoted_in_path g1 g2 p uid v -> nextvoted_value_in_path g1 g2 p uid v' -> 
+  certvoted_in_path g1 g2 p uid v -> nextvoted_value_in_path g1 g2 p uid v' ->
   v = v'.
 Admitted.
-  
+
 (* To show there is not a fork in a particular round,
    we will take a history that extends before any honest
    node started that round *)
