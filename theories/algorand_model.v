@@ -1574,7 +1574,7 @@ Definition softvoted_once_in_path path r p uid : Prop :=
 Lemma no_two_softvotes_in_p : forall path uid r p,
   softvoted_once_in_path path r p uid \/
   forall v, ~ softvoted_in_path path uid r p v.
-Admitted
+Admitted.
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path g0 g p uid : Prop :=
@@ -1605,13 +1605,50 @@ Lemma certvote_nextvote_value_in_p : forall g1 g2 path uid r p v v',
   v = v'.
 Admitted.
 
+Definition msg_received uid msg_deadline msg path : Prop :=
+  exists n ms, step_at path n
+   (lbl_deliver uid msg_deadline msg ms).
+
 Definition received_next_vote u voter round period step value path : Prop :=
-  exists n msg_deadline, step_at path n
-    (lbl_deliver u msg_deadline
-                 ((match value with
-                   | Some v => (Nextvote_Val,next_val v step)
-                   | None => (Nextvote_Open,step_val step)
-                   end),round,period,voter) [::]).
+  exists d, msg_received u d ((match value with
+                               | Some v => (Nextvote_Val,next_val v step)
+                               | None => (Nextvote_Open,step_val step)
+                               end),round,period,voter) path.
+
+Definition honest_after (r p s:nat) uid path :=
+  exists n,
+    match ohead (drop n path) with
+    | None => False
+    | Some gstate =>
+      match gstate.(users).[? uid] with
+      | None => False
+      | Some ustate => ~ustate.(corrupt)
+       /\ (ustate.(round) > r
+       \/ ((ustate.(round) = r) /\
+          (ustate.(period) > p
+           \/ (ustate.(period) = p /\ ustate.(step) > s))))
+      end
+    end.
+
+Definition received_was_sent : forall (p: seq GState) g0 u d msg,
+    path gtransition g0 p ->
+    msg_received u d msg p ->
+    let: (_,exval,msg_r,msg_p,sender) := msg in
+    let (safe_p,safe_s) :=
+        match exval with
+        | val _ => (msg_p.+1,0)
+        | step_val s => (msg_p,s)
+        | repr_val _ _ s => (msg_p,s)
+        | next_val _ s => (msg_p,s)
+        end in
+    honest_after msg_r safe_p safe_s (sender:UserId) p ->
+    exists ix g1 g2,
+      step_in_path_at g1 g2 ix p
+      /\ user_sent sender msg g1 g2
+      /\ match g1.(users).[? sender] with
+         | Some ustate => ~ustate.(corrupt)
+         | None => False
+         end.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
    the same value from some step s of period p-1 *)
@@ -1636,21 +1673,6 @@ Lemma period_advance_only_by_next_votes : forall path uid r p,
 Admitted.
 
 (* L5.1 Any set of t_H committee  members must include at least one honest node *)
-Definition honest_after (r p s:nat) uid path :=
-  exists n,
-    match ohead (drop n path) with
-    | None => False
-    | Some gstate =>
-      match gstate.(users).[? uid] with
-      | None => False
-      | Some ustate => ~ustate.(corrupt)
-       /\ (ustate.(round) > r
-       \/ ((ustate.(round) = r) /\
-          (ustate.(period) > p
-           \/ (ustate.(period) = p /\ ustate.(step) > s))))
-      end
-    end.
-
 Hypothesis quorum_has_honest :
   forall (round period step:nat) path (voters: {fset UserId}),
   #|voters| >= tau_b ->
