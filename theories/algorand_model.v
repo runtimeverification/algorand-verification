@@ -1083,6 +1083,15 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
     is_partitioned pre /\ post = recover_from_partitioned pre
   end.
 
+Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
+  exists ix, ohead (drop ix ms) = Some m.
+
+Definition user_sent uid (m : Msg) (pre post : GState) : Prop :=
+  exists ms,
+  ((exists d incoming, related_by (lbl_deliver uid d incoming ms) pre post)
+  \/ (related_by (lbl_step_internal uid ms) pre post))
+  /\ msg_list_includes m ms.
+
 Lemma transitions_labeled: forall g1 g2,
     GTransition g1 g2 <-> exists lbl, related_by lbl g1 g2.
 Proof.
@@ -1099,12 +1108,11 @@ Proof.
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 Qed.
 
-Definition step_in_path (g1 g2 : GState) (path : seq GState) : Prop :=
-  exists n,
-    match drop n path with
-    | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
-    | _ => False
-    end.
+Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
+  match drop n path with
+  | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
+  | _ => False
+  end.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
@@ -1514,30 +1522,25 @@ Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
 Admitted.
 
 (* A user has certvoted a value for a given period along a given path *)
-Definition certvoted_in_path g0 g p uid v : Prop :=
-  exists g1 g2 us1 us2 m r id ms,
-  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
-  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\
-  (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms).
+Definition certvoted_in_path_at ix path uid r p v : Prop :=
+  exists g1 g2, step_in_path_at g1 g2 ix path
+   /\ user_sent uid (Certvote,v,r,p,uid) g1 g2.
+
+Definition certvoted_in_path path uid r p v : Prop :=
+  exists ix, certvoted_in_path_at ix path uid r p v.
 
 (* A user has certvoted for one value exactly once for a given period along a given path *)
-Definition certvoted_once_in_path g0 g p uid : Prop :=
-  exists g1 g2 us1 us2 m v r id ms,
-  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
-  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  us1.(period) = p /\ us2.(period) = p /\
-  (m, us1) ~> (us2, (Certvote, v, r, p,id) :: ms) /\
-  forall v',
-    ~ certvoted_in_path g0 g1 p uid v' /\
-    ~ certvoted_in_path g2 g p uid v' .
+Definition certvoted_once_in_path path r p uid : Prop :=
+  exists ix v, certvoted_in_path_at ix path uid r p v
+  /\ forall ix' v',
+     certvoted_in_path_at ix path uid r p v -> ix = ix' /\ v = v'.
 
 (* L1: An honest user cert-votes for at most one value in a period *)
 (* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period
    :: If an honest user certvotes in a period (step 3) then he will never certvote again in that period *)
-Lemma no_two_certvotes_in_p : forall g1 g2 uid p,
-  certvoted_once_in_path g1 g2 p uid \/
-  forall v, ~ certvoted_in_path g1 g2 p uid v.
+Lemma no_two_certvotes_in_p : forall path uid r p,
+  certvoted_once_in_path path r p uid \/
+  forall v, ~ certvoted_in_path path uid r p v.
 Admitted.
 
 
@@ -1597,14 +1600,14 @@ Definition nextvoted_value_in_path g0 g p uid v : Prop :=
 
 (* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
 *)
-Lemma certvote_excludes_nextvote_open_in_p : forall g1 g2 p uid v,
-  certvoted_in_path g1 g2 p uid v -> ~ nextvoted_open_in_path g1 g2 p uid .
+Lemma certvote_excludes_nextvote_open_in_p : forall path g1 g2 uid r p v,
+  certvoted_in_path path uid r p v -> ~ nextvoted_open_in_path g1 g2 p uid .
 Admitted.
 
 (* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
 
-Lemma certvote_nextvote_value_in_p : forall g1 g2 p uid v v',
-  certvoted_in_path g1 g2 p uid v -> nextvoted_value_in_path g1 g2 p uid v' ->
+Lemma certvote_nextvote_value_in_p : forall g1 g2 path uid r p v v',
+  certvoted_in_path path uid r p v -> nextvoted_value_in_path g1 g2 p uid v' ->
   v = v'.
 Admitted.
 
@@ -1618,19 +1621,24 @@ Definition received_next_vote u voter round period step value path : Prop :=
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
    the same value from some step s of period p-1 *)
-Lemma period_advance_only_by_next_votes :
-  forall (g0 g1 g2: GState) (path:seq GState) uid r p
-         (u_key1:uid \in g1.(users)) (u_key2:uid \in g2.(users)),
-    g1.(users).[u_key1].(period) < p ->
-    g2.(users).[u_key2].(round) = r ->
-    g2.(users).[u_key2].(period) = p ->
-    gtransition g1 g2 ->
-    step_in_path g1 g2 path ->
+Definition period_advance_at n path uid r p g1 g2 : Prop :=
+  step_in_path_at g1 g2 n path /\
+  {ukey_1: uid \in g1.(users) &
+  {ukey_2: uid \in g2.(users) &
+  let ustate1 := g1.(users).[ukey_1] in
+  let ustate2 := g2.(users).[ukey_2] in
+  (ustate1.(round) < r \/ ustate1.(round) = r /\ ustate1.(period) < p)
+  /\ ustate2.(round) = r /\ ustate2.(period) = p}}.
+
+Lemma period_advance_only_by_next_votes : forall path uid r p,
+    forall n,
+    (exists g1 g2, period_advance_at n path uid r p g1 g2) ->
+    let path_prefix := take n.+2 path in
     exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
       #| next_voters | >= tau_b
       /\ forall voter, voter \in next_voters ->
        committee_cred (credential voter r p s)
-       /\ received_next_vote uid voter r p s v path.
+       /\ received_next_vote uid voter r p s v path_prefix.
 Admitted.
 
 (* L5.1 Any set of t_H committee  members must include at least one honest node *)
@@ -1682,6 +1690,7 @@ Lemma adv_period_from_honest_in_prev :
     step_in_path g1 g2 path ->
     exists honest_prev,
       honest_in_period r (p.-1) honest_prev path.
+Proof.
 Admitted.
 
 (* To show there is not a fork in a particular round,
