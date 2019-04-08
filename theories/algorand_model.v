@@ -1253,10 +1253,28 @@ Definition softvoted_once_in_path g0 g p uid : Prop :=
     ~ softvoted_in_path g0 g1 p uid v' /\
     ~ softvoted_in_path g2 g p uid v' .
 
+(* A softvoting step must have the value 2 *)
+Lemma softvoting_is_step_2 : forall n, step_name n = Some Softvoting -> n = 2 .
+Proof.
+do 4! [ case => /= ; first by [] ] ; by [].
+Qed.
+
+(* An honest user may soft-vote only at step 2 of a period *)
+(* Softvoting is enabled only at step 2 *)
+Lemma softvote_only_in_step2 : forall us v b r p,
+  softvote_new_ok us v b r p -> us.(step) = 2 /\
+  softvote_repr_ok us v b r p -> us.(step) = 2 .
+Proof.
+move => us v b r p Hc.
+elim: Hc => tH [vH oH].
+elim: vH => rH [pH sH].
+by apply softvoting_is_step_2 in sH.
+Qed.
+
 (* L2: An honest user soft-votes for at most one value in a period *)
 Lemma no_two_softvotes_in_p : forall g1 g2 uid p,
-  softvoted_once_in_path g1 g2 uid p \/
-  forall v, ~ softvoted_in_path g1 g2 uid v.
+  softvoted_once_in_path g1 g2 p uid \/
+  forall v, ~ softvoted_in_path g1 g2 p uid v.
 Admitted.
 
 
