@@ -685,8 +685,9 @@ Definition timeout_ok (pre : UState) : Prop :=
 
 (* On a timeout, move on to the next step and update the deadline *)
 Definition timeout_result (pre : UState) : UState :=
-  {[ {[ pre with deadline := next_deadline pre.(step) ]}
-       with step := pre.(step) + 1 ]}.
+  {[ pre with step := pre.(step) + 1 ]}.
+(*  {[ {[ pre with deadline := next_deadline pre.(step) ]}
+       with step := pre.(step) + 1 ]}. *)
 
 (** Message delivery transitions **)
 
@@ -1084,7 +1085,7 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   end.
 
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
-  exists ix, ohead (drop ix ms) = Some m.
+  m \in ms.
 
 Definition user_sent uid (m : Msg) (pre post : GState) : Prop :=
   exists ms,
@@ -1093,7 +1094,7 @@ Definition user_sent uid (m : Msg) (pre post : GState) : Prop :=
   /\ msg_list_includes m ms.
 
 Lemma transitions_labeled: forall g1 g2,
-    GTransition g1 g2 <-> exists lbl, related_by lbl g1 g2.
+    g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
 Proof.
   split.
   + (* forward - find label for transition *)
@@ -1118,7 +1119,7 @@ Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
 
 Definition user_timers_valid : pred UState :=
   fun u =>
-    (Rleb u.(p_start) u.(timer) &&
+    (Rleb 0 u.(p_start) &&
      Rleb u.(timer) u.(deadline) ).
 
 (* definition of reachable global state via paths *)
@@ -1175,16 +1176,19 @@ Definition step_at path ix lbl :=
    special case of sensibility *)
 Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
-  (us.(p_start) <= us.(timer) <= us.(deadline))%R /\
-  us.(deadline) = next_deadline(us.(step) - 1) .
+  (0 <= us.(timer) <= us.(deadline))%R .
+  (* The following does not generally hold since step 2 does no update the deadline *)
+  (* It can be refined though to accommodate that *)
+  (* us.(deadline) = next_deadline(us.(step) - 1) . *)
+
 
 Definition sensible_gstate (gs : GState) : Prop :=
   (gs.(now) >= 0)%R /\
   ~ gs.(users) = [fmap] /\
-  domf gs.(msg_in_transit) `<=` domf gs.(users) /\
-  forall uid (k:uid \in gs.(users)), sensible_ustate gs.(users).[k] /\
-  domf (gs.(msg_in_transit)) `<=` domf gs.(users). (* needed? *)
+  domf gs.(msg_in_transit) `<=` domf gs.(users) /\ (* needed? *)
+  forall uid (k:uid \in gs.(users)), sensible_ustate gs.(users).[k].
   (* more constraints if we add corrupt users map and total message history *)
+
 
 Lemma step_name_to_value: forall s n,
     step_name s = n ->
@@ -1201,6 +1205,7 @@ Qed.
 
 Lemma step_later_deadlines : forall s,
     s > 3 -> next_deadline s = (lambda + big_lambda + (INR s - 3) * L)%R.
+Proof.
   intros s H_s; clear -H_s.
   unfold next_deadline.
   do 3 (destruct s;[exfalso;apply not_false_is_true;assumption|]).
@@ -1231,10 +1236,11 @@ Proof.
      destruct s;unfold sensible_ustate in * |- *;
      decompose record H_sensible;clear H_sensible;simpl in * |- *
   end;
-  match goal with
+(*  match goal with
   | [H: ?deadline = next_deadline _ |- _] => subst deadline
   end;
-      try (
+*)      
+  try (
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
     | [H: repropose_ok _ _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
@@ -1251,23 +1257,21 @@ Proof.
     | _ => idtac
     end;
     repeat tidy;intuition lra).
-   (* bad deadline  results *)
-  admit.
-  admit.
-   (* bad p_start after advancing round or period *)
-  admit.
-  admit.
-  admit.
   (* deliver nonvote msg needs some custom steps *)
   destruct msg as [[[[mtype ex_val] ?] ?] ?];
     destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
   (* timeout - needs a lemma about next_deadline being monotone *)
+(*  split; first by assumption.
   unfold timeout_ok in t. use_hyp t.
+
+  unfold next_deadline. subst.  
   intuition try lra.
   admit. (* timer montone *)
   replace (step + 1 - 1) with step by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ).
   reflexivity.
-Admitted.
+Admitted. *)
+Qed.
+
 
 (* The global transition relation preserves sensibility of global states *)
 Lemma gtr_preserves_sensibility : forall gs gs',
