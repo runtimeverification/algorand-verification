@@ -312,7 +312,6 @@ Definition flip_partition_flag (g : GState) : GState :=
 
 (* small - non-block - message delivery delay *)
 Variable lambda : R.
-Hypothesis lambda_pos : (lambda > 0)%R.
 
 (* block message delivery delay *)
 Variable big_lambda : R.
