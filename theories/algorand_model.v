@@ -31,6 +31,15 @@ Unset Printing Implicit Defensive.
 
 Require Import Lra.
 
+Lemma path_prefix : forall T R p (x:T) n,
+    path R x p -> path R x (take n p).
+Proof.
+  induction p;[done|].
+  move => /= x n /andP [Hr Hpath].
+  destruct n. done.
+  simpl;apply /andP;by auto.
+Qed.
+
 (** General Description of Assumptions in the Model
  **
 
@@ -1110,11 +1119,49 @@ Proof.
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 Qed.
 
+Lemma honest_users_label_correctly : forall uid msg g1 g2,
+      user_sent uid msg g1 g2 ->
+      ~match g1.(users).[? uid] with
+       | Some u => u.(corrupt)
+       | None => true
+       end ->
+      match g1.(users).[? uid] with
+      | Some u =>
+      match msg with
+      | (_,v,r_m,p_m,uid_m) =>
+        r_m = u.(round) /\ p_m = u.(period) /\  uid_m = uid
+        /\ match v with
+           | val _ => True
+           | step_val s_m => s_m = u.(step)
+           | repr_val _ _ s_m => s_m = u.(step)
+           | next_val _ s_m => s_m = u.(step)
+           end
+      end
+      | None => False
+      end.
+Proof.
+Admitted.
+
 Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
   match drop n path with
   | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
   | _ => False
   end.
+
+Lemma step_in_path_prefix (g1 g2 : GState) n k (path : seq GState) :
+  step_in_path_at g1 g2 n (take k path)
+  -> step_in_path_at g1 g2 n path.
+Proof.
+  revert k path;induction n.
+  intros k path;
+  destruct path;[done|];destruct k;[done|];
+  destruct path;[done|];destruct k;done.
+  intros k path. destruct k.
+  clear;intro;exfalso;destruct path;assumption.
+  unfold step_in_path_at.
+  destruct path. done.
+  simpl. apply IHn.
+Qed.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
@@ -1635,18 +1682,19 @@ Definition honest_after (r p s:nat) uid path :=
       end
     end.
 
-Definition received_was_sent : forall (p: seq GState) g0 u d msg,
+Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
     path gtransition g0 p ->
     msg_received u d msg p ->
-    let: (_,exval,msg_r,msg_p,sender) := msg in
-    let (safe_p,safe_s) :=
+    let (msg_body,sender) := msg in
+    (let: (_,exval,msg_r,msg_p) := msg_body in
+     let (safe_p,safe_s) :=
         match exval with
         | val _ => (msg_p.+1,0)
         | step_val s => (msg_p,s)
         | repr_val _ _ s => (msg_p,s)
         | next_val _ s => (msg_p,s)
         end in
-    honest_after msg_r safe_p safe_s (sender:UserId) p ->
+    honest_after msg_r safe_p safe_s (sender:UserId) p) ->
     exists ix g1 g2,
       step_in_path_at g1 g2 ix p
       /\ user_sent sender msg g1 g2
@@ -1654,6 +1702,7 @@ Definition received_was_sent : forall (p: seq GState) g0 u d msg,
          | Some ustate => ~ustate.(corrupt)
          | None => False
          end.
+Admitted.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
    the same value from some step s of period p-1 *)
@@ -1673,8 +1722,8 @@ Lemma period_advance_only_by_next_votes : forall path uid r p,
     exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
       #| next_voters | >= tau_b
       /\ forall voter, voter \in next_voters ->
-       committee_cred (credential voter r p s)
-       /\ received_next_vote uid voter r p s v path_prefix.
+       committee_cred (credential voter r p.-1 s)
+       /\ received_next_vote uid voter r p.-1 s v path_prefix.
 Admitted.
 
 (* L5.1 Any set of t_H committee  members must include at least one honest node *)
@@ -1686,8 +1735,6 @@ Hypothesis quorum_has_honest :
   exists (honest_voter:UserId), honest_voter \in voters
      /\ honest_after round period step honest_voter path.
 
-(* L5 An honest node can enter period p'>1 only if at least one honest
-      note entered period p'-1 *)
 Definition honest_in_period (r p:nat) uid path :=
   exists n,
     match ohead (drop n path) with
@@ -1700,19 +1747,50 @@ Definition honest_in_period (r p:nat) uid path :=
       end
     end.
 
+(* L5 An honest node can enter period p'>1 only if at least one
+      honest node participated in period p'-1 *)
 Lemma adv_period_from_honest_in_prev :
-  forall (g0 g1 g2: GState) (path:seq GState) uid r p
-         (u_key1:uid \in g1.(users)) (u_key2:uid \in g2.(users)),
+  forall n g0 trace uid r p,
     p > 0 ->
-    g1.(users).[u_key1].(period) < p ->
-    g2.(users).[u_key2].(period) = p ->
-    g2.(users).[u_key2].(round) = r ->
-    gtransition g1 g2 ->
-    step_in_path g1 g2 path ->
-    exists honest_prev,
-      honest_in_period r (p.-1) honest_prev path.
+    path gtransition g0 trace ->
+    (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
+    exists uid', honest_in_period r (p.-1) uid' trace.
 Proof.
-Admitted.
+  intros n g0 trace uid r p.
+  intros H_p H_path H_adv.
+  apply period_advance_only_by_next_votes in H_adv.
+  destruct H_adv as (s & v & next_voters & next_voters_size & ?).
+  destruct (@quorum_has_honest r p.-1 s (take n.+2 trace) next_voters next_voters_size)
+    as (uid_honest & H_honest_voter & H_honest);
+    [clear -H;intros;apply H;assumption|].
+  exists uid_honest.
+  specialize (H uid_honest H_honest_voter).
+  destruct H.
+  destruct H0 as [d H0].
+  pose proof (@received_was_sent (take n.+2 trace) g0 uid d
+              _ (path_prefix n.+2 H_path) H0).
+  simpl in H1.
+  lapply H1;[clear H1|destruct v;assumption].
+  intros (ix & g1 & g2 & H_step & H_sent & H_honest_at_send).
+  unfold honest_in_period;exists ix.
+  assert (ohead (drop ix trace) = Some g1) as H_ohead;[|rewrite H_ohead].
+  {
+    clear -H_step. apply step_in_path_prefix in H_step.
+    unfold step_in_path_at in H_step.
+    destruct (drop ix trace);[destruct H_step|];
+    destruct l;destruct H_step.
+    simpl;apply f_equal;assumption.
+  }
+  match goal with [H : match ?G with _ => _ end |- match ?G with _ => _ end] =>
+                  destruct G eqn:H_G;[|exfalso;assumption] end.
+  rewrite H_G.
+  split. assumption.
+  pose proof (honest_users_label_correctly H_sent) as H_lbl.
+  rewrite H_G in H_lbl.
+  specialize (H_lbl H_honest_at_send).
+  decompose record H_lbl.
+  destruct v;intuition congruence.
+Qed.
 
 (* To show there is not a fork in a particular round,
    we will take a history that extends before any honest
