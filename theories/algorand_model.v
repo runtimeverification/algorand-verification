@@ -1613,11 +1613,38 @@ Definition softvoted_once_in_path path r p uid : Prop :=
   /\ forall ix' v',
      softvoted_in_path_at ix path uid r p v -> ix = ix' /\ v = v'.
 
+Lemma take_rcons : forall s (x : GState), take (size s) (rcons s x) = s.
+Proof.
+  intros. induction s. trivial. simpl. rewrite IHs; trivial.
+Qed.
+
 (* L2: An honest user soft-votes for at most one value in a period *)
 Lemma no_two_softvotes_in_p : forall path uid r p,
   softvoted_once_in_path path r p uid \/
   forall v, ~ softvoted_in_path path uid r p v.
+Proof.
+  intros. elim/last_ind: path.
+
+  right. intros; unfold not; intros.
+  unfold softvoted_in_path in H.
+  inversion H; inversion H0; inversion H1; inversion H2; inversion H3.
+
+  intros.
+  inversion H; clear H.
+  left. unfold softvoted_once_in_path. unfold softvoted_once_in_path in H0.
+  unfold softvoted_in_path_at. unfold softvoted_in_path_at in H0.
+  inversion H0; inversion H; clear H0; clear H.
+
+  inversion H1; clear H1. inversion H; inversion H1. clear H1.
+  inversion H2; clear H2.
+  exists x0, x1. split. exists x2, x3. split.
+  eapply step_in_path_prefix with (size s).
+  rewrite take_rcons. trivial.
+  trivial.
+  intros. eapply H0 in H; eassumption.
+
 Admitted.
+
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path g0 g p uid : Prop :=
