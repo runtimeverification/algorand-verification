@@ -218,7 +218,6 @@ Inductive StepName :=
 
 Definition UState := local_state.UState UserId Value PropRecord Vote.
 
-(* Notation id         := (local_state.id UserId Value PropRecord Vote). *)
 Notation corrupt         := (local_state.corrupt UserId Value PropRecord Vote).
 Notation round         := (local_state.round UserId Value PropRecord Vote).
 Notation period        := (local_state.period UserId Value PropRecord Vote).
@@ -721,99 +720,106 @@ Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState 
 (* The transition relation type *)
 (* A user transitions from a state, possibly consuming a message, into a post-state
    while emitting a (possibly empty) sequence of outgoing messages *)
-Definition u_transition_type := (option Msg * UState) -> (UState * seq Msg) -> Prop.
 
-Reserved Notation "x ~> y" (at level 70).
+Definition u_transition_internal_type := UserId -> UState -> (UState * seq Msg) -> Prop.
 
-Inductive UTransition : u_transition_type :=
-  (** Internal actions **)
-  (* Actions that are supposed to take place:
-  	  - at a specific time instance (i.e. never triggered by a recevied message)
-  	  - during a time duration, but the preconditions are already satisfied that
-  	  	the action fires eagerly at the beginning of that time duration (again,
-  	  	without consuming a message)
-  	  *)
+Reserved Notation "x # z ~> y" (at level 70).
+
+(** Internal actions **)
+(* Actions that are supposed to take place:
+	  - at a specific time instance (i.e. never triggered by a recevied message)
+	  - during a time duration, but the preconditions are already satisfied that
+	  	the action fires eagerly at the beginning of that time duration (again,
+	  	without consuming a message)
+ *)
+Inductive UTransitionInternal : u_transition_internal_type :=
 
   (* Step 1: Block Proposal *)
-  | propose : forall (pre : UState) uid v b r p,
+  | propose : forall uid (pre : UState) v b r p,
       propose_ok pre uid v b r p ->
-      (None, pre) ~> (propose_result pre,
-          [:: (Proposal, val v, r, p, uid) ;
-              (Block, val b, r, p, uid)])
+      uid # pre ~> (propose_result pre, [:: (Proposal, val v, r, p, uid) ; (Block, val b, r, p, uid)])
+
   (* Step 1: Block Proposal [Reproposal] *)
-  | repropose : forall (pre : UState) uid v b r p,
+  | repropose : forall uid (pre : UState) v b r p,
       repropose_ok pre uid v b r p ->
-      (None, pre) ~> (propose_result pre,
-          [:: (Reproposal, repr_val v uid p, r, p, uid) ;
-              (Block, val b, r, p, uid)])
+      uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid) ; (Block, val b, r, p, uid)])
+
   (* Step 1: Block Proposal [failure] *)
-  | no_propose : forall (pre : UState) uid r p,
+  | no_propose : forall uid (pre : UState) r p,
       no_propose_ok pre uid r p ->
-      (None, pre) ~> (propose_result pre, [::])
+      uid # pre ~> (propose_result pre, [::])
 
   (* Step 2: Filtering Step [new value] *)
-  | softvote_new : forall (pre : UState) uid v r p,
+  | softvote_new : forall uid (pre : UState) v r p,
       softvote_new_ok pre uid v r p ->
-      (None, pre) ~> (softvote_result pre,
-          [:: (Softvote, val v, r, p, uid)])
+      uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
+
   (* Step 2: Filtering Step [old value] *)
-  | softvote_repr : forall (pre : UState) uid v r p,
+  | softvote_repr : forall uid (pre : UState) v r p,
       softvote_repr_ok pre uid v r p ->
-      (None, pre) ~> (softvote_result pre,
-          [:: (Softvote, val v, r, p, uid)])
+      uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
 
   (* Step 3: Certifying Step [success while being a committee member] *)
-  | certvote1 : forall (pre : UState) uid v b r p,
+  | certvote1 : forall uid (pre : UState) v b r p,
       certvote_ok pre v b r p -> comm_cred_step uid r p 3 ->
-        (None, pre) ~> (certvote_result pre true,
-          [:: (Certvote, val v, r, p, uid)])
+      uid # pre ~> (certvote_result pre true, [:: (Certvote, val v, r, p, uid)])
+
   (* Step 3: Certifying Step [success while NOT being a committee member] *)
-  | certvote2 : forall (pre : UState) uid v b r p,
+  | certvote2 : forall uid (pre : UState) v b r p,
       certvote_ok pre v b r p -> ~ comm_cred_step uid r p 3 ->
-        (None, pre) ~> (certvote_result pre true, [::])
+      uid # pre ~> (certvote_result pre true, [::])
+
   (* Step 3: Certifying Step [failure] *)
-  | no_certvote : forall (pre : UState) r p,
+  | no_certvote : forall uid (pre : UState) r p,
       no_certvote_ok pre r p ->
-      (None, pre) ~> (certvote_result pre false, [::])
+      uid # pre ~> (certvote_result pre false, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
-  | nextvote_val : forall (pre : UState) uid v b r p,
-      let s := pre.(step) in
-      nextvote_val_ok pre uid v b r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
+  | nextvote_val : forall uid (pre : UState) v b r p,
+      nextvote_val_ok pre uid v b r p pre.(step) ->
+      uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Val, next_val v pre.(step), r, p, uid)])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
-  | nextvote_open : forall (pre : UState) uid v r p,
-      let s := pre.(step) in
-      nextvote_open_ok pre uid v r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
+  | nextvote_open : forall uid (pre : UState) v r p,
+      nextvote_open_ok pre uid v r p pre.(step) ->
+      uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Open, step_val pre.(step), r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
-  | nextvote_stv : forall (pre : UState) uid v r p,
-      let s := pre.(step) in
-      nextvote_stv_ok pre uid v r p s ->
-      (None, pre) ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
+  | nextvote_stv : forall uid (pre : UState) v r p,
+      nextvote_stv_ok pre uid v r p pre.(step) ->
+      uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Val, next_val v pre.(step), r, p, uid)])
 
-  (** Deliver messages and possibly trigger actions urgently **)
+  (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
+  | timeout : forall uid (pre : UState),
+      timeout_ok pre ->
+      uid # pre ~> (timeout_result pre, [::])
 
+where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
+
+Definition u_transition_msg_type := UserId -> UState -> Msg -> (UState * seq Msg) -> Prop.
+
+Reserved Notation "a # b ; c ~> d" (at level 70).
+
+(** Deliver messages and possibly trigger actions urgently **)
+Inductive UTransitionMsg : u_transition_msg_type :=
   (* Deliver a softvote while not triggering any internal action *)
-  | deliver_softvote : forall (pre : UState) r p i v b,
+  | deliver_softvote : forall uid (pre : UState) r p i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
         ~ certvote_ok pre' v b r p ->
         (* ~ nextvote_val_ok pre' v b r p s -> *)
-        (Some (Softvote, val v, r, p, i), pre) ~> (pre', [::])
+        uid # pre ; (Softvote, val v, r, p, i) ~> (pre', [::])
 
   (* Deliver a softvote and certvote for the value [committee member case] *)
-  | deliver_softvote_certvote1 : forall (pre : UState) uid r p s i v b,
+  | deliver_softvote_certvote1 : forall uid (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' v b r p -> comm_cred_step uid r p s ->
-        (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, uid)])
+        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, uid)])
 
   (* Deliver a softvote and certvote for the value [non-committee member case] *)
-  | deliver_softvote_certvote2 : forall (pre : UState) uid r p s i v b,
+  | deliver_softvote_certvote2 : forall uid (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' v b r p -> ~ comm_cred_step uid r p s ->
-        (Some (Softvote, val v, r, p, i), pre) ~> (certvote_result pre' true, [::])
+        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre' true, [::])
 
   (* Deliver a softvote and nextvote for the value *)
   (* No longer needed after the 27March change *)
@@ -826,11 +832,11 @@ Inductive UTransition : u_transition_type :=
   *)
 
   (* Deliver a nextvote for bottom while not triggering any internal action *)
-  | deliver_nextvote_open : forall (pre : UState) r p s i,
+  | deliver_nextvote_open : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
-        (* ~ nextvote_open_ok pre' v r p s -> *)
-        ~ adv_period_open_ok pre' r p s ->
-        (Some (Nextvote_Open, step_val s, r, p, i), pre) ~> (pre', [::])
+      (* ~ nextvote_open_ok pre' v r p s -> *)
+      ~ adv_period_open_ok pre' r p s ->
+      uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (pre', [::])
 
   (* Deliver a nextvote for bottom and do the nextvote_open action *)
   (* No longer needed after the 27March change *)
@@ -844,52 +850,57 @@ Inductive UTransition : u_transition_type :=
 
   (* Deliver a nextvote for bottom and advance the period *)
   (* Note: Advancing the period takes precedence over nextvote2_open actions *)
-  | deliver_nextvote_open_adv_prd : forall (pre : UState) r p s i,
+  | deliver_nextvote_open_adv_prd : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
         adv_period_open_ok pre' r p s ->
-        (Some (Nextvote_Open, step_val s, r, p, i), pre) ~> (adv_period_result pre', [::])
+        uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (adv_period_result pre', [::])
 
   (* Deliver a nextvote for value while not triggering any internal action *)
-  | deliver_nextvote_val : forall (pre : UState) r p s i v,
+  | deliver_nextvote_val : forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
         ~ adv_period_val_ok pre' v r p s ->
-        (Some (Nextvote_Val, next_val v s, r, p, i), pre) ~> (pre', [::])
+        uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (pre', [::])
 
   (* Deliver a nextvote for value and advance the period *)
-  | deliver_nextvote_val_adv_prd : forall (pre : UState) r p s i v,
+  | deliver_nextvote_val_adv_prd : forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
-        adv_period_val_ok pre' v r p s ->
-        (Some (Nextvote_Val, next_val v s, r, p, i), pre) ~> (adv_period_result pre', [::])
+      adv_period_val_ok pre' v r p s ->
+      uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (adv_period_result pre', [::])
 
   (* Deliver a certvote while not triggering any internal action *)
-  | deliver_certvote : forall (pre : UState) v r p i,
+  | deliver_certvote : forall uid (pre : UState) v r p i,
       let pre' := set_certvotes pre r p (i, v) in
-        ~ certify_ok pre' v r p ->
-        (Some (Certvote, val v, r, p, i), pre) ~> (pre', [::])
+      ~ certify_ok pre' v r p ->
+      uid # pre ; (Certvote, val v, r, p, i) ~> (pre', [::])
 
   (* Deliver a certvote for value and advance the round *)
-  | deliver_certvote_adv_rnd : forall (pre : UState) uid v r p i,
+  | deliver_certvote_adv_rnd : forall uid (pre : UState) v r p i,
       let pre' := set_certvotes pre r p (i, v) in
         certify_ok pre' v r p ->
-        (Some (Certvote, val v, r, p, i), pre) ~>
-        (certify_result pre', [:: (Certvote, val v, r, p, uid)])
-
+        uid # pre ; (Certvote, val v, r, p, i) ~> (certify_result pre', [:: (Certvote, val v, r, p, uid)])
   (* Deliver a message other than vote messages (i.e. Block, Proposal or Reproposal) *)
-  | deliver_nonvote_msg : forall (pre : UState) msg c r p,
+  | deliver_nonvote_msg : forall uid (pre : UState) msg c r p,
       ~ vote_msg msg ->
-      (Some msg, pre) ~> (deliver_nonvote_msg_result pre msg c r p, [::])
+      uid # pre ; msg ~> (deliver_nonvote_msg_result pre msg c r p, [::])
+where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
 
-  (** Generic timeout action **)
+(*
+Definition u_transition_type := UserId -> UState -> option Msg -> (UState * seq Msg) -> Prop.
 
-  (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
-  | timeout : forall (pre : UState),
-      timeout_ok pre ->
-      (None, pre) ~> (timeout_result pre, [::])
+Reserved Notation "a # b -/ c ~> d" (at level 70).
 
-where "x ~> y" := (UTransition x y) : type_scope .
+Inductive UTransition : u_transition_type :=
+| u_transition_msg : forall uid pre msg post,
+    uid # pre ; msg ~> post ->
+    uid # pre -/ (Some msg) ~> post
+| u_transition_internal : forall uid pre post,
+    uid # pre ~> post ->
+    uid # pre -/ None ~> post
+where "a # b -/ c ~> d" := (UTransition a b c d) : type_scope.
+*)
 
 (* Global transition relation type *)
-Definition g_transition_type := relation GState .
+Definition g_transition_type := relation GState.
 
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u => Rleb (u.(timer) + pos increment) u.(deadline).
@@ -1045,24 +1056,27 @@ Definition recover_from_partitioned pre : GState :=
 Reserved Notation "x ~~> y" (at level 90).
 
 Inductive GTransition : g_transition_type :=
-| tick : forall increment pre, tick_ok increment pre ->
+| step_tick : forall increment pre,
+    tick_ok increment pre ->
     pre ~~> tick_update increment pre
-| deliver_msg : forall pre uid (key_msg:uid \in pre.(msg_in_transit))
-                       pending,
-    pending \in pre.(msg_in_transit).[key_msg] ->
-    forall (key_ustate:uid \in pre.(users)) ustate_post sent,
-      let ustate_pre := pre.(users).[key_ustate] in
-      (Some (snd pending),ustate_pre) ~> (ustate_post,sent) ->
-      pre ~~> delivery_result pre uid key_msg pending ustate_post sent
-| step_internal : forall pre uid (H:uid \in pre.(users)),
-    let ustate_pre := pre.(users).[H] in
+
+| step_deliver_msg : forall pre uid (msg_key : uid \in pre.(msg_in_transit)) pending,
+    (* message in transit currently not removed after delivery *)
+    pending \in pre.(msg_in_transit).[msg_key] ->
+    forall (key_ustate : uid \in pre.(users)) ustate_post sent,
+      uid # pre.(users).[key_ustate] ; snd pending ~> (ustate_post, sent) ->
+      pre ~~> delivery_result pre uid msg_key pending ustate_post sent
+
+| step_internal : forall pre uid (ustate_key : uid \in pre.(users)),
     forall ustate_post sent,
-      (None,ustate_pre) ~> (ustate_post,sent) ->
+      uid # pre.(users).[ustate_key] ~> (ustate_post, sent) ->
       pre ~~> step_result pre uid ustate_post sent
-| enter_partition : forall pre,
+
+| step_enter_partition : forall pre,
     is_unpartitioned pre ->
     pre ~~> make_partitioned pre
-| exit_partition : forall pre,
+
+| step_exit_partition : forall pre,
     is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
 where "x ~~> y" := (GTransition x y) : type_scope.
