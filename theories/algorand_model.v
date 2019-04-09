@@ -1091,17 +1091,16 @@ Inductive GLabel : Type :=
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
   | lbl_tick increment => tick_ok increment pre /\ post = tick_update increment pre
-  | lbl_deliver user deadline msg sent =>
-    exists (key_mailbox : user \in pre.(msg_in_transit)),
+  | lbl_deliver uid deadline msg sent =>
+    exists (key_mailbox : uid \in pre.(msg_in_transit)),
     (deadline,msg) \in pre.(msg_in_transit).[key_mailbox]
-    /\ exists (key_ustate : user \in pre.(users)) ustate_post,
-       let ustate_pre := pre.(users).[key_ustate] in
-       (Some msg,ustate_pre) ~> (ustate_post,sent)
-       /\ post = delivery_result pre user key_mailbox (deadline,msg) ustate_post sent
-  | lbl_step_internal user sent =>
-    exists (key_user : user \in pre.(users)) ustate_post,
-    (None,pre.(users).[key_user]) ~> (ustate_post,sent)
-    /\ post = step_result pre user ustate_post sent
+    /\ exists (key_ustate : uid \in pre.(users)) ustate_post,
+       uid # pre.(users).[key_ustate] ; msg ~> (ustate_post,sent)
+       /\ post = delivery_result pre uid key_mailbox (deadline,msg) ustate_post sent
+  | lbl_step_internal uid sent =>
+    exists (key_user : uid \in pre.(users)) ustate_post,
+    uid # pre.(users).[key_user] ~> (ustate_post,sent)
+    /\ post = step_result pre uid ustate_post sent
   | lbl_enter_partition =>
     is_unpartitioned pre /\ post = make_partitioned pre
   | lbl_exit_partition =>
@@ -1275,8 +1274,8 @@ Proof.
 Qed.
 
 (* The user transition relation preserves sensibility of user states *)
-Lemma utr_preserves_sensibility : forall us us' m ms,
-  sensible_ustate us -> (m, us) ~> (us', ms) ->
+Lemma utr_preserves_sensibility : forall uid us us' m ms,
+  sensible_ustate us -> uid # us ; m ~> (us', ms) ->
   sensible_ustate us'.
 Proof.
   Ltac use_hyp H := unfold valid_rps in H;simpl in H; decompose record H.
@@ -1288,11 +1287,9 @@ Proof.
     | [ H : is_true (3 < ?s) |- context C [next_deadline ?s] ] =>
       rewrite (step_later_deadlines H)
   end.
-  intros us us' m ms H_sensible Hstep.
-  remember (m,us) as ustep_input eqn:H_input.
+  intros uid us us' m ms H_sensible Hstep.
   remember (us',ms) as ustep_output eqn:H_output.
-  destruct Hstep eqn:Hstep_record;
-    injection H_input;clear H_input;injection H_output;clear H_output;intros;subst us m us' ms;
+  destruct Hstep; injection H_output; intros; subst;
   match goal with
   | [H_sensible : sensible_ustate ?s |- _] => is_var s;
      destruct s;unfold sensible_ustate in * |- *;
@@ -1333,7 +1330,6 @@ Proof.
   reflexivity.
 Admitted. *)
 Qed.
-
 
 (* The global transition relation preserves sensibility of global states *)
 Lemma gtr_preserves_sensibility : forall gs gs',
@@ -1431,132 +1427,49 @@ Definition ustate_after us1 us2 : Prop :=
   \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
 
 (* A one-step user-level transition never decreases round-period-step *)
-Lemma utr_rps_non_decreasing : forall m us1 us2 ms,
-  (m, us1) ~> (us2, ms) -> ustate_after us1 us2.
+Lemma utr_rps_non_decreasing_msg : forall uid m us1 us2 ms,
+  uid # us1 ; m ~> (us2, ms) -> ustate_after us1 us2.
 Proof.
-move => m us1 us2 ms utrH.
+move => uid m us1 us2 ms utrH.
 inversion_clear utrH.
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
+- rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply softvoting_is_step_2 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply softvoting_is_step_2 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
+  do 2! [right]. by do 2! [split; auto].
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
   apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
   apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
+- rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-
-  elim: H => tH [vH [vbH [svH oH]]].
-  elim: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
-  rewrite addn1. by [].
-
-  elim: H => tH [vH [vbH [svH oH]]].
-  elim: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
-  rewrite addn1. by [].
-
-  elim: H => tH [vH [vbH [svH oH]]].
-  elim: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-  replace (local_state.step UserId Value PropRecord Vote us1) with s ; last by [].
-  rewrite addn1. by [].
-
-  replace pre' with (set_softvotes us1 r p (i, v)); last by [].
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  elim: H => tH [vH oH].
-  elim: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
-
-  replace pre' with (set_nextvotes_open us1 r p s i); last by [].
-  unfold set_softvotes => /=. unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-
-  elim: H => vH oH.
-  elim: vH => rH [pH sH].
+  do 2! [right]. by do 2! [split; auto].
+- case: H => vH oH.
+  case: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   right. left. split ; first by [].
   rewrite addn1. by [].
-
-  replace pre' with (set_nextvotes_val us1 r p s (i, v)); last by [].
+- rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-
-  elim: H => vH oH.
-  elim: vH => rH [pH sH].
+  do 2! [right]. by do 2! [split; auto].
+- case: H => vH oH.
+  case: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   right. left. split ; first by [].
   rewrite addn1. by [].
-
-  replace pre' with (set_certvotes us1 r p (i, v)); last by [].
+- rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-
-  unfold ustate_after => /=.
+  do 2! [right]. by do 2! [split; auto].
+- unfold ustate_after => /=.
   left. rewrite addn1. by [].
-  destruct msg.1.1.1.2 eqn:E.
-  destruct msg.1.1.1.1 eqn:E'.
+  destruct m.1.1.1.2 eqn:E.
+  destruct m.1.1.1.1 eqn:E'.
   unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
@@ -1576,14 +1489,78 @@ inversion_clear utrH.
   unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
+  do 2! [right]. by do 2! [split; auto].
+Qed.
 
-  elim: H => vH oH.
+(* A one-step user-level transition never decreases round-period-step *)
+Lemma utr_rps_non_decreasing_internal : forall uid us1 us2 ms,
+  uid # us1 ~> (us2, ms) -> ustate_after us1 us2.
+Proof.
+move => uid us1 us2 ms utrH.
+inversion_clear utrH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply proposing_is_step_1 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply softvoting_is_step_2 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply softvoting_is_step_2 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply certvoting_is_step_3 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- elim: H => tH [vH [vbH [svH oH]]].
+  elim: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by [].
+- case: H => tH [vH [vbH [svH oH]]].
+  case: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by [].
+- case: H => tH [vH [vbH [svH oH]]].
+  case: vH => rH [pH sH].
+  apply nextvoting_is_step_ge4 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by [].
+- case: H => vH oH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   rewrite addn1. by [].
 Qed.
-
 
 (* A one-step global transition never decreases round-period-step of any user *)
 Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
@@ -1644,19 +1621,19 @@ Admitted.
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path g0 g p uid : Prop :=
-  exists g1 g2 us1 us2 m v r id ms,
+  exists g1 g2 us1 us2 v r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\
-  (m, us1) ~> (us2, (Nextvote_Open, v, r, p, id) :: ms).
+  uid # us1 ~> (us2, (Nextvote_Open, v, r, p, id) :: ms).
 
 (* A user has nextvoted a value for a given period along a given path *)
 Definition nextvoted_value_in_path g0 g p uid v : Prop :=
-  exists g1 g2 us1 us2 m r id ms,
+  exists g1 g2 us1 us2 r id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
   us1.(period) = p /\ us2.(period) = p /\
-  (m, us1) ~> (us2, (Nextvote_Val, v, r, p, id) :: ms).
+  uid # us1 ~> (us2, (Nextvote_Val, v, r, p, id) :: ms).
 
 (* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
 *)
