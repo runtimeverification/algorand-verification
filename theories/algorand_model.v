@@ -228,36 +228,38 @@ Notation has_certvoted := (local_state.has_certvoted UserId Value PropRecord Vot
 
 Definition set_proposals u r' p' prop : UState :=
  {[ u with proposals := fun r p => if (r, p) == (r', p')
-                                 then prop :: u.(proposals) r p
+                                 then undup (prop :: u.(proposals) r p)
                                  else u.(proposals) r p ]}.
 
 Definition set_blocks (u : UState) r' p' block : UState :=
  {[ u with blocks := fun r p => if (r, p) == (r', p')
-                                 then block :: u.(blocks) r p
+                                 then undup (block :: u.(blocks) r p)
                                  else u.(blocks) r p ]}.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
   {[ u with softvotes := fun r p => if (r, p) == (r', p')
-                                 then sv :: u.(softvotes) r p
+                                 then undup (sv :: u.(softvotes) r p)
                                  else u.(softvotes) r p ]}.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
   {[ u with certvotes := fun r p => if (r, p) == (r', p')
-                                 then sv :: u.(certvotes) r p
+                                 then undup (sv :: u.(certvotes) r p)
                                  else u.(certvotes) r p ]}.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
   {[ u with nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
-                                   then nvo :: u.(nextvotes_open) r p s
+                                   then undup (nvo :: u.(nextvotes_open) r p s)
                                    else u.(nextvotes_open) r p s ]}.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
   {[ u with nextvotes_val := fun r p s => if (r, p, s) == (r', p', s')
-                                   then nvv :: u.(nextvotes_val) r p s
+                                   then undup (nvv :: u.(nextvotes_val) r p s)
                                    else u.(nextvotes_val) r p s ]}.
 
 Definition set_has_certvoted (u : UState) r' p' b' : UState :=
-  {[ u with has_certvoted := fun r p => if (r, p) == (r', p') then b' else u.(has_certvoted) r p ]}.
+  {[ u with has_certvoted := fun r p => if (r, p) == (r', p') 
+                                        then b' 
+                                        else u.(has_certvoted) r p ]}.
 
 Definition advance_period (u : UState) : UState :=
   {[ {[ {[ {[ {[ u with period := u.(period) + 1 ]}
@@ -386,18 +388,20 @@ Definition valid_rps (u : UState) r p w : Prop :=
 Definition matchValue (x : Vote) (v : Value) : bool :=
   let: (u', v') := x in v == v' .
 
-(* The sequence of all values appearing a given sequence of votes *)
+(* The sequence of all values appearing in a given sequence of votes with
+   duplicates removed *)
 Definition vote_values (vs: seq Vote) : seq Value :=
-  [seq x.2 | x <- vs] .
+  undup [seq x.2 | x <- vs] .
 
-(* The number of softvotes of a given value in a given user state *)
-Definition soft_weight (v:Value) (u:UState) : nat :=
-  size [seq x <- u.(softvotes) u.(round) u.(period) | matchValue x v] .
+(* The number of softvotes of a given value in a given user state for the round
+   and period given (assumes u.(softvotes) r p is duplicate-free) *)
+Definition soft_weight (v:Value) (u:UState) r p : nat :=
+  size [seq x <- u.(softvotes) r p | matchValue x v] .
 
 (* The sequence of values with high enough softvotes in a given user state for given round and period *)
 (* i.e. the sequence of values in softvotes having votes greater than or equal to the threshold *)
 Definition certvals (u:UState) r p : seq Value :=
-  [seq v <- vote_values (u.(softvotes) r p) | (soft_weight v u) >= tau_s] .
+  [seq v <- vote_values (u.(softvotes) r p) | (soft_weight v u r p) >= tau_s] .
 (* invariant: size should be <= 1 *)
 
 (* The sequence of values certified for in the last period as seen by the given user *)
@@ -417,16 +421,15 @@ Definition nextvote_val_quorum (u:UState) r p s : Prop :=
 (* Whether the user has already certified a value (based on enough nextvotes) in the previous period
    of the current round (for some step during that period) *)
 (* This corresponds to cert_may_exist field in the automaton model *)
-(* Notes: - the step s is not specified in the automaton model so the assumption here is that
-            step s is existentially quantified
-          - the second condition (nextvote_bottom_quorum is never true in the current period) was added
-            based on recent discussion
+(* Notes: - modified based on Victor's comment
+          - p > 1
 *)
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
-    exists s, nextvote_val_quorum u r (p - 1) s
-    /\ forall s, ~ nextvote_bottom_quorum u r p s.
+  forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
+(* to be shown as an invariant (?): exists s, nextvote_val_quorum u r (p - 1) s *)
+
 
 (* Returns the proposal record in a given sequence of records having the least
    credential (reproposal records are ignored) *)
@@ -459,14 +462,14 @@ Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
 (* The proposal step preconditions *)
 (* Note that this covers both: (a) the case when p = 1, and (b)
    the case when p > 1 with the previous period voting for bottom.
-   Just as in Victor's model, the fact that the last period's winning
-   vote was for a value is captured by the predicate cert_may_exist *)
+   Just as in Victor's model, the fact that the last period's quorum
+   was not for bottom is captured by the predicate cert_may_exist *)
 Definition propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\
   comm_cred_step uid r p 1 /\
-  ~ cert_may_exist pre /\
-  valid b /\ correct_hash v b .
+  valid b /\ correct_hash v b /\
+  (p > 1 -> ~ cert_may_exist pre) .
 
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
@@ -506,9 +509,8 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\
   comm_cred_step uid r p 2 /\
-  ~ cert_may_exist pre /\
+  (p > 1 -> ~ cert_may_exist pre) /\
   potential_leader_value v (pre.(proposals) r p) .
-  (* ~ pre.(proposals) r p = [::] . (* so a leader can be identified *) *)
 
 (* The Softvoting-a-reproposal step preconditions *)
 (* Note that this is the Softvoting step when p > 1 and the previous-
@@ -550,7 +552,7 @@ Definition softvote_result (pre : UState) : UState :=
 Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p Certvoting /\
-  ~ cert_may_exist pre /\
+  (p > 1 -> ~ cert_may_exist pre) /\
   valid_block_and_hash pre b v r p /\
   v \in certvals pre r p .
 
@@ -575,7 +577,7 @@ Definition certvote_result (pre : UState) b : UState :=
 
 (** Steps >= 4: Nextvoting1 propositions and user state update **)
 
-(* First nextvoting step preconditions *)
+(* Nextvoting step preconditions *)
 (* The proper-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
@@ -590,7 +592,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   (* pre.(has_certvoted) r p. *)
   v \in certvals pre r p.
 
-(* First nextvoting step preconditions *)
+(* Nextvoting step preconditions *)
 (* The bottom-value case *)
 (* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
@@ -602,10 +604,9 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
   (* ~ pre.(has_certvoted) r p /\ *)
-  (p = 1 \/ (p > 1 /\ nextvote_bottom_quorum pre r (p - 1) s )) /\
-  ~ cert_may_exist pre . (* extra? *)
+  (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
-(* First nextvoting step preconditions *)
+(* Nextvoting step preconditions *)
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
 (*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly)
@@ -619,7 +620,7 @@ Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
   comm_cred_step uid r p s. (* required (?) *)
 
-(* Nextvoting step state update for even steps s >= 4 (all cases) *)
+(* Nextvoting step state update for steps s >= 4 (all cases) *)
 (* Note: Updated to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
   {[ {[ pre with step := (s + 1) ]}
