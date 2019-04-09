@@ -297,7 +297,7 @@ Definition comm_cred_step uid r p s : Prop :=
 (*
 (* Similarly, a proposition for whether a given credential qualifies its
    owner to be a potential leader *)
-Variable leader_cred : credType -> Prop.
+nVariable leader_cred : credType -> Prop.
 
 
 Definition leader_cred_step (u : UState) r p s : Prop :=
@@ -1081,6 +1081,62 @@ Inductive GTransition : g_transition_type :=
     pre ~~> recover_from_partitioned pre
 where "x ~~> y" := (GTransition x y) : type_scope.
 
+Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
+  match drop n path with
+  | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
+  | _ => False
+  end.
+
+(* definition of reachable global state via paths *)
+Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
+
+Definition greachable (g0 g : GState) : Prop := exists2 p, path gtransition g0 p & g = last g0 p.
+
+(* classic definition of reachable global state *)
+
+Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition g0 g.
+
+(* definitions are equivalent in our setting *)
+
+Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
+Proof.
+move => g0 g; case => x.
+move: g0 g.
+elim: x => /=; first by move => g0 g Ht ->; exact: rt1n_refl.
+move => g1 p IH g0 g.
+move/andP => [Hg Hp] Hgg.
+have IH' := IH _ _ Hp Hgg.
+move: IH'; apply: rt1n_trans.
+by move: Hg; move/asboolP.
+Qed.
+
+Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g.
+Proof.
+move => g0 g.
+elim; first by move => x; exists [::].
+move => x y z Hxy Hc.
+case => p Hp Hl.
+exists (y :: p) => //=.
+apply/andP.
+by split => //; apply/asboolP.
+Qed.
+
+(* More definitions for stating that a state or transition exists along a path *)
+Lemma step_in_path_prefix (g1 g2 : GState) n k (path : seq GState) :
+  step_in_path_at g1 g2 n (take k path)
+  -> step_in_path_at g1 g2 n path.
+Proof.
+  revert k path;induction n.
+  intros k path;
+  destruct path;[done|];destruct k;[done|];
+  destruct path;[done|];destruct k;done.
+  intros k path. destruct k.
+  clear;intro;exfalso;destruct path;assumption.
+  unfold step_in_path_at.
+  destruct path. done.
+  simpl. apply IHn.
+Qed.
+
 Inductive GLabel : Type :=
 | lbl_tick :  posreal -> GLabel
 | lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
@@ -1132,6 +1188,87 @@ Proof.
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 Qed.
 
+(* This predicate says a particular step on the path
+   is consistent with the given transition label *)
+Definition step_at path ix lbl :=
+  match drop ix path with
+  | pre :: post :: _ => related_by lbl pre post
+  | _ => False
+  end.
+
+Definition msg_received uid msg_deadline msg path : Prop :=
+  exists n ms, step_at path n
+   (lbl_deliver uid msg_deadline msg ms).
+
+Definition received_next_vote u voter round period step value path : Prop :=
+  exists d, msg_received u d ((match value with
+                               | Some v => (Nextvote_Val,next_val v step)
+                               | None => (Nextvote_Open,step_val step)
+                               end),round,period,voter) path.
+
+Definition honest_after (r p s:nat) uid path :=
+  exists n,
+    match ohead (drop n path) with
+    | None => False
+    | Some gstate =>
+      match gstate.(users).[? uid] with
+      | None => False
+      | Some ustate => ~ustate.(corrupt)
+       /\ (ustate.(round) > r
+       \/ ((ustate.(round) = r) /\
+          (ustate.(period) > p
+           \/ (ustate.(period) = p /\ ustate.(step) > s))))
+      end
+    end.
+
+Definition committee (r p s:nat) : {fset UserId} :=
+  [fset uid : UserId | `[<committee_cred (credential uid r p s)>] ].
+
+Hypothesis quorums_c_honest_overlap :
+  forall trace r p s (quorum1 quorum2 : {fset UserId}),
+    quorum1 `<=` committee r p s ->
+    #| quorum1 | >= tau_c ->
+    quorum2 `<=` committee r p s ->
+    #| quorum2 | >= tau_c ->
+    exists honest_voter,
+      honest_voter \in quorum1
+      /\ honest_voter \in quorum2
+      /\ honest_after r p s honest_voter trace.
+
+Lemma quorum_c_has_honest :
+  forall trace r p s (quorum : {fset UserId}),
+    quorum `<=` committee r p s ->
+    #| quorum | >= tau_c ->
+   exists honest_voter, honest_voter \in quorum ->
+     honest_after r p s honest_voter trace.
+Proof.
+  intros trace r p s q H_q H_size.
+  pose proof (quorums_c_honest_overlap trace H_q H_size H_q H_size).
+  clear -H. decompose record H;eauto.
+Qed.
+
+Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
+    path gtransition g0 p ->
+    msg_received u d msg p ->
+    let (msg_body,sender) := msg in
+    (let: (_,exval,msg_r,msg_p) := msg_body in
+     let (safe_p,safe_s) :=
+        match exval with
+        | val _ => (msg_p.+1,0)
+        | step_val s => (msg_p,s)
+        | repr_val _ _ s => (msg_p,s)
+        | next_val _ s => (msg_p,s)
+        end in
+    honest_after msg_r safe_p safe_s (sender:UserId) p) ->
+    exists ix g1 g2,
+      step_in_path_at g1 g2 ix p
+      /\ user_sent sender msg g1 g2
+      /\ match g1.(users).[? sender] with
+         | Some ustate => ~ustate.(corrupt)
+         | None => False
+         end.
+Admitted.
+
 Lemma honest_users_label_correctly : forall uid msg g1 g2,
       user_sent uid msg g1 g2 ->
       ~match g1.(users).[? uid] with
@@ -1152,29 +1289,7 @@ Lemma honest_users_label_correctly : forall uid msg g1 g2,
       end
       | None => False
       end.
-Proof.
 Admitted.
-
-Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
-  match drop n path with
-  | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
-  | _ => False
-  end.
-
-Lemma step_in_path_prefix (g1 g2 : GState) n k (path : seq GState) :
-  step_in_path_at g1 g2 n (take k path)
-  -> step_in_path_at g1 g2 n path.
-Proof.
-  revert k path;induction n.
-  intros k path;
-  destruct path;[done|];destruct k;[done|];
-  destruct path;[done|];destruct k;done.
-  intros k path. destruct k.
-  clear;intro;exfalso;destruct path;assumption.
-  unfold step_in_path_at.
-  destruct path. done.
-  simpl. apply IHn.
-Qed.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
@@ -1182,49 +1297,6 @@ Definition user_timers_valid : pred UState :=
   fun u =>
     (Rleb 0 u.(p_start) &&
      Rleb u.(timer) u.(deadline) ).
-
-(* definition of reachable global state via paths *)
-
-Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
-
-Definition greachable (g0 g : GState) : Prop := exists2 p, path gtransition g0 p & g = last g0 p.
-
-(* classic definition of reachable global state *)
-
-Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition g0 g.
-
-(* definitions are equivalent in our setting *)
-
-Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
-Proof.
-move => g0 g; case => x.
-move: g0 g.
-elim: x => /=; first by move => g0 g Ht ->; exact: rt1n_refl.
-move => g1 p IH g0 g.
-move/andP => [Hg Hp] Hgg.
-have IH' := IH _ _ Hp Hgg.
-move: IH'; apply: rt1n_trans.
-by move: Hg; move/asboolP.
-Qed.
-
-Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g.
-Proof.
-move => g0 g.
-elim; first by move => x; exists [::].
-move => x y z Hxy Hc.
-case => p Hp Hl.
-exists (y :: p) => //=.
-apply/andP.
-by split => //; apply/asboolP.
-Qed.
-
-(* This predicate says a particular step on the path
-   is consistent with the given transition label *)
-Definition step_at path ix lbl :=
-  match drop ix path with
-  | pre :: post :: _ => related_by lbl pre post
-  | _ => False
-  end.
 
 (* Sensible states *)
 (* This notion specifiies what states can be considered valid states. The idea
@@ -1588,7 +1660,24 @@ Definition certvoted_in_path path uid r p v : Prop :=
 Definition certvoted_once_in_path path r p uid : Prop :=
   exists ix v, certvoted_in_path_at ix path uid r p v
   /\ forall ix' v',
-     certvoted_in_path_at ix path uid r p v -> ix = ix' /\ v = v'.
+     certvoted_in_path_at ix' path uid r p v' -> ix = ix' /\ v = v'.
+
+Definition certified_in_step trace r p s v :=
+  exists (certvote_quorum:{fset UserId}), #| certvote_quorum | >= tau_c
+  /\ forall (voter:UserId), voter \in certvote_quorum ->
+     committee_cred (credential voter r p s)
+     /\ certvoted_in_path trace voter r p v.
+
+Lemma certvotes_at_step_3: forall path r p s v,
+    certified_in_step path r p s v -> s = 3.
+Admitted.
+
+Definition certified_in_period trace r p v :=
+  exists (certvote_quorum:{fset UserId}),
+    certvote_quorum `<=` committee r p 3
+  /\ #| certvote_quorum | >= tau_c
+  /\ (forall (voter:UserId), voter \in certvote_quorum
+      -> certvoted_in_path trace voter r p v).
 
 (* L1: An honest user cert-votes for at most one value in a period *)
 (* :: In any global state, an honest user either never certvotes in a period or certvotes once in step 3 and never certvotes after that during that period
@@ -1673,53 +1762,6 @@ Admitted.
 Lemma certvote_nextvote_value_in_p : forall g1 g2 path uid r p v v',
   certvoted_in_path path uid r p v -> nextvoted_value_in_path g1 g2 p uid v' ->
   v = v'.
-Admitted.
-
-Definition msg_received uid msg_deadline msg path : Prop :=
-  exists n ms, step_at path n
-   (lbl_deliver uid msg_deadline msg ms).
-
-Definition received_next_vote u voter round period step value path : Prop :=
-  exists d, msg_received u d ((match value with
-                               | Some v => (Nextvote_Val,next_val v step)
-                               | None => (Nextvote_Open,step_val step)
-                               end),round,period,voter) path.
-
-Definition honest_after (r p s:nat) uid path :=
-  exists n,
-    match ohead (drop n path) with
-    | None => False
-    | Some gstate =>
-      match gstate.(users).[? uid] with
-      | None => False
-      | Some ustate => ~ustate.(corrupt)
-       /\ (ustate.(round) > r
-       \/ ((ustate.(round) = r) /\
-          (ustate.(period) > p
-           \/ (ustate.(period) = p /\ ustate.(step) > s))))
-      end
-    end.
-
-Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
-    path gtransition g0 p ->
-    msg_received u d msg p ->
-    let (msg_body,sender) := msg in
-    (let: (_,exval,msg_r,msg_p) := msg_body in
-     let (safe_p,safe_s) :=
-        match exval with
-        | val _ => (msg_p.+1,0)
-        | step_val s => (msg_p,s)
-        | repr_val _ _ s => (msg_p,s)
-        | next_val _ s => (msg_p,s)
-        end in
-    honest_after msg_r safe_p safe_s (sender:UserId) p) ->
-    exists ix g1 g2,
-      step_in_path_at g1 g2 ix p
-      /\ user_sent sender msg g1 g2
-      /\ match g1.(users).[? sender] with
-         | Some ustate => ~ustate.(corrupt)
-         | None => False
-         end.
 Admitted.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
@@ -1812,9 +1854,11 @@ Qed.
 
 (* To show there is not a fork in a particular round,
    we will take a history that extends before any honest
-   node started that round *)
+   node has made a transition in that round *)
 Definition user_before_round r (u : UState) : Prop :=
-  u.(round) < r
+  (u.(round) < r \/
+   (u.(round) = r /\
+    u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
   /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(blocks) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
@@ -1864,6 +1908,54 @@ Lemma recved_honest_sent : forall r g0 g1 path_seq pending,
       exists key_msg pending ustate_post sent,
            gmid2 = delivery_result gmid1 sender key_msg pending ustate_post sent
         /\ pending_msg \in sent.
+Admitted.
+
+Lemma one_certificate_per_period: forall g0 trace r p,
+    state_before_round r g0 ->
+    path gtransition g0 trace ->
+    forall v1, certified_in_period trace r p v1 ->
+    forall v2, certified_in_period trace r p v2 ->
+    v1 = v2.
+Proof.
+  intros g0 trace r p H_start H_path v1 H_cert1 v2 H_cert2.
+  destruct H_cert1 as (quorum1 & H_q1 & H_size1 & H_cert1).
+  destruct H_cert2 as (quorum2 & H_q2 & H_size2 & H_cert2).
+  pose proof (quorums_c_honest_overlap trace H_q1 H_size1 H_q2 H_size2).
+  destruct H as (honest_voter & H_common1 & H_common2 & H_honest).
+  specialize (H_cert1 _ H_common1).
+  specialize (H_cert2 _ H_common2).
+  destruct (no_two_certvotes_in_p trace honest_voter r p);
+  [|exfalso;eapply H;eassumption].
+  unfold certvoted_once_in_path in H.
+  decompose record H;clear H.
+  destruct H_cert1 as [ix1 H_cert1], H_cert2 as [ix2 H_cert2].
+  destruct (H2 _ _ H_cert1) as [_ <-].
+  destruct (H2 _ _ H_cert2) as [_ <-].
+  reflexivity.
+Qed.
+
+Theorem safety: forall g0 trace (r:nat),
+    state_before_round r g0 ->
+    path gtransition g0 trace ->
+    forall p1 v1, certified_in_period trace r p1 v1 ->
+    forall p2 v2, certified_in_period trace r p2 v2 ->
+    v1 = v2.
+Proof.
+  intros g0 trace r H_start H_path p1 v1 H_cert1 p2 v2 H_cert2.
+  wlog: p1 v1 H_cert1 p2 v2 H_cert2 / (p1 <= p2).
+  { (* showing this suffices *)
+  intros H_narrowed.
+  destruct (p1 <= p2) eqn:H_test;[|symmetry];eapply H_narrowed;try eassumption.
+  apply ltnW. rewrite ltnNge. rewrite H_test. done.
+  }
+  (* Continuing proof *)
+  intro H_le.
+  destruct (eqVneq p1 p2).
+  * (* Two blocks certified in same period *)
+  subst p2; clear H_le.
+  eapply one_certificate_per_period;eassumption.
+  * (* Second certificate from a later period *)
+  admit.
 Admitted.
 
 (* LIVENESS *)
