@@ -1866,6 +1866,27 @@ Definition state_before_round r (g:GState) : Prop :=
 Definition user_honest (uid:UserId) (g:GState) : bool :=
   if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
+(* D1: an honest node enters a period exclusively for value v *)
+(* if it enters the period with starting value $v$ *)
+(* and has not observed t_H next-votes for $\bot$ from any single step of the previous period *)
+Definition enters_exclusively_for_value (uid : UserId) (r p : nat) (v : Value) path :=
+  exists g1 g2 n, period_advance_at n path uid r p g1 g2 /\
+  exists ustate, g2.(users).[? uid] = Some ustate /\
+  ~ ustate.(corrupt) /\ ustate.(stv) p = Some v /\
+  forall s, size (ustate.(nextvotes_open) r p.-1 s) < tau_b.
+
+(* L6: if all honest nodes that entered a period p >= 2 did so exclusively for value v *)
+(* then an honest node cannot cert-vote for any value other than v in step 3 of period p'. *)
+Lemma excl_enter_cert_vote :
+  forall (r p : nat) (v : Value) path,
+    p >= 2 ->
+    forall (uid : UserId),
+      honest_in_period r p uid path ->
+      enters_exclusively_for_value uid r p v path ->
+      certvoted_once_in_path path r p uid.
+Proof.
+Admitted.
+
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
    to some honest user having sent those messages *)
@@ -2014,5 +2035,15 @@ Lemma prop_g : forall g0 g r b v p,
   (* TODO: timely produced? *)
   size (cert_users g v r p) > tau_c.
 Admitted.
+  
+(* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
+(*
+Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset UserId}) path :=
+  vote_msg m ->
+  #|voters| >= tau_b ->
+  (forall voter, voter \in voters -> committee_cred (credential voter round period step)) ->
+  (forall voter, voter \in voters -> has_sent_vote_message_in r p s) ->
+  s > 3 ->
+*)
 
 End AlgoModel.
