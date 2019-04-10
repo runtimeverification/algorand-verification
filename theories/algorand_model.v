@@ -1217,7 +1217,7 @@ Lemma quorum_c_has_honest :
   forall trace r p s (quorum : {fset UserId}),
     quorum `<=` committee r p s ->
     #| quorum | >= tau_c ->
-   exists honest_voter, honest_voter \in quorum ->
+   exists honest_voter, honest_voter \in quorum /\
      honest_after r p s honest_voter trace.
 Proof.
   intros trace r p s q H_q H_size.
@@ -1638,7 +1638,7 @@ Admitted.
 (* A user has certvoted a value for a given period along a given path *)
 Definition certvoted_in_path_at ix path uid r p v : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path
-   /\ user_sent uid (Certvote,v,r,p,uid) g1 g2.
+   /\ user_sent uid (Certvote,val v,r,p,uid) g1 g2.
 
 Definition certvoted_in_path path uid r p v : Prop :=
   exists ix, certvoted_in_path_at ix path uid r p v.
@@ -1723,9 +1723,9 @@ Lemma certvote_excludes_nextvote_open_in_p : forall path g1 g2 uid r p v,
 Admitted.
 
 (* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
-
 Lemma certvote_nextvote_value_in_p : forall g1 g2 path uid r p v v',
-  certvoted_in_path path uid r p v -> nextvoted_value_in_path g1 g2 p uid v' ->
+  certvoted_in_path path uid r p v ->
+  forall s, nextvoted_value_in_path g1 g2 p uid (next_val v' s) ->
   v = v'.
 Admitted.
 
@@ -1864,13 +1864,13 @@ Definition enters_exclusively_for_value (uid : UserId) (r p : nat) (v : Value) p
 
 (* L6: if all honest nodes that entered a period p >= 2 did so exclusively for value v *)
 (* then an honest node cannot cert-vote for any value other than v in step 3 of period p'. *)
-Lemma excl_enter_cert_vote :
+Lemma excl_enter_limits_cert_vote :
   forall (r p : nat) (v : Value) path,
-    p >= 2 ->
+    p >= 1 ->
     forall (uid : UserId),
       honest_in_period r p uid path ->
       enters_exclusively_for_value uid r p v path ->
-      certvoted_once_in_path path r p uid.
+      forall v', certvoted_in_path path uid r p v' -> v' = v.
 Proof.
 Admitted.
 
@@ -1920,6 +1920,22 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma certificate_is_start_of_later_periods:
+  forall trace r p v,
+    certified_in_period trace r p v ->
+  forall p', p' > p ->
+    forall uid,
+      honest_in_period r p' uid trace ->
+      enters_exclusively_for_value uid r p' v trace.
+Admitted.
+
+Lemma honest_in_from_after_and_send: forall r p s uid trace,
+      honest_after r p s uid trace ->
+  forall mt v g1 g2,
+    user_sent uid (mt,v,r,p,uid) g1 g2 ->
+    honest_in_period r p uid trace.
+Admitted.
+
 Theorem safety: forall g0 trace (r:nat),
     state_before_round r g0 ->
     path gtransition g0 trace ->
@@ -1937,20 +1953,41 @@ Proof.
   (* Continuing proof *)
   intro H_le.
   destruct (eqVneq p1 p2).
-  * (* Two blocks certified in same period *)
+  * (* Two blocks certified in same period. *)
   subst p2; clear H_le.
   eapply one_certificate_per_period;eassumption.
-  * (* Second certificate from a later period *)
-  admit.
-Admitted.
+  *
+  (* Second certificate produced in a later period *)
+  assert (p1 < p2) as Hlt by (rewrite ltn_neqAle;apply /andP;split;assumption).
+  clear H_le i.
+  assert (0 < p2) as Hpos by (apply leq_trans with p1.+1;[rewrite ltnS|];done).
+
+  pose proof H_cert2 as H_cert2'.
+  destruct H_cert2' as (q2 & H_q2 & H_size2 & H_cert2').
+  destruct (quorum_c_has_honest trace H_q2 H_size2)
+     as (honest_voter & H_honest_q & H_honest_in).
+  specialize (H_cert2' honest_voter H_honest_q).
+  destruct H_cert2' as (ix & ga1 & ga2 & H_cert2').
+  assert (honest_in_period r p2 honest_voter trace)
+   by (eapply honest_in_from_after_and_send;[eassumption|eexact (proj2 H_cert2')]).
+
+  pose proof (certificate_is_start_of_later_periods H_cert1 Hlt) as H_entry.
+  pose proof (@excl_enter_limits_cert_vote r p2 v1 trace Hpos) as H_recert.
+  specialize (H_entry honest_voter H).
+  specialize (H_recert honest_voter H H_entry v2).
+  symmetry. apply H_recert; clear H_recert.
+
+
+  unfold certvoted_in_path.
+  exists ix. exists ga1. exists ga2. assumption.
+Qed.
 
 (* LIVENESS *)
 
-Definition cert_users (g : GState) v r p :=
+Definition cert_users (g : GState) v (r p:nat) :=
   [seq uid <- (domf g.(users)) | if g.(users).[? uid] is Some ustate
                                  then v \in certvals ustate r p
-                                 else false
-  ].
+                                 else false].
 
 Definition unique_stv_bot (g : GState) p :=
   all
