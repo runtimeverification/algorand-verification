@@ -31,15 +31,6 @@ Unset Printing Implicit Defensive.
 
 Require Import Lra.
 
-Lemma path_prefix : forall T R p (x:T) n,
-    path R x p -> path R x (take n p).
-Proof.
-  induction p;[done|].
-  move => /= x n /andP [Hr Hpath].
-  destruct n. done.
-  simpl;apply /andP;by auto.
-Qed.
-
 (** General Description of Assumptions in the Model
  **
 
@@ -67,13 +58,6 @@ We generally list the assumptions made in this version of the model so far:
 **)
 
 Section AlgoModel.
-
-
-(* We first define a user's state structure *)
-(* Note: these definitions follow quite closely the ones given by Victor
-   in his automaton model of the system. We may stick to those or refine/abstract
-   over some of the details as we move on.
-*)
 
 (* We assume a finite set of users *)
 Variable UserId : finType.
@@ -125,17 +109,14 @@ Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7)
 Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
 Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
 
-(* None means the value bottom *)
-(* NOTE: No need to explicitly represent bottom, so this is removed.*)
-(* Definition MaybeValue := option Value. *)
-
-(* Similar to the strucutres used as values in messages in Victor's paper *)
+(* Inspired by the strucutres used as values in messages in Victor's paper *)
 Inductive ExValue :=
   | val      : Value -> ExValue
   | step_val : nat -> ExValue
   | repr_val : Value -> UserId -> nat -> ExValue
   | next_val : Value -> nat -> ExValue.
 
+(* Make ExValue an eqType and a choiceType *)
 Definition codeExVal (e:ExValue) :
   Value + nat + (Value * UserId * nat) + (Value * nat) :=
   match e with
@@ -161,22 +142,16 @@ Canonical exvalue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal)
 Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
 
 (* A message type as a product type *)
+(* A message is a tuple (type, ev, r, p, id) where:
+    type: message type as an MType
+    ev  : message payload as an ExValue
+    r   : round value
+    p   : period value
+    id  : sender's user id 
+ *)
 Definition Msg : Type := MType * ExValue * nat * nat * UserId.
 
-(* Alternatively, we could construct a message as a more elaborate record ??)
-Record Msg :=
-  mkMsg {
-    type : MType ;
-    val : Value ;
-    round: nat ;
-    period : nat ;
-    user : UserId
-  }.
-*)
-
-(* Messages are grouped by target.
-   We do not need to remember the sender, everything only
-   depends on which keys signed parts of the message.
+(* Messages are grouped by the target user.
 
    Messages are paired with a delivery deadline.
    In the absence of a partition, messages must be
@@ -184,31 +159,37 @@ Record Msg :=
  *)
 Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
 
-(* The credential of a User at a round-period-step triple *)
-(* Note: We abstract away the random value produced by an Oracle *)
-(* and the fact that credentials are interpreted as integer *)
-(* values. Instead, we model the type of credentials as an *)
-(* abstract totally ordered type. *)
-
+(* The credential of a User at a round-period-step triple
+   Note: We abstract away the random value produced by an Oracle
+   and the fact that credentials are interpreted as integer
+   values. Instead, we model the type of credentials as an
+   abstract totally ordered type. 
+ *)
 Variable credType : orderType tt.
 
+(* A credential is constructed using the user's id and the 
+   current round-period-step values
+ *)
 Variable credential : UserId -> nat -> nat -> nat -> credType.
 
+(* Credentials of two differnet users must be different *)
 Hypothesis credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
 
-(* A proposal/preproposal record is a triple consisting of two
-   values along with a boolean indicating whether this is
-   a proposal (true) or a reproposal (false)
-*)
-
+(* A proposal/preproposal record is a quadruple consisting of 
+   a user id, a user's credential, a value and a boolean 
+   indicating whether the record represents a proposal (true) 
+   or a reproposal (false)
+ *)
 Definition PropRecord := (UserId * credType * Value * bool)%type.
 
-(* A vote is a pair of UserID and Value *)
+(* A vote is a pair of UserId (the id of the voter) and Value 
+   (the value voted for)
+ *)
 Definition Vote := (UserId * Value)%type.
 
-(* Constructors for the different steps in a period
+(* An enumerated data type for the different step names in a period
 *)
 Inductive StepName :=
   | Proposing
@@ -216,24 +197,29 @@ Inductive StepName :=
   | Certvoting
   | Nextvoting.
 
+(* The user's state structure *)
+(* Note that the user state structure and supporting functions and notations 
+   are all defined in local_state.v 
+ *)
 Definition UState := local_state.UState UserId Value PropRecord Vote.
 
-Notation corrupt         := (local_state.corrupt UserId Value PropRecord Vote).
-Notation round         := (local_state.round UserId Value PropRecord Vote).
-Notation period        := (local_state.period UserId Value PropRecord Vote).
-Notation step          := (local_state.step UserId Value PropRecord Vote).
-Notation timer         := (local_state.timer UserId Value PropRecord Vote).
-Notation deadline      := (local_state.deadline UserId Value PropRecord Vote).
-Notation p_start       := (local_state.p_start UserId Value PropRecord Vote).
-Notation stv           := (local_state.stv UserId Value PropRecord Vote).
-Notation proposals     := (local_state.proposals UserId Value PropRecord Vote).
-Notation blocks        := (local_state.blocks UserId Value PropRecord Vote).
-Notation softvotes     := (local_state.softvotes UserId Value PropRecord Vote).
-Notation certvotes     := (local_state.certvotes UserId Value PropRecord Vote).
+Notation corrupt        := (local_state.corrupt UserId Value PropRecord Vote).
+Notation round          := (local_state.round UserId Value PropRecord Vote).
+Notation period         := (local_state.period UserId Value PropRecord Vote).
+Notation step           := (local_state.step UserId Value PropRecord Vote).
+Notation timer          := (local_state.timer UserId Value PropRecord Vote).
+Notation deadline       := (local_state.deadline UserId Value PropRecord Vote).
+Notation p_start        := (local_state.p_start UserId Value PropRecord Vote).
+Notation stv            := (local_state.stv UserId Value PropRecord Vote).
+Notation proposals      := (local_state.proposals UserId Value PropRecord Vote).
+Notation blocks         := (local_state.blocks UserId Value PropRecord Vote).
+Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
+Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
 Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
-Notation nextvotes_val := (local_state.nextvotes_val UserId Value PropRecord Vote).
-Notation has_certvoted := (local_state.has_certvoted UserId Value PropRecord Vote).
+Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
+Notation has_certvoted  := (local_state.has_certvoted UserId Value PropRecord Vote).
 
+(* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
  {[ u with proposals := fun r p => if (r, p) == (r', p')
                                  then undup (prop :: u.(proposals) r p)
@@ -264,11 +250,13 @@ Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
                                    then undup (nvv :: u.(nextvotes_val) r p s)
                                    else u.(nextvotes_val) r p s ]}.
 
+(* Update function for the has_certvoted field *)
 Definition set_has_certvoted (u : UState) r' p' b' : UState :=
   {[ u with has_certvoted := fun r p => if (r, p) == (r', p') 
                                         then b' 
                                         else u.(has_certvoted) r p ]}.
 
+(* Update function for advancing the period of a user state *)
 Definition advance_period (u : UState) : UState :=
   {[ {[ {[ {[ {[ u with period := u.(period) + 1 ]}
                 with step := 1 ]}
@@ -276,6 +264,7 @@ Definition advance_period (u : UState) : UState :=
           with deadline := 0%R ]}
        with p_start := u.(p_start) + u.(timer) ]}.
 
+(* Update function for advancing the round of a user state *)
 Definition advance_round (u : UState) : UState :=
   {[ {[ {[ {[ {[ {[ u with round := u.(round) + 1 ]}
                    with period := 1 ]}
@@ -285,38 +274,30 @@ Definition advance_round (u : UState) : UState :=
        with p_start := u.(p_start) + u.(timer) ]}.
 
 (* A proposition for whether a given credential qualifies its
-   owner to be a committee member *)
-(* Note: This abstract away how credential values are
-   interpreted (which is a piece of detail that may not be
-   relevant to the model at this stage) *)
+   owner to be a committee member 
+   Note: This abstracts away how credential values are
+   interpreted 
+ *)
 Variable committee_cred : credType -> Prop.
 
+(* Whether the credential is a committee credential for the given 
+   round-period-step 
+ *)
 Definition comm_cred_step uid r p s : Prop :=
   committee_cred (credential uid r p s) .
 
-(*
-(* Similarly, a proposition for whether a given credential qualifies its
-   owner to be a potential leader *)
-nVariable leader_cred : credType -> Prop.
-
-
-Definition leader_cred_step (u : UState) r p s : Prop :=
-  leader_cred (credential u.(id) r p s) .
-
-
-(* The basic requirement that a potential leader for a particular round-period-step
-   must by defintion be a committee member as well for that round-period-step *)
-Hypothesis leader_is_comm_member :
-  forall cr : credType, leader_cred cr -> committee_cred cr .
-*)
-
-Notation now         := (global_state.now UserId UState [choiceType of Msg]).
-Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
-Notation users         := (global_state.users UserId UState [choiceType of Msg]).
-Notation msg_in_transit  := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
-
+(* The global state *)
+(* Note that the global state structure and supporting functions and notations 
+   are all defined in global_state.v 
+ *)
 Definition GState := global_state.GState UserId UState [choiceType of Msg].
 
+Notation now               := (global_state.now UserId UState [choiceType of Msg]).
+Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
+Notation users             := (global_state.users UserId UState [choiceType of Msg]).
+Notation msg_in_transit    := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
+
+(* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
   {[ g with network_partition := ~~ g.(network_partition) ]}.
 
@@ -333,10 +314,9 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (lambda < big_lambda < L)%R .
 
-(* additional time delay introduced by the adversary when the network is
-   partitioned *)
+(* additional (non-negative) time delay introduced by the adversary 
+   when the network is partitioned *)
 Variable rho : R.
-
 Hypothesis arbitrary_rho : (rho >= 0)%R .
 
 (* some other thresholds *)
@@ -346,10 +326,10 @@ Variable tau_s : nat.
 (* number of cert-votes needed for a certificate *)
 Variable tau_c : nat.
 
-(* number of next-votes for None to move to next period *)
+(* number of next-votes for bottom to move to next period *)
 Variable tau_b : nat.
 
-(* number of next-votes for a proper value to move to next period *)
+(* number of next-votes for a value to move to next period *)
 Variable tau_v : nat.
 
 (* upper bound on the credential to be part of the committee for step s *)
@@ -426,11 +406,11 @@ Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
 Definition nextvote_val_quorum (u:UState) r p s : Prop :=
   exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
 
-(* Whether the user has already certified a value (based on enough nextvotes) in the previous period
+(* Whether a quorum for bottom was seen in the last period
    of the current round (for some step during that period) *)
-(* This corresponds to cert_may_exist field in the automaton model *)
+(* This corresponds roughly to cert_may_exist field in the automaton model *)
 (* Notes: - modified based on Victor's comment
-          - p > 1
+          - assumes p > 1
 *)
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
@@ -440,7 +420,9 @@ Definition cert_may_exist (u:UState) : Prop :=
 
 
 (* Returns the proposal record in a given sequence of records having the least
-   credential (reproposal records are ignored) *)
+   credential (reproposal records are ignored)
+   i.e. the record of the potential leader
+ *)
 Fixpoint least_record (prs : seq PropRecord) : option PropRecord :=
   match prs with
   | [::]                          => None
@@ -482,8 +464,6 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
    period's winning vote was for a value v *)
-(* Note also that we do not distinguish values from their hashes (for now),
-   and so the check that v = hash(B) is not used *)
 Definition repropose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\ p > 1 /\
@@ -523,8 +503,6 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
 (* The Softvoting-a-reproposal step preconditions *)
 (* Note that this is the Softvoting step when p > 1 and the previous-
    period's winning vote was for a value v *)
-(* Notes: - the automaton model includes an additional condition that is not
-            explicitly given in the description [TODO: investigate]  *)
 Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\ p > 1 /\
@@ -535,15 +513,12 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
 (* This seems to be related to the condition mentioned above in softvote_new_ok above *)
 
 (* The softvoting step (new or reproposal) post-state *)
-(* NOTE: We keep the current deadline at 2 * lambda and let certvoting rules do that
-         (to avoid timing out while certvoting is already enabled) *)
+(* NOTE: We keep the current deadline at 2 * lambda and let certvoting handled
+         updating the deadline (to avoid timing out while certvoting is already
+         enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
 Definition softvote_result (pre : UState) : UState :=
   {[ pre with step := 3 ]}.
-(*  update_step
-    (update_deadline pre (next_deadline pre.(step))
-    3.
-*)
 
 (** Step 3: Certvoting propositions and user state update **)
 
@@ -587,8 +562,10 @@ Definition certvote_result (pre : UState) b : UState :=
 
 (* Nextvoting step preconditions *)
 (* The proper-value case *)
-(* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
+(* Notes: - Corresponds (roughly) to transition nextvote_val in the automaton
+            model (but not the same) *)
+(*        - Corresponds more closely to the Algorand2 description (but with the
+            committee membership constraint)
           - Updated to accommodate the 27March change
  *)
 Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
@@ -602,10 +579,12 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
 
 (* Nextvoting step preconditions *)
 (* The bottom-value case *)
-(* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton model (but not the same) *)
-(*        - Corresponds more closely to the Algorand2 description (but with the committee membership constraint)
+(* Notes: - Corresponds (roughly) to transition nextvote_open in the automaton
+            model (but not the same) *)
+(*        - Corresponds more closely to the Algorand2 description (but with the
+            committee membership constraint)
           - Updated to accommodate the 27March change
-*)
+ *)
 Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
@@ -617,9 +596,10 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
 (* Nextvoting step preconditions *)
 (* The aditional special case of using the starting value *)
 (* Notes: - Not sure if this is captured in the automaton model *)
-(*        - Corresponds more closely to the Algorand2 description (but with additional constraints given explicitly)
+(*        - Corresponds more closely to the Algorand2 description (but with
+            additional constraints given explicitly)
           - Updated to accommodate the 27March change
-*)
+ *)
 Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
@@ -640,17 +620,16 @@ Definition nextvote_result (pre : UState) s : UState :=
 (* Notes: - Corresponds to transition advance_period_open in the automaton model *)
 Definition adv_period_open_ok (pre : UState) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
-  nextvote_bottom_quorum pre r p s .
+  nextvote_bottom_quorum pre r p s.
 
 (* Preconditions -- The proper value case *)
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
-  size [seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]  >= tau_v .
+  size [seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]  >= tau_v.
 
 (* State update -- both cases *)
-Definition adv_period_result (pre : UState) : UState := advance_period pre .
-
+Definition adv_period_result (pre : UState) : UState := advance_period pre.
 
 (** Advancing round propositions and user state update **)
 (* Preconditions *)
@@ -664,7 +643,6 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
 
 (* State update *)
 Definition certify_result (pre : UState) : UState := advance_round pre.
-
 
 (** Timeout transitions **)
 
@@ -686,20 +664,16 @@ Definition next_deadline k : R :=
 
 (* A user timeouts if a deadline is reached while waiting for some external messages
    (i.e. while observing softvotes in step 3) *)
-(* Note: This captures the timeout transitions in the automaton model in addition
-         to timing out in the repeated steps *)
+(* Note: This captures the timeout transitions in the automaton model *)
 (* Note: Updated to accommodate the 27March change *)
 Definition timeout_ok (pre : UState) : Prop :=
   pre.(step) = 3 /\ (pre.(timer) >= pre.(deadline))%R.
 
-(* On a timeout, move on to the next step and update the deadline *)
+(* On a timeout, move on to the next step *)
 Definition timeout_result (pre : UState) : UState :=
   {[ pre with step := pre.(step) + 1 ]}.
-(*  {[ {[ pre with deadline := next_deadline pre.(step) ]}
-       with step := pre.(step) + 1 ]}. *)
 
-(** Message delivery transitions **)
-
+(* The post state of delivering a non-vote message *)
 Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState :=
   let type := msg.1.1.1.1 in
   let id := msg.2 in
@@ -715,18 +689,18 @@ Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState 
   | _ => pre
   end.
 
-(** The inductive definition of the user state transition relation **)
 
-(* The transition relation type *)
-(* A user transitions from a state, possibly consuming a message, into a post-state
-   while emitting a (possibly empty) sequence of outgoing messages *)
+(** The inductive definition of the user state transition relations **)
 
+(* The internal user-level transition relation type *)
+(* An internal transition is a transition that does not consume a message *)
+(* A user transitions from a pre-state into a post-state while emitting
+   a (possibly empty) sequence of outgoing messages *)
 Definition u_transition_internal_type := UserId -> UState -> (UState * seq Msg) -> Prop.
 
 Reserved Notation "x # z ~> y" (at level 70).
 
-(** Internal actions **)
-(* Actions that are supposed to take place:
+(* Internal actions are supposed to take place either:
 	  - at a specific time instance (i.e. never triggered by a recevied message)
 	  - during a time duration, but the preconditions are already satisfied that
 	  	the action fires eagerly at the beginning of that time duration (again,
@@ -796,6 +770,10 @@ Inductive UTransitionInternal : u_transition_internal_type :=
 
 where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
 
+(* The message-triggered user-level transition relation type *)
+(* A message-triggered transition consumes an incoming message *)
+(* A user transitions from a pre-state, while consuming a message, into a 
+   post-state and emits a (possibly empty) sequence of outgoing messages *)
 Definition u_transition_msg_type := UserId -> UState -> Msg -> (UState * seq Msg) -> Prop.
 
 Reserved Notation "a # b ; c ~> d" (at level 70).
@@ -1425,6 +1403,15 @@ exact: gtr_preserves_sensibility.
 Qed.
 
 (* SAFETY *)
+
+Lemma path_prefix : forall T R p (x:T) n,
+    path R x p -> path R x (take n p).
+Proof.
+  induction p;[done|].
+  move => /= x n /andP [Hr Hpath].
+  destruct n. done.
+  simpl;apply /andP;by auto.
+Qed.
 
 (* Generates a condition on the step value corresponding to a step name *)
 Definition step_condition step_name n : Prop :=
