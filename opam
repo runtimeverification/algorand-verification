@@ -1,20 +1,27 @@
-opam-version: "1.2"
+opam-version: "2.0"
 maintainer: "palmskog@gmail.com"
 
 homepage: "https://github.com/runtimeverification/algorand-verification"
-dev-repo: "https://github.com/runtimeverification/algorand-verification.git"
+dev-repo: "git+https://github.com/runtimeverification/algorand-verification.git"
 bug-reports: "https://github.com/runtimeverification/algorand-verification/issues"
 license: "Proprietary"
+
+synopsis: "A formalization of Algorand in Coq"
+description: """
+A formalization of the Algorand distributed ledger in Coq.
+"""
 
 build: [make "-j%{jobs}%"]
 install: [make "install"]
 remove: ["rm" "-R" "%{lib}%/coq/user-contrib/Algorand"]
+flags: light-uninstall
 depends: [
+  "ocaml"
   "coq" {>= "8.9" & < "8.10~"}
-  "coq-mathcomp-ssreflect" {>= "1.7" & < "1.8~"}
+  "coq-mathcomp-ssreflect" {>= "1.7" & < "1.9~"}
   "coq-mathcomp-algebra"
-  "coq-interval"
   "coq-mathcomp-finmap"
+  "coq-interval"
 ]
 
 tags: [
