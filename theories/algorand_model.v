@@ -52,7 +52,7 @@ We generally list the assumptions made in this version of the model so far:
 - We abstract over nonces that are assumed to be produced by an Oracle and assume
   that randomness is unbiasable
 - Credentials are modeled by abstract totally ordered types (the interpretation
-  of a cedential as an unsigned integer is not needed)
+  of a credential as an unsigned integer is not needed)
 
 **
 **)
@@ -177,7 +177,7 @@ Hypothesis credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
 
-(* A proposal/preproposal record is a quadruple consisting of 
+(* A proposal/reproposal record is a quadruple consisting of 
    a user id, a user's credential, a value and a boolean 
    indicating whether the record represents a proposal (true) 
    or a reproposal (false)
@@ -880,15 +880,27 @@ where "a # b -/ c ~> d" := (UTransition a b c d) : type_scope.
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
 
+(* Is the network in a partitioned/unpartitioned state? *)
+Definition is_partitioned pre : bool := pre.(network_partition).
+Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
+
+(* It's ok to advance time if:
+   - the user is corrupt (its deadline is irrelevant), or 
+   - the increment does not go beyond the deadline *)
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
-  fun u => Rleb (u.(timer) + pos increment) u.(deadline).
+  fun u => u.(corrupt) || Rleb (u.(timer) + pos increment) u.(deadline).
 
+(* Advance the timer of an honest user (timers of corrupt users are irrelevant) *)
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
-  {[ u with timer := (u.(timer) + pos increment)%R ]}.
+  if ~~ u.(corrupt)
+    then {[ u with timer := (u.(timer) + pos increment)%R ]}
+    else u.
 
+(* Is it ok to advance timers of all (honest) users by the given increment? *) 
 Definition tick_ok_users increment (pre:GState) : bool :=
   allf (user_can_advance_timer increment) pre.(users).
 
+(* As a proposition *)
 Lemma tick_ok_usersP : forall increment (g : GState),
   reflect
     (forall (uid : UserId) (h : uid \in domf g.(users)), user_can_advance_timer increment g.(users).[h])
@@ -898,14 +910,23 @@ move => increment g.
 exact: allfP.
 Qed.
 
+(* It is ok to advance time if:
+   - the network is partitioned (message delivery delays are ignored), or
+   - the time increment does not cause missing a message delivery deadline
+ *)
 Definition tick_ok_msgs (increment:posreal) (pre:GState) : bool :=
+  is_partitioned pre ||
   let target_time := (pre.(now) + pos increment)%R in
   \big[andb/true]_(user_msgs <- codomf pre.(msg_in_transit))
    \big[andb/true]_(m <- (enum_mset user_msgs)) Rleb target_time (fst m).
 
+(* Returns whether time may advance, taking into consideration the state of
+   the network, users, their deadlines and message deadlines.
+ *)
 Definition tick_ok (increment:posreal) (pre:GState) : bool :=
   tick_ok_users increment pre && tick_ok_msgs increment pre.
 
+(* Advance all (honest) user timers by the given increment *)
 Definition tick_users increment pre : {fmap UserId -> UState} :=
   updf pre.(users) (domf pre.(users)) (fun _ us => user_advance_timer increment us).
 
@@ -923,6 +944,7 @@ move => increment pre uid h.
 by rewrite updf_update.
 Qed.
 
+(* Computes the global state after advancing time with the given increment *)
 Definition tick_update increment pre : GState :=
   {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
        with users := tick_users increment pre ]}.
@@ -943,12 +965,26 @@ Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) 
 Definition send_broadcasts (deadline : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
   foldl (send_broadcast deadline targets) prev_msgs msgs.
 
-(* Computes the global state after a message delivery,
-   given the result of the user transition *)
+(* Returns true if the given user id is found in the map and the user state
+   corresponding to that id is for a corrupt user *)
+Definition is_user_corrupt (uid : UserId) (users : {fmap UserId -> UState}) : bool :=
+  if users.[? uid] is Some u then u.(corrupt) else false.
+
+(* Returns the given users map restricted to honest users only *)
+Definition honest_users (users : {fmap UserId -> UState}) :=
+  let corrupt_ids := 
+    [fset x in domf users | is_user_corrupt x users] in
+    users.[\ corrupt_ids] .
+
+(* Computes the global state after a message delivery, given the result of the
+   user transition 
+   Notes: - the delivered message is removed from the user's mailbox
+          - broadcasts new messages to honest users only
+ *)
 Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transit)) delivered ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
-  let msgs' := send_broadcasts (pre.(now)+lambda)%R (domf (pre.(users)) `\ uid)
+  let msgs' := send_broadcasts (pre.(now)+lambda)%R (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
   {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 Arguments delivery_result : clear implicits.
@@ -961,19 +997,19 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
                                pre.(msg_in_transit) sent in
   {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 
-(* Resets the deadline of a message having an excessively high delay *)
+(* Resets the deadline of a message having a missed deadline *)
 Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
   let cur_deadline := fst msg in
   let max_deadline := msg_deadline (snd msg) now in
-  let new_deadline := (Rmin cur_deadline max_deadline) in
+  let new_deadline := if (Rgtb now cur_deadline) then max_deadline else cur_deadline in
   (msgs `|` [mset (new_deadline, msg.2)])%mset.
 
 (* Recursively resets message deadlines of all the messages given *)
 Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
   foldl (reset_deadline now) mset0 msgs .
 
-(* Constructs a message pool with all deadlines of messages having excessively
-   high delays reset appropriately based on the message type *)
+(* Constructs a message pool with all messages having missed delivery deadlines
+   updated appropriately based on the message type *)
 Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
   updf msgpool (domf msgpool) (fun _ msgs => reset_user_msg_delays msgs now).
 
@@ -1014,49 +1050,88 @@ move => msgpool uid h.
 by rewrite updf_update.
 Qed.
 
-(* Is the network in a partitioned/unpartitioned state? *)
-Definition is_partitioned pre : bool := pre.(network_partition).
-Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
-
 (* Computes the state resulting from getting partitioned *)
+(* Note: this no longer injects extended message delays (see the tick rule) *)
 Definition make_partitioned (pre:GState) : GState :=
+  flip_partition_flag pre.
+(*
   let msgpool' := extend_msg_deadlines pre.(msg_in_transit) in
   {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
-(*  (flip_partition_flag pre). *)
+*)
 
 (* Computes the state resulting from recovering from a partition *)
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
   {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
 
+(* Marks a user state corrupted by setting the corrupt flag *)
+Definition make_corrupt ustate : UState :=
+  {[ ustate with corrupt := true ]}.
+
+(* Drop the set of messages targeted for a specific user from the given 
+   message map *)
+Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
+  if msgs.[? uid] is Some mailbox then msgs.[uid <- mset0] else msgs.
+
+(* Computes the state resulting from corrupting a user *)
+(* The user will have its corrupt flag (in its local state) set to true
+   and his mailbox in the global state removed *)
+Definition corrupt_user_result (pre : GState) (uid : UserId) 
+                               (ustate_key : uid \in pre.(users)) : GState :=
+  let ustate' := make_corrupt pre.(users).[ustate_key] in
+  let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
+  let users' := pre.(users).[uid <- ustate'] in
+    {[ {[ pre with users := users'         ]}
+              with msg_in_transit := msgs' ]}.
+
 (* The global transition relation *)
 
 Reserved Notation "x ~~> y" (at level 90).
 
 Inductive GTransition : g_transition_type :=
+(* Advance the global time *)
+(* Notes: - corrupt user deadlines are ignored 
+          - when partitioned, message delivery delays are ignored
+ *)
 | step_tick : forall increment pre,
     tick_ok increment pre ->
     pre ~~> tick_update increment pre
 
+(* Deliver a message to a user (honest users only) *)
 | step_deliver_msg : forall pre uid (msg_key : uid \in pre.(msg_in_transit)) pending,
-    (* message in transit currently not removed after delivery *)
     pending \in pre.(msg_in_transit).[msg_key] ->
     forall (key_ustate : uid \in pre.(users)) ustate_post sent,
+      ~ pre.(users).[key_ustate].(corrupt) ->
       uid # pre.(users).[key_ustate] ; snd pending ~> (ustate_post, sent) ->
       pre ~~> delivery_result pre uid msg_key pending ustate_post sent
 
+(* Progress based on an internal step of a user (honest users only) *)
 | step_internal : forall pre uid (ustate_key : uid \in pre.(users)),
-    forall ustate_post sent,
-      uid # pre.(users).[ustate_key] ~> (ustate_post, sent) ->
-      pre ~~> step_result pre uid ustate_post sent
+      ~ pre.(users).[ustate_key].(corrupt) ->
+      forall ustate_post sent,
+        uid # pre.(users).[ustate_key] ~> (ustate_post, sent) ->
+        pre ~~> step_result pre uid ustate_post sent
 
+(* Recover from a partition *)
+| step_exit_partition : forall pre,
+    is_partitioned pre ->
+    pre ~~> recover_from_partitioned pre
+
+(* Adversary action - partition the network *) 
 | step_enter_partition : forall pre,
     is_unpartitioned pre ->
     pre ~~> make_partitioned pre
 
-| step_exit_partition : forall pre,
-    is_partitioned pre ->
-    pre ~~> recover_from_partitioned pre
+(* Adversary action - corrupt a user *) 
+| step_corrupt_user : forall pre uid (ustate_key : uid \in pre.(users)),
+    pre.(users).[ustate_key].(corrupt) = false ->
+    pre ~~> @corrupt_user_result pre uid ustate_key
+
+(* Adversary action - inject extended message delays *)
+(* -- modeled by ignoring message delivery deadlines when partitioned *)
+
+(* Adversary action - send out a message *)
+
 where "x ~~> y" := (GTransition x y) : type_scope.
 
 Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
@@ -1119,26 +1194,34 @@ Inductive GLabel : Type :=
 | lbl_tick :  posreal -> GLabel
 | lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
 | lbl_step_internal : UserId -> seq Msg -> GLabel
-| lbl_enter_partition : GLabel
-| lbl_exit_partition : GLabel.
+| lbl_exit_partition : GLabel
+| lbl_corrupt_user : UserId -> GLabel
+| lbl_enter_partition : GLabel.
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
-  | lbl_tick increment => tick_ok increment pre /\ post = tick_update increment pre
+  | lbl_tick increment => 
+      tick_ok increment pre /\ post = tick_update increment pre
   | lbl_deliver uid deadline msg sent =>
-    exists (key_mailbox : uid \in pre.(msg_in_transit)),
-    (deadline,msg) \in pre.(msg_in_transit).[key_mailbox]
-    /\ exists (key_ustate : uid \in pre.(users)) ustate_post,
-       uid # pre.(users).[key_ustate] ; msg ~> (ustate_post,sent)
-       /\ post = delivery_result pre uid key_mailbox (deadline,msg) ustate_post sent
+      exists (key_mailbox : uid \in pre.(msg_in_transit)),
+      (deadline,msg) \in pre.(msg_in_transit).[key_mailbox]
+      /\ exists (key_ustate : uid \in pre.(users)) ustate_post,
+        ~ pre.(users).[key_ustate].(corrupt) /\
+        uid # pre.(users).[key_ustate] ; msg ~> (ustate_post,sent)
+        /\ post = delivery_result pre uid key_mailbox (deadline,msg) ustate_post sent
   | lbl_step_internal uid sent =>
-    exists (key_user : uid \in pre.(users)) ustate_post,
-    uid # pre.(users).[key_user] ~> (ustate_post,sent)
-    /\ post = step_result pre uid ustate_post sent
-  | lbl_enter_partition =>
-    is_unpartitioned pre /\ post = make_partitioned pre
+      exists (key_user : uid \in pre.(users)) ustate_post,
+      ~ pre.(users).[key_user].(corrupt) /\
+      uid # pre.(users).[key_user] ~> (ustate_post,sent)
+      /\ post = step_result pre uid ustate_post sent
   | lbl_exit_partition =>
-    is_partitioned pre /\ post = recover_from_partitioned pre
+      is_partitioned pre /\ post = recover_from_partitioned pre
+  | lbl_corrupt_user uid =>
+      exists (ustate_key : uid \in pre.(users)), 
+      pre.(users).[ustate_key].(corrupt) = false 
+      /\ post = @corrupt_user_result pre uid ustate_key
+  | lbl_enter_partition =>
+      is_unpartitioned pre /\ post = make_partitioned pre
   end.
 
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
@@ -1160,8 +1243,9 @@ Proof.
     exists (lbl_tick increment);finish_case.
     destruct pending as [deadline msg];exists (lbl_deliver uid deadline msg sent);finish_case.
     exists (lbl_step_internal uid sent);finish_case.
-    exists (lbl_enter_partition);finish_case.
     exists (lbl_exit_partition);finish_case.
+    exists (lbl_enter_partition);finish_case.
+    exists (lbl_corrupt_user uid);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 Qed.
@@ -1277,13 +1361,13 @@ Definition user_timers_valid : pred UState :=
      Rleb u.(timer) u.(deadline) ).
 
 (* Sensible states *)
-(* This notion specifiies what states can be considered valid states. The idea
+(* This notion specifies what states can be considered valid states. The idea
    is that we only consider execution traces that begin at sensible states,
    since sensibility is preserved by the transition system (to be shown), the
    set of reachable states will also be sensible (to be shown). This means that
    it is not important which specific state is assumed as the initial state as
    long as the state is sensible.
-   Note: the transditional operational notion of an initial state is a now a
+   Note: the traditional operational notion of an initial state is a now a
    special case of sensibility *)
 Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
