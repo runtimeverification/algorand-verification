@@ -509,11 +509,23 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   comm_cred_step uid r p 2 /\
   v \in prev_certvals pre.
 
+(* The no-softvoting step preconditions *)
+(* Two reasons a user may not be able to soft-vote:
+   - Not being in the soft-voting committee, or
+   - Not being able to identify a potential leader value to soft-vote for 
+ *)
+(* Note that this may apply regardless of whether p = 1*)
+Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
+  pre.(timer) = (2 * lambda)%R /\
+  valid_rps pre r p Softvoting /\
+  (comm_cred_step uid r p 2 -> 
+    (nilp (prev_certvals pre) /\ ~ potential_leader_value v (pre.(proposals) r p))).
+
 (* TODO: The Softvoting-conflict step preconditions *)
 (* This seems to be related to the condition mentioned above in softvote_new_ok above *)
 
 (* The softvoting step (new or reproposal) post-state *)
-(* NOTE: We keep the current deadline at 2 * lambda and let certvoting handled
+(* NOTE: We keep the current deadline at 2 * lambda and let certvoting handle
          updating the deadline (to avoid timing out while certvoting is already
          enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
@@ -732,6 +744,11 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   | softvote_repr : forall uid (pre : UState) v r p,
       softvote_repr_ok pre uid v r p ->
       uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
+
+  (* Step 2: Filtering Step [no value] *)
+  | no_softvote : forall uid (pre : UState) v r p,
+      no_softvote_ok pre uid v r p ->
+      uid # pre ~> (softvote_result pre, [::])
 
   (* Step 3: Certifying Step [success while being a committee member] *)
   | certvote1 : forall uid (pre : UState) v b r p,
@@ -1657,6 +1674,11 @@ inversion_clear utrH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  apply softvoting_is_step_2 in sH.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H  => tH [vH oH].
   case: vH => rH [pH sH].
   apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
