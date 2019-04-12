@@ -147,7 +147,7 @@ Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal)
     ev  : message payload as an ExValue
     r   : round value
     p   : period value
-    id  : sender's user id 
+    id  : sender's user id
  *)
 Definition Msg : Type := MType * ExValue * nat * nat * UserId.
 
@@ -163,11 +163,11 @@ Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
    Note: We abstract away the random value produced by an Oracle
    and the fact that credentials are interpreted as integer
    values. Instead, we model the type of credentials as an
-   abstract totally ordered type. 
+   abstract totally ordered type.
  *)
 Variable credType : orderType tt.
 
-(* A credential is constructed using the user's id and the 
+(* A credential is constructed using the user's id and the
    current round-period-step values
  *)
 Variable credential : UserId -> nat -> nat -> nat -> credType.
@@ -177,14 +177,14 @@ Hypothesis credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
 
-(* A proposal/reproposal record is a quadruple consisting of 
-   a user id, a user's credential, a value and a boolean 
-   indicating whether the record represents a proposal (true) 
+(* A proposal/reproposal record is a quadruple consisting of
+   a user id, a user's credential, a value and a boolean
+   indicating whether the record represents a proposal (true)
    or a reproposal (false)
  *)
 Definition PropRecord := (UserId * credType * Value * bool)%type.
 
-(* A vote is a pair of UserId (the id of the voter) and Value 
+(* A vote is a pair of UserId (the id of the voter) and Value
    (the value voted for)
  *)
 Definition Vote := (UserId * Value)%type.
@@ -198,8 +198,8 @@ Inductive StepName :=
   | Nextvoting.
 
 (* The user's state structure *)
-(* Note that the user state structure and supporting functions and notations 
-   are all defined in local_state.v 
+(* Note that the user state structure and supporting functions and notations
+   are all defined in local_state.v
  *)
 Definition UState := local_state.UState UserId Value PropRecord Vote.
 
@@ -252,8 +252,8 @@ Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
 
 (* Update function for the has_certvoted field *)
 Definition set_has_certvoted (u : UState) r' p' b' : UState :=
-  {[ u with has_certvoted := fun r p => if (r, p) == (r', p') 
-                                        then b' 
+  {[ u with has_certvoted := fun r p => if (r, p) == (r', p')
+                                        then b'
                                         else u.(has_certvoted) r p ]}.
 
 (* Update function for advancing the period of a user state *)
@@ -274,21 +274,21 @@ Definition advance_round (u : UState) : UState :=
        with p_start := u.(p_start) + u.(timer) ]}.
 
 (* A proposition for whether a given credential qualifies its
-   owner to be a committee member 
+   owner to be a committee member
    Note: This abstracts away how credential values are
-   interpreted 
+   interpreted
  *)
 Variable committee_cred : credType -> Prop.
 
-(* Whether the credential is a committee credential for the given 
-   round-period-step 
+(* Whether the credential is a committee credential for the given
+   round-period-step
  *)
 Definition comm_cred_step uid r p s : Prop :=
   committee_cred (credential uid r p s) .
 
 (* The global state *)
-(* Note that the global state structure and supporting functions and notations 
-   are all defined in global_state.v 
+(* Note that the global state structure and supporting functions and notations
+   are all defined in global_state.v
  *)
 Definition GState := global_state.GState UserId UState [choiceType of Msg].
 
@@ -314,7 +314,7 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (lambda < big_lambda < L)%R .
 
-(* additional (non-negative) time delay introduced by the adversary 
+(* additional (non-negative) time delay introduced by the adversary
    when the network is partitioned *)
 Variable rho : R.
 Hypothesis arbitrary_rho : (rho >= 0)%R .
@@ -772,7 +772,7 @@ where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
 
 (* The message-triggered user-level transition relation type *)
 (* A message-triggered transition consumes an incoming message *)
-(* A user transitions from a pre-state, while consuming a message, into a 
+(* A user transitions from a pre-state, while consuming a message, into a
    post-state and emits a (possibly empty) sequence of outgoing messages *)
 Definition u_transition_msg_type := UserId -> UState -> Msg -> (UState * seq Msg) -> Prop.
 
@@ -885,7 +885,7 @@ Definition is_partitioned pre : bool := pre.(network_partition).
 Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
 
 (* It's ok to advance time if:
-   - the user is corrupt (its deadline is irrelevant), or 
+   - the user is corrupt (its deadline is irrelevant), or
    - the increment does not go beyond the deadline *)
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u => u.(corrupt) || Rleb (u.(timer) + pos increment) u.(deadline).
@@ -896,7 +896,7 @@ Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
     then {[ u with timer := (u.(timer) + pos increment)%R ]}
     else u.
 
-(* Is it ok to advance timers of all (honest) users by the given increment? *) 
+(* Is it ok to advance timers of all (honest) users by the given increment? *)
 Definition tick_ok_users increment (pre:GState) : bool :=
   allf (user_can_advance_timer increment) pre.(users).
 
@@ -972,12 +972,12 @@ Definition is_user_corrupt (uid : UserId) (users : {fmap UserId -> UState}) : bo
 
 (* Returns the given users map restricted to honest users only *)
 Definition honest_users (users : {fmap UserId -> UState}) :=
-  let corrupt_ids := 
+  let corrupt_ids :=
     [fset x in domf users | is_user_corrupt x users] in
     users.[\ corrupt_ids] .
 
 (* Computes the global state after a message delivery, given the result of the
-   user transition 
+   user transition
    Notes: - the delivered message is removed from the user's mailbox
           - broadcasts new messages to honest users only
  *)
@@ -1068,7 +1068,7 @@ Definition recover_from_partitioned pre : GState :=
 Definition make_corrupt ustate : UState :=
   {[ ustate with corrupt := true ]}.
 
-(* Drop the set of messages targeted for a specific user from the given 
+(* Drop the set of messages targeted for a specific user from the given
    message map *)
 Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
   if msgs.[? uid] is Some mailbox then msgs.[uid <- mset0] else msgs.
@@ -1076,7 +1076,7 @@ Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
 (* Computes the state resulting from corrupting a user *)
 (* The user will have its corrupt flag (in its local state) set to true
    and his mailbox in the global state removed *)
-Definition corrupt_user_result (pre : GState) (uid : UserId) 
+Definition corrupt_user_result (pre : GState) (uid : UserId)
                                (ustate_key : uid \in pre.(users)) : GState :=
   let ustate' := make_corrupt pre.(users).[ustate_key] in
   let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
@@ -1090,7 +1090,7 @@ Reserved Notation "x ~~> y" (at level 90).
 
 Inductive GTransition : g_transition_type :=
 (* Advance the global time *)
-(* Notes: - corrupt user deadlines are ignored 
+(* Notes: - corrupt user deadlines are ignored
           - when partitioned, message delivery delays are ignored
  *)
 | step_tick : forall increment pre,
@@ -1117,12 +1117,12 @@ Inductive GTransition : g_transition_type :=
     is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
 
-(* Adversary action - partition the network *) 
+(* Adversary action - partition the network *)
 | step_enter_partition : forall pre,
     is_unpartitioned pre ->
     pre ~~> make_partitioned pre
 
-(* Adversary action - corrupt a user *) 
+(* Adversary action - corrupt a user *)
 | step_corrupt_user : forall pre uid (ustate_key : uid \in pre.(users)),
     pre.(users).[ustate_key].(corrupt) = false ->
     pre ~~> @corrupt_user_result pre uid ustate_key
@@ -1200,7 +1200,7 @@ Inductive GLabel : Type :=
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
-  | lbl_tick increment => 
+  | lbl_tick increment =>
       tick_ok increment pre /\ post = tick_update increment pre
   | lbl_deliver uid deadline msg sent =>
       exists (key_mailbox : uid \in pre.(msg_in_transit)),
@@ -1217,8 +1217,8 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   | lbl_exit_partition =>
       is_partitioned pre /\ post = recover_from_partitioned pre
   | lbl_corrupt_user uid =>
-      exists (ustate_key : uid \in pre.(users)), 
-      pre.(users).[ustate_key].(corrupt) = false 
+      exists (ustate_key : uid \in pre.(users)),
+      pre.(users).[ustate_key].(corrupt) = false
       /\ post = @corrupt_user_result pre uid ustate_key
   | lbl_enter_partition =>
       is_unpartitioned pre /\ post = make_partitioned pre
@@ -1432,7 +1432,7 @@ Proof.
 (*  match goal with
   | [H: ?deadline = next_deadline _ |- _] => subst deadline
   end;
-*)      
+*)
   try (
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
@@ -1457,7 +1457,7 @@ Proof.
 (*  split; first by assumption.
   unfold timeout_ok in t. use_hyp t.
 
-  unfold next_deadline. subst.  
+  unfold next_deadline. subst.
   intuition try lra.
   admit. (* timer montone *)
   replace (step + 1 - 1) with step by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ).
@@ -2143,7 +2143,7 @@ Lemma prop_g : forall g0 g r b v p,
   (* TODO: timely produced? *)
   size (cert_users g v r p) > tau_c.
 Admitted.
-  
+
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
 (*
 Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset UserId}) path :=
