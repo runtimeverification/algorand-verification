@@ -505,13 +505,13 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
 (* The no-softvoting step preconditions *)
 (* Two reasons a user may not be able to soft-vote:
    - Not being in the soft-voting committee, or
-   - Not being able to identify a potential leader value to soft-vote for 
+   - Not being able to identify a potential leader value to soft-vote for
  *)
 (* Note that this may apply regardless of whether p = 1*)
 Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\
-  (comm_cred_step uid r p 2 -> 
+  (comm_cred_step uid r p 2 ->
     (nilp (prev_certvals pre) /\ ~ potential_leader_value v (pre.(proposals) r p))).
 
 (* TODO: The Softvoting-conflict step preconditions *)
@@ -743,10 +743,10 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       certvote_ok pre uid v b r p ->
       uid # pre ~> (certvote_result pre, [:: (Certvote, val v, r, p, uid)])
 
-  (* Step 3: Certifying Step [success while NOT being a committee member] 
+  (* Step 3: Certifying Step [success while NOT being a committee member]
   | certvote2 : forall uid (pre : UState) v b r p,
       certvote_ok pre v b r p -> ~ comm_cred_step uid r p 3 ->
-      uid # pre ~> (certvote_result pre true, [::])  
+      uid # pre ~> (certvote_result pre true, [::])
    *)
 
   (* Step 3: Certifying Step [failure] *)
@@ -795,11 +795,11 @@ Inductive UTransitionMsg : u_transition_msg_type :=
   (* Deliver a softvote and cert-vote for the value [committee member case] *)
   | deliver_softvote_certvote1 : forall uid (pre : UState) r p i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' uid v b r p -> 
+        certvote_ok pre' uid v b r p ->
         uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [:: (Certvote, val v, r, p, uid)])
 
   (* Deliver a softvote and certvote for the value [non-committee member case] *)
-  (* 
+  (*
   | deliver_softvote_certvote2 : forall uid (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' uid v b r p -> ~ comm_cred_step uid r p s ->
@@ -1596,11 +1596,11 @@ inversion_clear utrH.
   do 2! [right]. by do 2! [split; auto].
 - rewrite /pre'.
   unfold ustate_after => /=.
-  right. left. split ; first by []. 
+  right. left. split ; first by [].
   rewrite addn1. by [].
 - rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. 
+  do 2! [right]. do 2! [split; auto].
 - case: H => vH oH.
   case: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
