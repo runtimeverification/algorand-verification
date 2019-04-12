@@ -341,8 +341,8 @@ Variable correct_hash : Value -> Value -> Prop.
 
 (* The block has been seen and is valid and the given value is indeed its hash
    value *)
-Definition valid_block_and_hash (u : UState) b v r p : Prop :=
-  valid b /\ correct_hash v b /\ b \in u.(blocks) r p.
+Definition valid_block_and_hash b v : Prop :=
+  valid b /\ correct_hash v b.
 
 (* Returns the name of a given step value if valid, and None otherwise *)
 Definition step_name s : option StepName :=
@@ -451,7 +451,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\
   comm_cred_step uid r p 1 /\
-  valid b /\ correct_hash v b /\
+  valid_block_and_hash b v /\
   (p > 1 -> ~ cert_may_exist pre) .
 
 (* The reproposal step preconditions *)
@@ -462,7 +462,7 @@ Definition repropose_ok (pre : UState) uid v b r p : Prop :=
   valid_rps pre r p Proposing /\ p > 1 /\
   comm_cred_step uid r p 1 /\
   v \in prev_certvals pre /\
-  valid b /\ correct_hash v b .
+  valid_block_and_hash b v .
 
 (* The no-propose step preconditions *)
 (* Note that this applies regardless of whether p = 1 *)
@@ -540,7 +540,8 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   valid_rps pre r p Certvoting /\
   comm_cred_step uid r p 3 /\
   (p > 1 -> ~ cert_may_exist pre) /\
-  valid_block_and_hash pre b v r p /\
+  valid_block_and_hash b v /\ 
+  b \in pre.(blocks) r p /\
   v \in certvals pre r p .
 
 (* Certvoting step preconditions *)
@@ -573,7 +574,8 @@ Definition certvote_result (pre : UState) : UState :=
 Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
-  valid_block_and_hash pre b v r p /\
+  valid_block_and_hash b v /\
+  b \in pre.(blocks) r p /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
   v \in certvals pre r p.
@@ -638,7 +640,9 @@ Definition adv_period_result (pre : UState) : UState := advance_period pre.
             may happen at any time *)
 Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   (* valid_rps pre r p Nextvoting /\ *)
-  exists b, valid_block_and_hash pre b v r p /\
+  exists b, 
+  valid_block_and_hash b v /\
+  b \in pre.(blocks) r p /\
   size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
 
 (* State update *)
@@ -2110,7 +2114,7 @@ Admitted.
 Lemma prop_b : forall g0 g uid ustate c r b v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
-  ~ valid_block_and_hash ustate b v r 1 ->
+  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r 1) ->
   (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) <= tau_c.
 Proof.
@@ -2129,7 +2133,7 @@ Lemma prop_e : forall g0 g r b v p,
   greachable g0 g ->
   p >= 2 ->
   all_honest_stv g p v ->
-  valid b /\ correct_hash v b ->
+  valid_block_and_hash b v ->
   (* TODO: need to filter by just honest users in cert_users? *)
   size (cert_users g v r p) > tau_c.
 Admitted.
@@ -2138,7 +2142,7 @@ Lemma prop_g : forall g0 g r b v p,
   greachable g0 g ->
   p >= 2 ->
   all_honest_stv_or_bot g p v ->
-  valid b /\ correct_hash v b ->
+  valid_block_and_hash b v ->
   (* TODO: need to filter by just honest users in cert_users? *)
   (* TODO: timely produced? *)
   size (cert_users g v r p) > tau_c.
