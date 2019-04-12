@@ -52,7 +52,7 @@ We generally list the assumptions made in this version of the model so far:
 - We abstract over nonces that are assumed to be produced by an Oracle and assume
   that randomness is unbiasable
 - Credentials are modeled by abstract totally ordered types (the interpretation
-  of a cedential as an unsigned integer is not needed)
+  of a credential as an unsigned integer is not needed)
 
 **
 **)
@@ -147,7 +147,7 @@ Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal)
     ev  : message payload as an ExValue
     r   : round value
     p   : period value
-    id  : sender's user id 
+    id  : sender's user id
  *)
 Definition Msg : Type := MType * ExValue * nat * nat * UserId.
 
@@ -163,11 +163,11 @@ Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
    Note: We abstract away the random value produced by an Oracle
    and the fact that credentials are interpreted as integer
    values. Instead, we model the type of credentials as an
-   abstract totally ordered type. 
+   abstract totally ordered type.
  *)
 Variable credType : orderType tt.
 
-(* A credential is constructed using the user's id and the 
+(* A credential is constructed using the user's id and the
    current round-period-step values
  *)
 Variable credential : UserId -> nat -> nat -> nat -> credType.
@@ -177,14 +177,14 @@ Hypothesis credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
 
-(* A proposal/preproposal record is a quadruple consisting of 
-   a user id, a user's credential, a value and a boolean 
-   indicating whether the record represents a proposal (true) 
+(* A proposal/reproposal record is a quadruple consisting of
+   a user id, a user's credential, a value and a boolean
+   indicating whether the record represents a proposal (true)
    or a reproposal (false)
  *)
 Definition PropRecord := (UserId * credType * Value * bool)%type.
 
-(* A vote is a pair of UserId (the id of the voter) and Value 
+(* A vote is a pair of UserId (the id of the voter) and Value
    (the value voted for)
  *)
 Definition Vote := (UserId * Value)%type.
@@ -198,8 +198,8 @@ Inductive StepName :=
   | Nextvoting.
 
 (* The user's state structure *)
-(* Note that the user state structure and supporting functions and notations 
-   are all defined in local_state.v 
+(* Note that the user state structure and supporting functions and notations
+   are all defined in local_state.v
  *)
 Definition UState := local_state.UState UserId Value PropRecord Vote.
 
@@ -217,7 +217,6 @@ Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
 Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
 Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
 Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
-Notation has_certvoted  := (local_state.has_certvoted UserId Value PropRecord Vote).
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
@@ -250,12 +249,6 @@ Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
                                    then undup (nvv :: u.(nextvotes_val) r p s)
                                    else u.(nextvotes_val) r p s ]}.
 
-(* Update function for the has_certvoted field *)
-Definition set_has_certvoted (u : UState) r' p' b' : UState :=
-  {[ u with has_certvoted := fun r p => if (r, p) == (r', p') 
-                                        then b' 
-                                        else u.(has_certvoted) r p ]}.
-
 (* Update function for advancing the period of a user state *)
 Definition advance_period (u : UState) : UState :=
   {[ {[ {[ {[ {[ u with period := u.(period) + 1 ]}
@@ -274,21 +267,21 @@ Definition advance_round (u : UState) : UState :=
        with p_start := u.(p_start) + u.(timer) ]}.
 
 (* A proposition for whether a given credential qualifies its
-   owner to be a committee member 
+   owner to be a committee member
    Note: This abstracts away how credential values are
-   interpreted 
+   interpreted
  *)
 Variable committee_cred : credType -> Prop.
 
-(* Whether the credential is a committee credential for the given 
-   round-period-step 
+(* Whether the credential is a committee credential for the given
+   round-period-step
  *)
 Definition comm_cred_step uid r p s : Prop :=
   committee_cred (credential uid r p s) .
 
 (* The global state *)
-(* Note that the global state structure and supporting functions and notations 
-   are all defined in global_state.v 
+(* Note that the global state structure and supporting functions and notations
+   are all defined in global_state.v
  *)
 Definition GState := global_state.GState UserId UState [choiceType of Msg].
 
@@ -314,7 +307,7 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (lambda < big_lambda < L)%R .
 
-(* additional (non-negative) time delay introduced by the adversary 
+(* additional (non-negative) time delay introduced by the adversary
    when the network is partitioned *)
 Variable rho : R.
 Hypothesis arbitrary_rho : (rho >= 0)%R .
@@ -509,11 +502,23 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   comm_cred_step uid r p 2 /\
   v \in prev_certvals pre.
 
+(* The no-softvoting step preconditions *)
+(* Two reasons a user may not be able to soft-vote:
+   - Not being in the soft-voting committee, or
+   - Not being able to identify a potential leader value to soft-vote for 
+ *)
+(* Note that this may apply regardless of whether p = 1*)
+Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
+  pre.(timer) = (2 * lambda)%R /\
+  valid_rps pre r p Softvoting /\
+  (comm_cred_step uid r p 2 -> 
+    (nilp (prev_certvals pre) /\ ~ potential_leader_value v (pre.(proposals) r p))).
+
 (* TODO: The Softvoting-conflict step preconditions *)
 (* This seems to be related to the condition mentioned above in softvote_new_ok above *)
 
 (* The softvoting step (new or reproposal) post-state *)
-(* NOTE: We keep the current deadline at 2 * lambda and let certvoting handled
+(* NOTE: We keep the current deadline at 2 * lambda and let certvoting handle
          updating the deadline (to avoid timing out while certvoting is already
          enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
@@ -527,36 +532,33 @@ Definition softvote_result (pre : UState) : UState :=
 (* Notes: - Note that this applies for all period values *)
 (*        - Corresponds (roughly) to transitions cert_softvotes and certvote in
             the automaton model
-          - The condition comm_cred_step is checked outside of this proposition
-            to allow distinguishing the two cases of has_certvoted when
-            defining the transitions later *)
+ *)
 (* Note the time period is left-closed unlike the algorand paper to easily allow
     checking whether the action should fire at the beginning of the time period *)
-Definition certvote_ok (pre : UState) (v b: Value) r p : Prop :=
+Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p Certvoting /\
+  comm_cred_step uid r p 3 /\
   (p > 1 -> ~ cert_may_exist pre) /\
   valid_block_and_hash pre b v r p /\
   v \in certvals pre r p .
 
 (* Certvoting step preconditions *)
 (* The unsuccessful case *)
-(* Notes: - Corresponds (roughly) to no_certvote_nocred in the automaton model
-          - The Algorand2 description does not explicitly specify what happens in this case
+(* Notes: - The Algorand2 description does not explicitly specify what happens in this case
           - The timeout case is handled by a generic timeout transition given later
 *)
 (* Note the time period is left-closed unlike the algorand paper to easily allow
     checking whether the action should fire at the beginning of the time period *)
-Definition no_certvote_ok (pre : UState) r p : Prop :=
+Definition no_certvote_ok (pre : UState) uid r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p Certvoting /\
-  nilp (certvals pre r p).
+  (~ comm_cred_step uid r p 3 \/ nilp (certvals pre r p)).
 
 (* Certvoting step's resulting user state (both cases) *)
-Definition certvote_result (pre : UState) b : UState :=
-  {[ {[ (set_has_certvoted pre pre.(round) pre.(period) b)
-             with step := 4 ]}
-             with deadline := (lambda + big_lambda)%R ]}.
+Definition certvote_result (pre : UState) : UState :=
+  {[ {[ pre with step := 4 ]}
+            with deadline := (lambda + big_lambda)%R ]}.
 
 (** Steps >= 4: Nextvoting1 propositions and user state update **)
 
@@ -574,7 +576,6 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   valid_block_and_hash pre b v r p /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
-  (* pre.(has_certvoted) r p. *)
   v \in certvals pre r p.
 
 (* Nextvoting step preconditions *)
@@ -590,7 +591,6 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
-  (* ~ pre.(has_certvoted) r p /\ *)
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
 (* Nextvoting step preconditions *)
@@ -733,20 +733,26 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       softvote_repr_ok pre uid v r p ->
       uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
 
-  (* Step 3: Certifying Step [success while being a committee member] *)
-  | certvote1 : forall uid (pre : UState) v b r p,
-      certvote_ok pre v b r p -> comm_cred_step uid r p 3 ->
-      uid # pre ~> (certvote_result pre true, [:: (Certvote, val v, r, p, uid)])
+  (* Step 2: Filtering Step [no value] *)
+  | no_softvote : forall uid (pre : UState) v r p,
+      no_softvote_ok pre uid v r p ->
+      uid # pre ~> (softvote_result pre, [::])
 
-  (* Step 3: Certifying Step [success while NOT being a committee member] *)
+  (* Step 3: Certifying Step [success] *)
+  | certvote1 : forall uid (pre : UState) v b r p,
+      certvote_ok pre uid v b r p ->
+      uid # pre ~> (certvote_result pre, [:: (Certvote, val v, r, p, uid)])
+
+  (* Step 3: Certifying Step [success while NOT being a committee member] 
   | certvote2 : forall uid (pre : UState) v b r p,
       certvote_ok pre v b r p -> ~ comm_cred_step uid r p 3 ->
-      uid # pre ~> (certvote_result pre true, [::])
+      uid # pre ~> (certvote_result pre true, [::])  
+   *)
 
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall uid (pre : UState) r p,
-      no_certvote_ok pre r p ->
-      uid # pre ~> (certvote_result pre false, [::])
+      no_certvote_ok pre uid r p ->
+      uid # pre ~> (certvote_result pre, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall uid (pre : UState) v b r p,
@@ -772,7 +778,7 @@ where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
 
 (* The message-triggered user-level transition relation type *)
 (* A message-triggered transition consumes an incoming message *)
-(* A user transitions from a pre-state, while consuming a message, into a 
+(* A user transitions from a pre-state, while consuming a message, into a
    post-state and emits a (possibly empty) sequence of outgoing messages *)
 Definition u_transition_msg_type := UserId -> UState -> Msg -> (UState * seq Msg) -> Prop.
 
@@ -783,21 +789,22 @@ Inductive UTransitionMsg : u_transition_msg_type :=
   (* Deliver a softvote while not triggering any internal action *)
   | deliver_softvote : forall uid (pre : UState) r p i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
-        ~ certvote_ok pre' v b r p ->
-        (* ~ nextvote_val_ok pre' v b r p s -> *)
+        ~ certvote_ok pre' uid v b r p ->
         uid # pre ; (Softvote, val v, r, p, i) ~> (pre', [::])
 
-  (* Deliver a softvote and certvote for the value [committee member case] *)
-  | deliver_softvote_certvote1 : forall uid (pre : UState) r p s i v b,
+  (* Deliver a softvote and cert-vote for the value [committee member case] *)
+  | deliver_softvote_certvote1 : forall uid (pre : UState) r p i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' v b r p -> comm_cred_step uid r p s ->
-        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre' true, [:: (Certvote, val v, r, p, uid)])
+        certvote_ok pre' uid v b r p -> 
+        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [:: (Certvote, val v, r, p, uid)])
 
   (* Deliver a softvote and certvote for the value [non-committee member case] *)
+  (* 
   | deliver_softvote_certvote2 : forall uid (pre : UState) r p s i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' v b r p -> ~ comm_cred_step uid r p s ->
-        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre' true, [::])
+        certvote_ok pre' uid v b r p -> ~ comm_cred_step uid r p s ->
+        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [::])
+   *)
 
   (* Deliver a softvote and nextvote for the value *)
   (* No longer needed after the 27March change *)
@@ -880,9 +887,13 @@ where "a # b -/ c ~> d" := (UTransition a b c d) : type_scope.
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
 
+(* Is the network in a partitioned/unpartitioned state? *)
+Definition is_partitioned pre : bool := pre.(network_partition).
+Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
+
 (* It's ok to advance time if:
-   - the user is corrupt (its deadline is irrelevant), or 
-   - the increment does not go beyond the deadline or if  *)
+   - the user is corrupt (its deadline is irrelevant), or
+   - the increment does not go beyond the deadline *)
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
   fun u => u.(corrupt) || Rleb (u.(timer) + pos increment) u.(deadline).
 
@@ -892,7 +903,7 @@ Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
     then {[ u with timer := (u.(timer) + pos increment)%R ]}
     else u.
 
-(* Is it ok to advance timers of all (honest) users by the given increment? *) 
+(* Is it ok to advance timers of all (honest) users by the given increment? *)
 Definition tick_ok_users increment (pre:GState) : bool :=
   allf (user_can_advance_timer increment) pre.(users).
 
@@ -906,14 +917,23 @@ move => increment g.
 exact: allfP.
 Qed.
 
+(* It is ok to advance time if:
+   - the network is partitioned (message delivery delays are ignored), or
+   - the time increment does not cause missing a message delivery deadline
+ *)
 Definition tick_ok_msgs (increment:posreal) (pre:GState) : bool :=
+  is_partitioned pre ||
   let target_time := (pre.(now) + pos increment)%R in
   \big[andb/true]_(user_msgs <- codomf pre.(msg_in_transit))
    \big[andb/true]_(m <- (enum_mset user_msgs)) Rleb target_time (fst m).
 
+(* Returns whether time may advance, taking into consideration the state of
+   the network, users, their deadlines and message deadlines.
+ *)
 Definition tick_ok (increment:posreal) (pre:GState) : bool :=
   tick_ok_users increment pre && tick_ok_msgs increment pre.
 
+(* Advance all (honest) user timers by the given increment *)
 Definition tick_users increment pre : {fmap UserId -> UState} :=
   updf pre.(users) (domf pre.(users)) (fun _ us => user_advance_timer increment us).
 
@@ -931,6 +951,7 @@ move => increment pre uid h.
 by rewrite updf_update.
 Qed.
 
+(* Computes the global state after advancing time with the given increment *)
 Definition tick_update increment pre : GState :=
   {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
        with users := tick_users increment pre ]}.
@@ -958,12 +979,12 @@ Definition is_user_corrupt (uid : UserId) (users : {fmap UserId -> UState}) : bo
 
 (* Returns the given users map restricted to honest users only *)
 Definition honest_users (users : {fmap UserId -> UState}) :=
-  let corrupt_ids := 
+  let corrupt_ids :=
     [fset x in domf users | is_user_corrupt x users] in
     users.[\ corrupt_ids] .
 
 (* Computes the global state after a message delivery, given the result of the
-   user transition 
+   user transition
    Notes: - the delivered message is removed from the user's mailbox
           - broadcasts new messages to honest users only
  *)
@@ -983,19 +1004,19 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
                                pre.(msg_in_transit) sent in
   {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
 
-(* Resets the deadline of a message having an excessively high delay *)
+(* Resets the deadline of a message having a missed deadline *)
 Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
   let cur_deadline := fst msg in
   let max_deadline := msg_deadline (snd msg) now in
-  let new_deadline := (Rmin cur_deadline max_deadline) in
+  let new_deadline := if (Rgtb now cur_deadline) then max_deadline else cur_deadline in
   (msgs `|` [mset (new_deadline, msg.2)])%mset.
 
 (* Recursively resets message deadlines of all the messages given *)
 Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
   foldl (reset_deadline now) mset0 msgs .
 
-(* Constructs a message pool with all deadlines of messages having excessively
-   high delays reset appropriately based on the message type *)
+(* Constructs a message pool with all messages having missed delivery deadlines
+   updated appropriately based on the message type *)
 Definition reset_msg_delays (msgpool : MsgPool) now : MsgPool :=
   updf msgpool (domf msgpool) (fun _ msgs => reset_user_msg_delays msgs now).
 
@@ -1036,13 +1057,8 @@ move => msgpool uid h.
 by rewrite updf_update.
 Qed.
 
-(* Is the network in a partitioned/unpartitioned state? *)
-Definition is_partitioned pre : bool := pre.(network_partition).
-Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
-
 (* Computes the state resulting from getting partitioned *)
-(* Note: this no longer injects extended message delays -- that's another
-   adversary action *)
+(* Note: this no longer injects extended message delays (see the tick rule) *)
 Definition make_partitioned (pre:GState) : GState :=
   flip_partition_flag pre.
 (*
@@ -1059,7 +1075,7 @@ Definition recover_from_partitioned pre : GState :=
 Definition make_corrupt ustate : UState :=
   {[ ustate with corrupt := true ]}.
 
-(* Drop the set of messages targeted for a specific user from the given 
+(* Drop the set of messages targeted for a specific user from the given
    message map *)
 Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
   if msgs.[? uid] is Some mailbox then msgs.[uid <- mset0] else msgs.
@@ -1067,7 +1083,7 @@ Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
 (* Computes the state resulting from corrupting a user *)
 (* The user will have its corrupt flag (in its local state) set to true
    and his mailbox in the global state removed *)
-Definition corrupt_user_result (pre : GState) (uid : UserId) 
+Definition corrupt_user_result (pre : GState) (uid : UserId)
                                (ustate_key : uid \in pre.(users)) : GState :=
   let ustate' := make_corrupt pre.(users).[ustate_key] in
   let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
@@ -1081,6 +1097,9 @@ Reserved Notation "x ~~> y" (at level 90).
 
 Inductive GTransition : g_transition_type :=
 (* Advance the global time *)
+(* Notes: - corrupt user deadlines are ignored
+          - when partitioned, message delivery delays are ignored
+ *)
 | step_tick : forall increment pre,
     tick_ok increment pre ->
     pre ~~> tick_update increment pre
@@ -1105,17 +1124,18 @@ Inductive GTransition : g_transition_type :=
     is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
 
-(* Adversary action - partition the network *) 
+(* Adversary action - partition the network *)
 | step_enter_partition : forall pre,
     is_unpartitioned pre ->
     pre ~~> make_partitioned pre
 
-(* Adversary action - corrupt a user *) 
+(* Adversary action - corrupt a user *)
 | step_corrupt_user : forall pre uid (ustate_key : uid \in pre.(users)),
     pre.(users).[ustate_key].(corrupt) = false ->
     pre ~~> @corrupt_user_result pre uid ustate_key
 
 (* Adversary action - inject extended message delays *)
+(* -- modeled by ignoring message delivery deadlines when partitioned *)
 
 (* Adversary action - send out a message *)
 
@@ -1187,7 +1207,7 @@ Inductive GLabel : Type :=
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
-  | lbl_tick increment => 
+  | lbl_tick increment =>
       tick_ok increment pre /\ post = tick_update increment pre
   | lbl_deliver uid deadline msg sent =>
       exists (key_mailbox : uid \in pre.(msg_in_transit)),
@@ -1204,8 +1224,8 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   | lbl_exit_partition =>
       is_partitioned pre /\ post = recover_from_partitioned pre
   | lbl_corrupt_user uid =>
-      exists (ustate_key : uid \in pre.(users)), 
-      pre.(users).[ustate_key].(corrupt) = false 
+      exists (ustate_key : uid \in pre.(users)),
+      pre.(users).[ustate_key].(corrupt) = false
       /\ post = @corrupt_user_result pre uid ustate_key
   | lbl_enter_partition =>
       is_unpartitioned pre /\ post = make_partitioned pre
@@ -1348,13 +1368,13 @@ Definition user_timers_valid : pred UState :=
      Rleb u.(timer) u.(deadline) ).
 
 (* Sensible states *)
-(* This notion specifiies what states can be considered valid states. The idea
+(* This notion specifies what states can be considered valid states. The idea
    is that we only consider execution traces that begin at sensible states,
    since sensibility is preserved by the transition system (to be shown), the
    set of reachable states will also be sensible (to be shown). This means that
    it is not important which specific state is assumed as the initial state as
    long as the state is sensible.
-   Note: the transditional operational notion of an initial state is a now a
+   Note: the traditional operational notion of an initial state is a now a
    special case of sensibility *)
 Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
@@ -1419,7 +1439,7 @@ Proof.
 (*  match goal with
   | [H: ?deadline = next_deadline _ |- _] => subst deadline
   end;
-*)      
+*)
   try (
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
@@ -1427,7 +1447,8 @@ Proof.
     | [H: no_propose_ok _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
     | [H: softvote_new_ok _ _ _ _ _ |- _] => unfold softvote_new_ok in H; use_hyp H
     | [H: softvote_repr_ok _ _ _ _ _ |- _] => unfold softvote_repr_ok in H; use_hyp H
-    | [H: certvote_ok _ _ _ _ _ |- _] => unfold certvote_ok in H; use_hyp H
+    | [H: no_softvote_ok _ _ _ _ _ |- _] => unfold no_softvote_ok in H; use_hyp H
+    | [H: certvote_ok _ _ _ _ _ _ |- _] => unfold certvote_ok in H; use_hyp H
     | [H: no_certvote_ok _ _ _ |- _] => unfold no_certvote_ok in H; use_hyp H
     | [H: nextvote_val_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_val_ok in H; use_hyp H
     | [H: nextvote_open_ok _ _ _ _ _ _ |- _] => unfold nextvote_open_ok in H; use_hyp H
@@ -1444,7 +1465,7 @@ Proof.
 (*  split; first by assumption.
   unfold timeout_ok in t. use_hyp t.
 
-  unfold next_deadline. subst.  
+  unfold next_deadline. subst.
   intuition try lra.
   admit. (* timer montone *)
   replace (step + 1 - 1) with step by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ).
@@ -1528,10 +1549,10 @@ Qed.
 
 (* An honest user may cert-vote only at step 3 of a period *)
 (* Certvoting is enabled only at step 3 *)
-Lemma certvote_only_in_step3 : forall us v b r p,
-  certvote_ok us v b r p -> us.(step) = 3.
+Lemma certvote_only_in_step3 : forall us uid v b r p,
+  certvote_ok us uid v b r p -> us.(step) = 3.
 Proof.
-move => us v b r p Hc.
+move => us uid v b r p Hc.
 elim: Hc => tH [vH oH].
 elim: vH => rH [pH sH].
 by apply certvoting_is_step_3 in sH.
@@ -1570,23 +1591,16 @@ inversion_clear utrH.
   apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
-- case: H => tH [vH oH].
-  case: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
-  unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - rewrite /pre'.
   unfold ustate_after => /=.
   do 2! [right]. by do 2! [split; auto].
-- case: H => vH oH.
-  case: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
+- rewrite /pre'.
   unfold ustate_after => /=.
-  right. left. split ; first by [].
+  right. left. split ; first by []. 
   rewrite addn1. by [].
 - rewrite /pre'.
   unfold ustate_after => /=.
-  do 2! [right]. by do 2! [split; auto].
+  do 2! [right]. do 2! [split; auto]. 
 - case: H => vH oH.
   case: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
@@ -1598,7 +1612,7 @@ inversion_clear utrH.
   do 2! [right]. by do 2! [split; auto].
 - unfold ustate_after => /=.
   left. rewrite addn1. by [].
-  destruct m.1.1.1.2 eqn:E.
+- destruct m.1.1.1.2 eqn:E.
   destruct m.1.1.1.1 eqn:E'.
   unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
@@ -1648,14 +1662,14 @@ inversion_clear utrH.
   apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
-- case: H => tH [vH oH].
+- case: H  => tH [vH oH].
   case: vH => rH [pH sH].
   apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
+  apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
@@ -1900,8 +1914,7 @@ Definition user_before_round r (u : UState) : Prop :=
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
-  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s))
-  /\ (forall r' p, r <= r' -> ~~ (u.(has_certvoted) r' p)).
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
 
 Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
   forall i (Hi : i \in g.(users)),
@@ -2130,7 +2143,7 @@ Lemma prop_g : forall g0 g r b v p,
   (* TODO: timely produced? *)
   size (cert_users g v r p) > tau_c.
 Admitted.
-  
+
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
 (*
 Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset UserId}) path :=
