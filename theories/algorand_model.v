@@ -603,6 +603,7 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
+  nilp (certvals pre r p) /\
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
 (* Nextvoting step preconditions *)
@@ -616,9 +617,10 @@ Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (*Nat.Even s /\ *) s >= 4 /\
-  ~ v \in certvals pre r p /\
-  p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
-  comm_cred_step uid r p s. (* required (?) *)
+  comm_cred_step uid r p s /\
+  nilp (certvals pre r p) /\ (*  ~ v \in certvals pre r p /\ *)
+  p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
+
 
 (* Nextvoting step state update for steps s >= 4 (all cases) *)
 (* Note: Updated to accommodate the 27March change *)
