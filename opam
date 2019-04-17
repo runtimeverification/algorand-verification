@@ -18,7 +18,7 @@ flags: light-uninstall
 depends: [
   "ocaml"
   "coq" {>= "8.9" & < "8.10~"}
-  "coq-mathcomp-ssreflect" {>= "1.7" & < "1.9~"}
+  "coq-mathcomp-ssreflect" {>= "1.7" & < "1.8~"}
   "coq-mathcomp-algebra"
   "coq-mathcomp-finmap"
   "coq-interval"
