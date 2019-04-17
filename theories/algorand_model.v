@@ -289,7 +289,7 @@ Notation now               := (global_state.now UserId UState [choiceType of Msg
 Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
 Notation users             := (global_state.users UserId UState [choiceType of Msg]).
 Notation msg_in_transit    := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
-
+Notation msg_history       := (global_state.msg_history UserId UState [choiceType of Msg]).
 (* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
   {[ g with network_partition := ~~ g.(network_partition) ]}.
@@ -987,26 +987,38 @@ Definition honest_users (users : {fmap UserId -> UState}) :=
     [fset x in domf users | is_user_corrupt x users] in
     users.[\ corrupt_ids] .
 
+Fixpoint seq2mset (T : choiceType) (msgs : seq T) : {mset T} :=
+  match msgs with
+  | [::]    => mset0
+  | x :: xs => (x |` (seq2mset xs))%mset 
+  end.
+
 (* Computes the global state after a message delivery, given the result of the
-   user transition
+   user transition and the messages sent out
    Notes: - the delivered message is removed from the user's mailbox
           - broadcasts new messages to honest users only
  *)
 Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transit)) delivered ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
-  let msgs' := send_broadcasts (pre.(now)+lambda)%R (domf (honest_users pre.(users)) `\ uid)
+  let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
+  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in 
+  {[ {[ {[ pre with users          := users' ]}
+               with msg_in_transit := msgs' ]}
+               with msg_history    := msgh' ]}.
 Arguments delivery_result : clear implicits.
 
 (* Computes the global state after an internal user-level transition
    given the result of the user transition and the messages sent out *)
 Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
-  let msgs' := send_broadcasts (pre.(now))%R (domf (pre.(users)) `\ uid)
+  let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
-  {[ {[ pre with users := users' ]} with msg_in_transit := msgs' ]}.
+  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in 
+  {[ {[ {[ pre with users          := users' ]}
+               with msg_in_transit := msgs' ]}
+               with msg_history    := msgh' ]}.
 
 (* Resets the deadline of a message having a missed deadline *)
 Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=

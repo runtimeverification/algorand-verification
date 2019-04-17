@@ -26,8 +26,10 @@ Record GState :=
     network_partition : bool ;
     (* The global set of users as a finite map of user ids to user states *)
     users : @finmap_of UserId UState (Phant _) ;
-    (* A multiset of messages in transit *)
-    msg_in_transit : @finmap_of UserId (@multiset_of _ (Phant (R * Msg))) (Phant _)
+    (* Messages in transit as a finite map from user ids (targets) to multisets of messages *)
+    msg_in_transit : @finmap_of UserId (@multiset_of _ (Phant (R * Msg))) (Phant _) ;
+    (* The history of all messages broadcast as a multiset of messages *)
+    msg_history : @multiset_of _ (Phant Msg) 
   }.
 
 End GlobalState.
