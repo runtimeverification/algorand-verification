@@ -973,8 +973,8 @@ Definition merge_msg_deadline (now : R) (msg : Msg) (_ : UserId) (v : {mset R * 
 Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
   updf prev_msgs targets (merge_msg_deadline now msg).
 
-Definition send_broadcasts (deadline : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
-  foldl (send_broadcast deadline targets) prev_msgs msgs.
+Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
+  foldl (send_broadcast now targets) prev_msgs msgs.
 
 (* Returns true if the given user id is found in the map and the user state
    corresponding to that id is for a corrupt user *)
@@ -1050,15 +1050,18 @@ by rewrite Hu'.
 Qed.
 
 (* Postpones the deadline of a message (extending its delivery delay) *)
+(* No longer used *)
 Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
   let ext_deadline := (fst msg + r)%R in
   (msgs `|` [mset (ext_deadline, msg.2)])%mset.
 
 (* Recursively postpones the deadlines of all the messages given *)
+(* No longer used *)
 Definition extend_user_msg_delays r msgs : {mset R * Msg} :=
   foldl (extend_deadline r) mset0 msgs.
 
 (* Constructs a message pool with all deadlines postponed by rho *)
+(* No longer used *)
 Definition extend_msg_deadlines (msgpool : MsgPool) : MsgPool :=
   updf msgpool (domf msgpool) (fun _ msgs => extend_user_msg_delays rho msgs).
 
@@ -1077,10 +1080,6 @@ Qed.
 (* Note: this no longer injects extended message delays (see the tick rule) *)
 Definition make_partitioned (pre:GState) : GState :=
   flip_partition_flag pre.
-(*
-  let msgpool' := extend_msg_deadlines pre.(msg_in_transit) in
-  {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
-*)
 
 (* Computes the state resulting from recovering from a partition *)
 Definition recover_from_partitioned pre : GState :=
@@ -1106,6 +1105,14 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
   let users' := pre.(users).[uid <- ustate'] in
     {[ {[ pre with users := users'         ]}
               with msg_in_transit := msgs' ]}.
+
+(* Computes the state resulting from replaying a message to a user *)
+(* The message is replayed to the given target user and added to his mailbox *)
+Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState :=
+  let msgs' := send_broadcasts pre.(now) [fset uid] (* (domf (honest_users pre.(users))) *)
+                 pre.(msg_in_transit) [:: msg] in
+  {[ pre with msg_in_transit := msgs' ]}.
+
 
 (* The global transition relation *)
 
@@ -1140,20 +1147,26 @@ Inductive GTransition : g_transition_type :=
     is_partitioned pre ->
     pre ~~> recover_from_partitioned pre
 
-(* Adversary action - partition the network *)
+(* [Adversary action] - partition the network *)
 | step_enter_partition : forall pre,
     is_unpartitioned pre ->
     pre ~~> make_partitioned pre
 
-(* Adversary action - corrupt a user *)
+(* [Adversary action] - corrupt a user *)
 | step_corrupt_user : forall pre uid (ustate_key : uid \in pre.(users)),
-    pre.(users).[ustate_key].(corrupt) = false ->
+    ~ pre.(users).[ustate_key].(corrupt) ->
     pre ~~> @corrupt_user_result pre uid ustate_key
 
-(* Adversary action - inject extended message delays *)
-(* -- modeled by ignoring message delivery deadlines when partitioned *)
+(* [Adversary action] - inject extended message delays *)
+(* -- modeled by step_tick ignoring message delivery deadlines when partitioned *)
 
-(* Adversary action - send out a message *)
+(* [Adversary action] - replay a message seen before *)
+| step_replay_msg : forall pre uid (ustate_key : uid \in pre.(users)) msg,
+    ~ pre.(users).[ustate_key].(corrupt) ->
+    msg \in pre.(msg_history) ->
+    pre ~~> replay_msg_result pre uid msg
+    
+(* [Adversary action] - create and broadcast a fresh message *)
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
@@ -1218,8 +1231,9 @@ Inductive GLabel : Type :=
 | lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
 | lbl_step_internal : UserId -> seq Msg -> GLabel
 | lbl_exit_partition : GLabel
+| lbl_enter_partition : GLabel
 | lbl_corrupt_user : UserId -> GLabel
-| lbl_enter_partition : GLabel.
+| lbl_replay_msg : UserId -> GLabel.
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
@@ -1239,12 +1253,17 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       /\ post = step_result pre uid ustate_post sent
   | lbl_exit_partition =>
       is_partitioned pre /\ post = recover_from_partitioned pre
-  | lbl_corrupt_user uid =>
-      exists (ustate_key : uid \in pre.(users)),
-      pre.(users).[ustate_key].(corrupt) = false
-      /\ post = @corrupt_user_result pre uid ustate_key
   | lbl_enter_partition =>
       is_unpartitioned pre /\ post = make_partitioned pre
+  | lbl_corrupt_user uid =>
+      exists (ustate_key : uid \in pre.(users)),
+      ~ pre.(users).[ustate_key].(corrupt)
+      /\ post = @corrupt_user_result pre uid ustate_key
+  | lbl_replay_msg uid =>
+      exists (ustate_key : uid \in pre.(users)) msg,
+      ~ pre.(users).[ustate_key].(corrupt)
+      /\ msg \in pre.(msg_history)
+      /\ post = replay_msg_result pre uid msg
   end.
 
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
@@ -1269,6 +1288,7 @@ Proof.
     exists (lbl_exit_partition);finish_case.
     exists (lbl_enter_partition);finish_case.
     exists (lbl_corrupt_user uid);finish_case.
+    exists (lbl_replay_msg uid);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 Qed.
