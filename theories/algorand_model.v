@@ -224,10 +224,10 @@ Definition set_proposals u r' p' prop : UState :=
                                  then undup (prop :: u.(proposals) r p)
                                  else u.(proposals) r p ]}.
 
-Definition set_blocks (u : UState) r' p' block : UState :=
- {[ u with blocks := fun r p => if (r, p) == (r', p')
-                                 then undup (block :: u.(blocks) r p)
-                                 else u.(blocks) r p ]}.
+Definition set_blocks (u : UState) r' block : UState :=
+ {[ u with blocks := fun r => if r == r'
+                                 then undup (block :: u.(blocks) r)
+                                 else u.(blocks) r]}.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
   {[ u with softvotes := fun r p => if (r, p) == (r', p')
@@ -541,7 +541,7 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   comm_cred_step uid r p 3 /\
   (p > 1 -> ~ cert_may_exist pre) /\
   valid_block_and_hash b v /\
-  b \in pre.(blocks) r p /\
+  b \in pre.(blocks) r /\
   v \in certvals pre r p .
 
 (* Certvoting step preconditions *)
@@ -585,7 +585,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   valid_block_and_hash b v /\
-  b \in pre.(blocks) r p /\
+  b \in pre.(blocks) r /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
   v \in certvals pre r p.
@@ -654,7 +654,7 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   (* valid_rps pre r p Nextvoting /\ *)
   exists b,
   valid_block_and_hash b v /\
-  b \in pre.(blocks) r p /\
+  b \in pre.(blocks) r /\
   size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
 
 (* State update *)
@@ -699,7 +699,7 @@ Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState 
     match type with
     | Proposal => set_proposals pre r p (id, c, v, true)
     | Reproposal => set_proposals pre r p (id, c, v, false)
-    | Block => set_blocks pre r p v
+    | Block => set_blocks pre r v
     | _ => pre
     end
   | _ => pre
@@ -1958,7 +1958,7 @@ Definition user_before_round r (u : UState) : Prop :=
    (u.(round) = r /\
     u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
   /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
-  /\ (forall r' p, r <= r' -> nilp (u.(blocks) r' p))
+  /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
@@ -2158,7 +2158,7 @@ Admitted.
 Lemma prop_b : forall g0 g uid ustate c r b v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
-  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r 1) ->
+  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r) ->
   (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) <= tau_c.
 Proof.

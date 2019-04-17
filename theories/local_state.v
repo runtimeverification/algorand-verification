@@ -34,8 +34,8 @@ Record UState :=
     proposals     : nat -> nat -> seq PropRecord;
     (* Starting value *)
     stv           : nat -> option Value;
-    (* A sequence of values seen for the given round/period *)
-    blocks        : nat -> nat -> seq Value;
+    (* A sequence of values seen for the given round *)
+    blocks        : nat -> seq Value;
     (* A sequence of softvotes seen for the given round/period *)
     softvotes     : nat -> nat -> seq Vote;
     (* A sequence of certvotes seen for the given round/period *)
