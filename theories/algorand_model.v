@@ -290,6 +290,7 @@ Notation network_partition := (global_state.network_partition UserId UState [cho
 Notation users             := (global_state.users UserId UState [choiceType of Msg]).
 Notation msg_in_transit    := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
 Notation msg_history       := (global_state.msg_history UserId UState [choiceType of Msg]).
+
 (* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
   {[ g with network_partition := ~~ g.(network_partition) ]}.
@@ -305,7 +306,7 @@ Variable L : R.
 
 (* assumptions on how these bounds relate *)
 Hypothesis delays_positive : (lambda > 0)%R .
-Hypothesis delays_order : (lambda < big_lambda < L)%R .
+Hypothesis delays_order : (3 * lambda <= big_lambda < L)%R .  (* As per the note from Victor *)
 
 (* additional (non-negative) time delay introduced by the adversary
    when the network is partitioned *)
@@ -395,7 +396,7 @@ Definition prev_certvals (u:UState) : seq Value :=
 Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
   size (u.(nextvotes_open) r p s) >= tau_b .
 
-(* Whether the user has seen enough votes for a value in the given round/period/step *)
+(* Whether the user has seen enough nextvotes for a value in the given round/period/step *)
 Definition nextvote_val_quorum (u:UState) r p s : Prop :=
   exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
 
@@ -403,12 +404,11 @@ Definition nextvote_val_quorum (u:UState) r p s : Prop :=
    of the current round (for some step during that period) *)
 (* This corresponds roughly to cert_may_exist field in the automaton model *)
 (* Notes: - modified based on Victor's comment
-          - assumes p > 1
-*)
+ *)
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
-  forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
+  p > 1 /\ forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
 (* to be shown as an invariant (?): exists s, nextvote_val_quorum u r (p - 1) s *)
 
 
@@ -452,7 +452,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   valid_rps pre r p Proposing /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
-  (p > 1 -> ~ cert_may_exist pre) .
+  ~ cert_may_exist pre.
 
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
@@ -461,8 +461,8 @@ Definition repropose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\ p > 1 /\
   comm_cred_step uid r p 1 /\
-  v \in prev_certvals pre /\
-  valid_block_and_hash b v .
+  valid_block_and_hash b v /\
+  v \in prev_certvals pre.
 
 (* The no-propose step preconditions *)
 (* Note that this applies regardless of whether p = 1 *)
@@ -475,7 +475,7 @@ Definition no_propose_ok (pre : UState) uid r p : Prop :=
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
 Definition propose_result (pre : UState) : UState :=
   {[ {[ pre with deadline := (2 * lambda)%R ]}
-       with step := 2 ]}.
+            with step := 2 ]}.
 
 (** Step 2: Softvoting propositions and user state update **)
 
@@ -490,7 +490,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\
   comm_cred_step uid r p 2 /\
-  (p > 1 -> ~ cert_may_exist pre) /\
+  ~ cert_may_exist pre /\
   potential_leader_value v (pre.(proposals) r p) .
 
 (* The Softvoting-a-reproposal step preconditions *)
@@ -539,7 +539,7 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p Certvoting /\
   comm_cred_step uid r p 3 /\
-  (p > 1 -> ~ cert_may_exist pre) /\
+  ~ cert_may_exist pre /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
   v \in certvals pre r p .
@@ -1129,8 +1129,8 @@ Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState 
 (* The adversary will have the keys if the user is corrupt and the given
    r-p-s comes after (or is equal to) the r-p-s of the user *)
 Definition have_keys ustate r p s : Prop :=
-  ustate.(corrupt) /\
-  (r > ustate.(round) \/
+  ustate.(corrupt) /\ 
+  (r > ustate.(round) \/ 
    r = ustate.(round) /\ p > ustate.(period) \/
    r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
 
@@ -1195,7 +1195,7 @@ Inductive GTransition : g_transition_type :=
     pre ~~> replay_msg_result pre uid msg
 
 (* [Adversary action] - forge and send out a message *)
-| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users))
+| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users)) 
                           r p s mtype mval target,
     have_keys pre.(users).[ustate_key] r p s ->
     pre ~~> forge_msg_result pre uid r p mtype mval target
