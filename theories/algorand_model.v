@@ -2012,6 +2012,9 @@ Definition state_before_round r (g:GState) : Prop :=
 Definition user_honest (uid:UserId) (g:GState) : bool :=
   if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
+Definition user_stv_none (uid:UserId) (g:GState) (p:nat) : bool :=
+  if g.(users).[? uid] is Some ustate then ustate.(stv) p == None else false.
+
 (* D1: an honest node enters a period exclusively for value v *)
 (* if it enters the period with starting value $v$ *)
 (* and has not observed t_H next-votes for $\bot$ from any single step of the previous period *)
@@ -2143,81 +2146,14 @@ Qed.
 
 (* LIVENESS *)
 
-Definition cert_users (g : GState) v (r p:nat) :=
-  [seq uid <- (domf g.(users)) | if g.(users).[? uid] is Some ustate
-                                 then v \in certvals ustate r p
-                                 else false].
-
-Definition unique_stv_bot (g : GState) p :=
-  all
-    (fun uid => if g.(users).[? uid] is Some ustate
-                then ustate.(stv) p == None
-                else false)
-    (domf g.(users)).
-
-Definition all_honest_stv (g : GState) p v :=
-  all
-    (fun uid => if g.(users).[? uid] is Some ustate
-                then if ustate.(corrupt) == false
-                     then ustate.(stv) p == Some v
-                     else true
-                else false)
-    (domf g.(users)).
-
-Definition all_honest_stv_or_bot (g : GState) p v :=
-  all
-    (fun uid => if g.(users).[? uid] is Some ustate
-                then if ustate.(corrupt) == false
-                     then if ustate.(stv) p == None
-                          then true else ustate.(stv) p == Some v
-                     else true
-                else false)
-    (domf g.(users)).
-
-Lemma prop_a : forall g0 g uid ustate c r v,
-  greachable g0 g ->
-  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
-  (uid, c, v, true) \in ustate.(proposals) r 1 ->
-  size (cert_users g v r 1) > tau_c.
-Proof.
-Admitted.
-
-Lemma prop_b : forall g0 g uid ustate c r b v,
-  greachable g0 g ->
-  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
-  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r) ->
-  (uid, c, v, true) \in ustate.(proposals) r 1 ->
-  size (cert_users g v r 1) <= tau_c.
-Proof.
-Admitted.
-
-Lemma prop_c : forall g0 g uid ustate r v p,
-  greachable g0 g ->
-  g.(users).[? uid] = Some ustate -> ustate.(corrupt) = false ->
-  (* leader_cred_step ustate r p s -> *)
-  unique_stv_bot g p ->
-  (* (ustate.(id), c, v, true) \in ustate.(proposals) r 1 -> *)
-  size (cert_users g v r 1) > tau_c.
-Admitted.
-
-Lemma prop_e : forall g0 g r b v p,
-  greachable g0 g ->
-  p >= 2 ->
-  all_honest_stv g p v ->
-  valid_block_and_hash b v ->
-  (* TODO: need to filter by just honest users in cert_users? *)
-  size (cert_users g v r p) > tau_c.
-Admitted.
-
-Lemma prop_g : forall g0 g r b v p,
-  greachable g0 g ->
-  p >= 2 ->
-  all_honest_stv_or_bot g p v ->
-  valid_block_and_hash b v ->
-  (* TODO: need to filter by just honest users in cert_users? *)
-  (* TODO: timely produced? *)
-  size (cert_users g v r p) > tau_c.
-Admitted.
+Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
+    path gtransition g0 path_seq ->
+    g2 = last g0 path_seq ->
+    g1 = last g0 (drop 1 path_seq) ->
+    user_honest uid g1 ->
+    user_stv_none uid g1 p ->
+    (exists v, certvoted_in_path path_seq uid r p v
+               \/ period_advance_at 1 path_seq uid r p g1 g2) .
 
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
 (*
