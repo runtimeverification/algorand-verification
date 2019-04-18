@@ -2146,6 +2146,9 @@ Qed.
 
 (* LIVENESS *)
 
+(* If any honest user is in period r.p with starting value bottom, then within
+time (2*lambda+Lambda), every honest user in period r.p will either certify a
+value (i.e., will get a certificate) or move to the next period *)
 Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     path gtransition g0 path_seq ->
     g2 = last g0 path_seq ->
