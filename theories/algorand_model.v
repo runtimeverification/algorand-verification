@@ -224,10 +224,10 @@ Definition set_proposals u r' p' prop : UState :=
                                  then undup (prop :: u.(proposals) r p)
                                  else u.(proposals) r p ]}.
 
-Definition set_blocks (u : UState) r' p' block : UState :=
- {[ u with blocks := fun r p => if (r, p) == (r', p')
-                                 then undup (block :: u.(blocks) r p)
-                                 else u.(blocks) r p ]}.
+Definition set_blocks (u : UState) r' block : UState :=
+ {[ u with blocks := fun r => if r == r'
+                                 then undup (block :: u.(blocks) r)
+                                 else u.(blocks) r]}.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
   {[ u with softvotes := fun r p => if (r, p) == (r', p')
@@ -540,8 +540,8 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   valid_rps pre r p Certvoting /\
   comm_cred_step uid r p 3 /\
   (p > 1 -> ~ cert_may_exist pre) /\
-  valid_block_and_hash b v /\ 
-  b \in pre.(blocks) r p /\
+  valid_block_and_hash b v /\
+  b \in pre.(blocks) r /\
   v \in certvals pre r p .
 
 (* Certvoting step preconditions *)
@@ -556,10 +556,20 @@ Definition no_certvote_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p Certvoting /\
   (~ comm_cred_step uid r p 3 \/ nilp (certvals pre r p)).
 
-(* Certvoting step's resulting user state (both cases) *)
+(* Certvoting step's resulting user state (successful case) *)
+(* The user has certvoted successfully, so move on to the next step and
+   update the deadline *)
 Definition certvote_result (pre : UState) : UState :=
-  {[ {[ pre with step := 4 ]}
+  {[ {[ pre with step := 4 ]} (**)
             with deadline := (lambda + big_lambda)%R ]}.
+
+(* Certvoting step's resulting user state (unsuccessful case) *)
+(* The user failed to certvote (at the beginning of the certvoting period)
+   so update the deadline only (the step remains at 3 since the user may
+   actually receive a message that would allow him to certvote then -- before
+   the deadline *)
+Definition no_certvote_result (pre : UState) : UState :=
+  {[ pre with deadline := (lambda + big_lambda)%R ]}.
 
 (** Steps >= 4: Nextvoting1 propositions and user state update **)
 
@@ -575,7 +585,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   valid_block_and_hash b v /\
-  b \in pre.(blocks) r p /\
+  b \in pre.(blocks) r /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
   v \in certvals pre r p.
@@ -593,6 +603,7 @@ Definition nextvote_open_ok (pre : UState) uid (v : Value) r p s : Prop :=
   valid_rps pre r p Nextvoting /\
   (* Nat.Even s /\ *) s >= 4 /\
   comm_cred_step uid r p s /\
+  nilp (certvals pre r p) /\
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
 (* Nextvoting step preconditions *)
@@ -606,9 +617,10 @@ Definition nextvote_stv_ok (pre : UState) uid (v : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   (*Nat.Even s /\ *) s >= 4 /\
-  ~ v \in certvals pre r p /\
-  p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s /\
-  comm_cred_step uid r p s. (* required (?) *)
+  comm_cred_step uid r p s /\
+  nilp (certvals pre r p) /\ (*  ~ v \in certvals pre r p /\ *)
+  p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
+
 
 (* Nextvoting step state update for steps s >= 4 (all cases) *)
 (* Note: Updated to accommodate the 27March change *)
@@ -640,9 +652,9 @@ Definition adv_period_result (pre : UState) : UState := advance_period pre.
             may happen at any time *)
 Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   (* valid_rps pre r p Nextvoting /\ *)
-  exists b, 
+  exists b,
   valid_block_and_hash b v /\
-  b \in pre.(blocks) r p /\
+  b \in pre.(blocks) r /\
   size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
 
 (* State update *)
@@ -687,7 +699,7 @@ Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState 
     match type with
     | Proposal => set_proposals pre r p (id, c, v, true)
     | Reproposal => set_proposals pre r p (id, c, v, false)
-    | Block => set_blocks pre r p v
+    | Block => set_blocks pre r v
     | _ => pre
     end
   | _ => pre
@@ -756,7 +768,7 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall uid (pre : UState) r p,
       no_certvote_ok pre uid r p ->
-      uid # pre ~> (certvote_result pre, [::])
+      uid # pre ~> (no_certvote_result pre, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall uid (pre : UState) v b r p,
@@ -990,7 +1002,7 @@ Definition honest_users (users : {fmap UserId -> UState}) :=
 Fixpoint seq2mset (T : choiceType) (msgs : seq T) : {mset T} :=
   match msgs with
   | [::]    => mset0
-  | x :: xs => (x |` (seq2mset xs))%mset 
+  | x :: xs => (x |` (seq2mset xs))%mset
   end.
 
 (* Computes the global state after a message delivery, given the result of the
@@ -1003,7 +1015,7 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in 
+  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -1015,7 +1027,7 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
-  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in 
+  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -1113,6 +1125,22 @@ Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState 
                  pre.(msg_in_transit) [:: msg] in
   {[ pre with msg_in_transit := msgs' ]}.
 
+(* Does the adversary have the keys of the user for the given r-p-s? *)
+(* The adversary will have the keys if the user is corrupt and the given
+   r-p-s comes after (or is equal to) the r-p-s of the user *)
+Definition have_keys ustate r p s : Prop :=
+  ustate.(corrupt) /\ 
+  (r > ustate.(round) \/ 
+   r = ustate.(round) /\ p > ustate.(period) \/
+   r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
+
+(* Computes the state resulting from forging a message to a user *)
+(* The message is first created and then queued at the target user's mailbox *)
+Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval target : GState :=
+  let msg := (mtype, mval, r, p, uid) in
+  let msgs' := send_broadcasts pre.(now) [fset target] (* (domf (honest_users pre.(users))) *)
+                 pre.(msg_in_transit) [:: msg] in
+  {[ pre with msg_in_transit := msgs' ]}.
 
 (* The global transition relation *)
 
@@ -1165,8 +1193,12 @@ Inductive GTransition : g_transition_type :=
     ~ pre.(users).[ustate_key].(corrupt) ->
     msg \in pre.(msg_history) ->
     pre ~~> replay_msg_result pre uid msg
-    
-(* [Adversary action] - create and broadcast a fresh message *)
+
+(* [Adversary action] - forge and send out a message *)
+| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users)) 
+                          r p s mtype mval target,
+    have_keys pre.(users).[ustate_key] r p s ->
+    pre ~~> forge_msg_result pre uid r p mtype mval target
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
@@ -1233,7 +1265,8 @@ Inductive GLabel : Type :=
 | lbl_exit_partition : GLabel
 | lbl_enter_partition : GLabel
 | lbl_corrupt_user : UserId -> GLabel
-| lbl_replay_msg : UserId -> GLabel.
+| lbl_replay_msg : UserId -> GLabel
+| lbl_forge_msg : UserId -> nat -> nat -> MType -> ExValue -> UserId -> GLabel.
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
@@ -1264,6 +1297,10 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       ~ pre.(users).[ustate_key].(corrupt)
       /\ msg \in pre.(msg_history)
       /\ post = replay_msg_result pre uid msg
+  | lbl_forge_msg uid r p mtype mval target =>
+      exists (ustate_key : uid \in pre.(users)) s,
+      have_keys pre.(users).[ustate_key] r p s
+      /\ post = forge_msg_result pre uid r p mtype mval target
   end.
 
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
@@ -1289,8 +1326,10 @@ Proof.
     exists (lbl_enter_partition);finish_case.
     exists (lbl_corrupt_user uid);finish_case.
     exists (lbl_replay_msg uid);finish_case.
+    exists (lbl_forge_msg uid r p mtype mval target);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
+
 Qed.
 
 (* This predicate says a particular step on the path
@@ -1717,7 +1756,7 @@ inversion_clear utrH.
   case: vH => rH [pH sH].
   apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+  do 2! [right]. do 2! [split; auto].
 - elim: H => tH [vH [vbH [svH oH]]].
   elim: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
@@ -1946,7 +1985,7 @@ Definition user_before_round r (u : UState) : Prop :=
    (u.(round) = r /\
     u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
   /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
-  /\ (forall r' p, r <= r' -> nilp (u.(blocks) r' p))
+  /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
@@ -2146,7 +2185,7 @@ Admitted.
 Lemma prop_b : forall g0 g uid ustate c r b v,
   greachable g0 g ->
   g.(users).[? uid] = Some ustate -> ustate.(corrupt) = true ->
-  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r 1) ->
+  ~ (valid_block_and_hash v b /\ b \in ustate.(blocks) r) ->
   (uid, c, v, true) \in ustate.(proposals) r 1 ->
   size (cert_users g v r 1) <= tau_c.
 Proof.
