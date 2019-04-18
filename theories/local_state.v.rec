@@ -34,8 +34,8 @@ Record UState :=
     proposals     : nat -> nat -> seq PropRecord;
     (* Starting value *)
     stv           : nat -> option Value;
-    (* A sequence of values seen for the given round/period *)
-    blocks        : nat -> nat -> seq Value;
+    (* A sequence of values seen for the given round *)
+    blocks        : nat -> seq Value;
     (* A sequence of softvotes seen for the given round/period *)
     softvotes     : nat -> nat -> seq Vote;
     (* A sequence of certvotes seen for the given round/period *)
@@ -43,11 +43,7 @@ Record UState :=
     (* A sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_open: nat -> nat -> nat -> seq UserId;
     (* A sequence of value-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote;
-    (* A flag for a given round and period indicating whether the preconditions *)
-    (* of certvoting in step 3 were satisfied at the time of step 3, regardless *)
-    (* of whether the user was actually in the committee of that step *)
-    has_certvoted : nat -> nat -> bool
+    nextvotes_val : nat -> nat -> nat -> seq Vote
   }.
 
 End LocalState.

@@ -1129,8 +1129,8 @@ Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState 
 (* The adversary will have the keys if the user is corrupt and the given
    r-p-s comes after (or is equal to) the r-p-s of the user *)
 Definition have_keys ustate r p s : Prop :=
-  ustate.(corrupt) /\ 
-  (r > ustate.(round) \/ 
+  ustate.(corrupt) /\
+  (r > ustate.(round) \/
    r = ustate.(round) /\ p > ustate.(period) \/
    r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
 
@@ -1195,7 +1195,7 @@ Inductive GTransition : g_transition_type :=
     pre ~~> replay_msg_result pre uid msg
 
 (* [Adversary action] - forge and send out a message *)
-| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users)) 
+| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users))
                           r p s mtype mval target,
     have_keys pre.(users).[ustate_key] r p s ->
     pre ~~> forge_msg_result pre uid r p mtype mval target
