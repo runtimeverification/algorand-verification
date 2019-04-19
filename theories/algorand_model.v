@@ -440,9 +440,28 @@ Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
   | Some (i, cr, v', true) => v = v'
   end.
 
+(* Returns the reproposal record in a given sequence of records having the least
+   credential (proposal records are ignored)
+   i.e. the record of the potential leader
+ *)
+Fixpoint least_repr_record (prs : seq PropRecord) : option PropRecord :=
+  match prs with
+  | [::]                          => None
+  | [:: (i, cr, v, true)]         => None
+  | [:: (i, cr, v, false)]        => Some (i, cr, v, false)
+  | [:: (i, cr, v, true) & prs']  => least_record prs'
+  | [:: (i, cr, v, false) & prs'] =>
+  	  match least_record prs' with
+  	  | None => Some (i, cr, v, false)
+  	  | Some (_,_,_, true) => Some (i, cr, v, false)
+  	  | Some (i', cr', v', false) =>
+      if (cr' < cr)%O then Some (i', cr', v', false) else Some (i, cr, v, false)
+    	end
+  end.
+
 (* Returns whether the given value is the current potential leader value *)
 Definition potential_leader_repr_value (v : Value) (prs : seq PropRecord) : Prop :=
-  let opr := least_record prs in
+  let opr := least_repr_record prs in
   match opr with
   | None => False
   | Some (_,_, _, true) => False
