@@ -2175,6 +2175,25 @@ Qed.
 
 (* LIVENESS *)
 
+(* An honest user has proposed a block for a given round/period along a given path *)
+Definition proposed_block_in_path g0 g r p uid v b : Prop :=
+  exists g1 g2 us1 us2 id ms,
+  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
+  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
+  user_honest uid g1 /\
+  valid_block_and_hash b v /\
+  us1.(period) = p /\ us2.(period) = p /\
+  uid # us1 ~> (us2, (Proposal, val v, r, p, id) :: (Block, val b, r, p, id) :: ms).
+
+(* If the block proposer of period r.1 is honest, then a certificate for round r
+is produced at period r.1 *)
+Lemma prop_a : forall g0 g1 path_seq r uid v b,
+    path gtransition g0 path_seq ->
+    g1 = last g0 path_seq ->
+    proposed_block_in_path g0 g1 r 1 uid v b ->
+    certified_in_period path_seq r 1 v.
+Admitted.
+
 (* If any honest user is in period r.p with starting value bottom, then within
 time (2*lambda+Lambda), every honest user in period r.p will either certify a
 value (i.e., will get a certificate) or move to the next period *)
