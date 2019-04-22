@@ -396,8 +396,12 @@ Definition prev_certvals (u:UState) : seq Value :=
 Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
   size (u.(nextvotes_open) r p s) >= tau_b .
 
-(* Whether the user has seen enough nextvotes for a value in the given round/period/step *)
-Definition nextvote_val_quorum (u:UState) r p s : Prop :=
+(* Whether the user has seen enough nextvotes for a given value in the given round/period/step *)
+Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
+  size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
+
+(* Whether the user has seen enough nextvotes for some value in the given round/period/step *)
+Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
   exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
 
 (* Whether a quorum for bottom was seen in the last period
@@ -409,7 +413,7 @@ Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
   p > 1 /\ forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
-(* to be shown as an invariant (?): exists s, nextvote_val_quorum u r (p - 1) s *)
+(* to be shown as an invariant (?): exists s, nextvote_quorum_for_some_value u r (p - 1) s *)
 
 (* Proposal record ordering induced by ordering on credentials *)
 Definition reclt (rec rec' : PropRecord) : bool := (rec.1.1.2 < rec'.1.1.2)%O.
@@ -509,8 +513,8 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\ p > 1 /\
   comm_cred_step uid r p 2 /\
-  leader_reprop_value v (pre.(proposals) r p) /\
-  (v \in prev_certvals pre \/ (cert_may_exist pre /\ pre.(stv) p = Some v)).
+  ( (nextvote_value_quorum pre v r (p - 1) 2 /\ leader_reprop_value v (pre.(proposals) r p))
+    \/ (cert_may_exist pre /\ pre.(stv) p = Some v) ).
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -525,11 +529,8 @@ Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p Softvoting /\
   (comm_cred_step uid r p 2 ->
     ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
-    /\ (~ leader_reprop_value v (pre.(proposals) r p) \/
-       (~ v \in prev_certvals pre /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v))))).
-(*  (comm_cred_step uid r p 2 ->
-      (nilp (prev_certvals pre) /\
-       ~ potential_leader_value v (pre.(proposals) r p))). *)
+    /\ ((~ nextvote_value_quorum pre v r (p - 1) 2 \/ ~ leader_reprop_value v (pre.(proposals) r p))
+       /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
 
 (* The softvoting step (new or reproposal) post-state *)
 (* NOTE: We keep the current deadline at 2 * lambda and let certvoting handle
