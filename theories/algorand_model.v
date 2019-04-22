@@ -513,8 +513,13 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\ p > 1 /\
   comm_cred_step uid r p 2 /\
-  ( (nextvote_value_quorum pre v r (p - 1) 2 /\ leader_reprop_value v (pre.(proposals) r p))
-    \/ (cert_may_exist pre /\ pre.(stv) p = Some v) ).
+  ( (~ cert_may_exist pre /\
+    (exists s, nextvote_value_quorum pre v r (p - 1) s) /\ 
+    leader_reprop_value v (pre.(proposals) r p))
+    \/ 
+    (cert_may_exist pre /\ pre.(stv) p = Some v) ).
+(* Victor: Technically, I think it would be correct to vote for your (non-bottom) 
+   starting value even if `~ cert_may_exist pre` *)
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -529,7 +534,9 @@ Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p Softvoting /\
   (comm_cred_step uid r p 2 ->
     ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
-    /\ ((~ nextvote_value_quorum pre v r (p - 1) 2 \/ ~ leader_reprop_value v (pre.(proposals) r p))
+    /\ ((cert_may_exist pre \/ 
+        (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/ 
+        ~ leader_reprop_value v (pre.(proposals) r p))
        /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
 
 (* The softvoting step (new or reproposal) post-state *)
