@@ -411,63 +411,43 @@ Definition cert_may_exist (u:UState) : Prop :=
   p > 1 /\ forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
 (* to be shown as an invariant (?): exists s, nextvote_val_quorum u r (p - 1) s *)
 
+(* Proposal record ordering induced by ordering on credentials *)
+Definition reclt (rec rec' : PropRecord) : bool := (rec.1.1.2 < rec'.1.1.2)%O.
 
 (* Returns the proposal record in a given sequence of records having the least
-   credential (reproposal records are ignored)
-   i.e. the record of the potential leader
+   credential, i.e. the record of the potential leader
  *)
 Fixpoint least_record (prs : seq PropRecord) : option PropRecord :=
   match prs with
-  | [::]                          => None
-  | [:: (i, cr, v, false)]        => None
-  | [:: (i, cr, v, true)]         => Some (i, cr, v, true)
-  | [:: (i, cr, v, false) & prs'] => least_record prs'
-  | [:: (i, cr, v, true) & prs']  =>
+  | [::]            => None
+  | [:: rec & prs'] =>
   	  match least_record prs' with
-  	  | None => Some (i, cr, v, true)
-  	  | Some (_,_, _, false) => Some (i, cr, v, true)
-  	  | Some (i', cr', v', true) =>
-      if (cr' < cr)%O then Some (i', cr', v', true) else Some (i, cr, v, true)
+  	  | None      => Some rec
+  	  | Some rec' =>
+      if reclt rec' rec
+      then Some rec'
+      else Some rec
     	end
   end.
 
-(* Returns whether the given value is the current potential leader value *)
-Definition potential_leader_value (v : Value) (prs : seq PropRecord) : Prop :=
+(* Returns whether the given (proposal) value is the potential leader value *)
+Definition leader_prop_value (v : Value) (prs : seq PropRecord) : Prop :=
   let opr := least_record prs in
   match opr with
   | None => False
   | Some (_,_, _, false) => False
-  | Some (i, cr, v', true) => v = v'
+  | Some (_,_, v', true) => v = v'
   end.
 
-(* Returns the reproposal record in a given sequence of records having the least
-   credential (proposal records are ignored)
-   i.e. the record of the potential leader
- *)
-Fixpoint least_repr_record (prs : seq PropRecord) : option PropRecord :=
-  match prs with
-  | [::]                          => None
-  | [:: (i, cr, v, true)]         => None
-  | [:: (i, cr, v, false)]        => Some (i, cr, v, false)
-  | [:: (i, cr, v, true) & prs']  => least_record prs'
-  | [:: (i, cr, v, false) & prs'] =>
-  	  match least_record prs' with
-  	  | None => Some (i, cr, v, false)
-  	  | Some (_,_,_, true) => Some (i, cr, v, false)
-  	  | Some (i', cr', v', false) =>
-      if (cr' < cr)%O then Some (i', cr', v', false) else Some (i, cr, v, false)
-    	end
-  end.
-
-(* Returns whether the given value is the current potential leader value *)
-Definition potential_leader_repr_value (v : Value) (prs : seq PropRecord) : Prop :=
-  let opr := least_repr_record prs in
+(* Returns whether the given (reproposal) value is the potential leader value *)
+Definition leader_reprop_value (v : Value) (prs : seq PropRecord) : Prop :=
+  let opr := least_record prs in
   match opr with
   | None => False
   | Some (_,_, _, true) => False
-  | Some (i, cr, v', false) => v = v'
+  | Some (_,_, v', false) => v = v'
   end.
-  
+
 
 (** Step 1: Proposing propositions and user state update **)
 
@@ -498,7 +478,7 @@ Definition repropose_ok (pre : UState) uid v b r p : Prop :=
 Definition no_propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p Proposing /\
-  (comm_cred_step uid r p 1 /\ valid_block_and_hash b v -> 
+  (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
     cert_may_exist pre \/ ~ v \in prev_certvals pre).
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
@@ -520,7 +500,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p Softvoting /\
   comm_cred_step uid r p 2 /\
   ~ cert_may_exist pre /\
-  potential_leader_value v (pre.(proposals) r p) .
+  leader_prop_value v (pre.(proposals) r p) .
 
 (* The Softvoting-a-reproposal step preconditions *)
 (* Note that this is the Softvoting step when p > 1 and the previous-
@@ -529,9 +509,8 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\ p > 1 /\
   comm_cred_step uid r p 2 /\
-  v \in prev_certvals pre /\
-  potential_leader_repr_value v (pre.(proposals) r p) /\
-  pre.(stv) p = Some v.
+  leader_reprop_value v (pre.(proposals) r p) /\
+  (v \in prev_certvals pre \/ (cert_may_exist pre /\ pre.(stv) p = Some v)).
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -544,12 +523,10 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
 Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p Softvoting /\
-  (comm_cred_step uid r p 2 -> 
-    ((cert_may_exist pre \/ 
-      ~ potential_leader_value v (pre.(proposals) r p)) /\
-     (~ v \in prev_certvals pre \/
-      ~ potential_leader_repr_value v (pre.(proposals) r p) \/
-      ~ pre.(stv) p = Some v))).
+  (comm_cred_step uid r p 2 ->
+    ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
+    /\ (~ leader_reprop_value v (pre.(proposals) r p) \/
+       (~ v \in prev_certvals pre /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v))))).
 (*  (comm_cred_step uid r p 2 ->
       (nilp (prev_certvals pre) /\
        ~ potential_leader_value v (pre.(proposals) r p))). *)
@@ -602,7 +579,7 @@ Definition no_certvote_ok (pre : UState) uid v b r p : Prop :=
 (* The user has certvoted successfully, so move on to the next step and
    update the deadline *)
 Definition certvote_result (pre : UState) : UState :=
-  {[ {[ pre with step := 4 ]} 
+  {[ {[ pre with step := 4 ]}
             with deadline := (lambda + big_lambda)%R ]}.
 
 (* Certvoting step's resulting user state (unsuccessful case) *)
@@ -643,8 +620,8 @@ Definition nextvote_open_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   comm_cred_step uid r p s /\
-  (~ b \in pre.(blocks) r \/ 
-   ~ valid_block_and_hash b v \/ 
+  (~ b \in pre.(blocks) r \/
+   ~ valid_block_and_hash b v \/
    ~ v \in certvals pre r p) /\
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
@@ -659,8 +636,8 @@ Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p Nextvoting /\
   comm_cred_step uid r p s /\
-  (~ b \in pre.(blocks) r \/ 
-   ~ valid_block_and_hash b v \/ 
+  (~ b \in pre.(blocks) r \/
+   ~ valid_block_and_hash b v \/
    ~ v \in certvals pre r p) /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
 
@@ -1172,8 +1149,8 @@ Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState 
 (* The adversary will have the keys if the user is corrupt and the given
    r-p-s comes after (or is equal to) the r-p-s of the user *)
 Definition have_keys ustate r p s : Prop :=
-  ustate.(corrupt) /\ 
-  (r > ustate.(round) \/ 
+  ustate.(corrupt) /\
+  (r > ustate.(round) \/
    r = ustate.(round) /\ p > ustate.(period) \/
    r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
 
@@ -1238,7 +1215,7 @@ Inductive GTransition : g_transition_type :=
     pre ~~> replay_msg_result pre uid msg
 
 (* [Adversary action] - forge and send out a message *)
-| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users)) 
+| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users))
                           r p s mtype mval target,
     have_keys pre.(users).[ustate_key] r p s ->
     pre ~~> forge_msg_result pre uid r p mtype mval target
@@ -1812,7 +1789,7 @@ inversion_clear utrH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   rewrite addn1. by [].
-- case: H => H v'H. 
+- case: H => H v'H.
   case: H => tH [vH [vbH [svH oH]]].
   case: vH => rH [pH sH].
   apply nextvoting_is_step_ge4 in sH.
