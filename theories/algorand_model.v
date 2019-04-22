@@ -1034,37 +1034,16 @@ Definition map_mset {A B : choiceType} (f : A -> B) (m : {mset A}) : {mset B} :=
 Lemma map_mset_count_inj {A B :choiceType} (f: A -> B) (m : {mset A}) :
   injective f -> forall (a :A), m a = (map_mset f m) (f a).
 Proof.
-  intro H_inj.
-  unfold map_mset.
-  intro a.
-  generalize (mset0E (f a)).
-  generalize (mset0 : {mset B}).
-  intro x.
-  intro Hx.
-  match goal with
-  | [ |- ?A = _] => assert (A = addn (x (f a)) (count_mem a m))
-  end.
-  rewrite Hx. symmetry. apply count_mem_mset.
-  rewrite H.
-  clear Hx H.
-  generalize (EnumMset.f m). intro l. clear m.
-  revert x.
-
-  induction l;[intros;by apply addn0|].
-  intro x. simpl.
-  specialize (IHl (f a0 +` x)).
-  rewrite <- IHl.
-  clear IHl.
-  rewrite addnA.
-  rewrite mset1DE.
-  apply (f_equal (fun x => (addn x _))).
-  rewrite addnC.
-  apply (f_equal (fun x => (addn x _))).
-  symmetry.
-  rewrite eq_sym.
-  f_equal. (* seemingly unnecessary, but there is a nat_of_bool coercion in the way *)
-  apply eqtype.inj_eq.
-  assumption.
+  rewrite /map_mset => H_inj a.
+  move: (mset0) (mset0E (f a)) => x Hx.
+  have ->: m a = ((x (f a) + (count_mem a) m))%nat.
+  rewrite Hx.
+  symmetry; apply count_mem_mset.
+  move: (EnumMset.f m) => l {m}.
+  move: l x {Hx}.
+  elim => //= x l IHl x0.
+  apply/eqP.
+  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym x) (eqtype.inj_eq H_inj).
 Qed.
 
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
@@ -1659,13 +1638,10 @@ Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
          end.
 Admitted.
 
-Print MType.
-
 Lemma utransition_label_correctly : forall uid msg g1 g2,
     user_sent uid msg g1 g2 ->
-    match g1.(users).[? uid] with
-    | Some u =>
-      match msg with
+    forall u, g1.(users).[? uid] = Some u ->
+     match msg with
       | (Certvote,_,r_m,p_m,uid_m) =>
         ((r_m > u.(round)) \/ (r_m = u.(round) /\ p_m >= u.(period)))
           /\ uid_m = uid
@@ -1677,9 +1653,7 @@ Lemma utransition_label_correctly : forall uid msg g1 g2,
            | repr_val _ _ p_m => p_m = u.(period)
            | next_val _ s_m => s_m = u.(step)
            end
-      end
-      | None => False
-    end.
+      end.
 Proof.
   intros uid msg g1 g2.
   unfold user_sent.
