@@ -1105,7 +1105,7 @@ Lemma reset_msg_delays_fwd : forall (msgs : {mset R * Msg}) (m : R * Msg),
 Proof.
   move => msgs m Hm now.
   rewrite -has_pred1 /= has_count.
-  have Hcnt: (0 < count_mem m msgs) by (rewrite <- has_count;rewrite has_pred1;assumption).
+  have Hcnt: (0 < count_mem m msgs) by rewrite -has_count has_pred1.
   eapply leq_trans;[eassumption|clear Hcnt].
   rewrite (count_mem_mset (reset_deadline now m) (reset_user_msg_delays msgs now)).
   rewrite /reset_user_msg_delays -map_mset_count.
@@ -1115,29 +1115,16 @@ Qed.
 
 Lemma reset_user_msg_delays_rev (now : R) (msgs : {mset R * Msg}) (m: R*Msg):
   m \in reset_user_msg_delays msgs now ->
-  exists d0, m = reset_deadline now (d0,m.2)
-             /\ (d0,m.2) \in msgs.
+  exists d0, m = reset_deadline now (d0,m.2) /\ (d0,m.2) \in msgs.
 Proof.
-  intro Hm.
+  move => Hm.
   suff: (has (preim (reset_deadline now) (pred1 m)) msgs).
-  *
-    (* TODO: Karl why can't this just be apply /hasP => [[d0 msg0] H_mem H_preim] *)
-    intro H;apply (elimT (@hasP _ (preim (reset_deadline now) (pred1 m)) msgs)) in H;
-      destruct H as [[d0 msg0] H_mem H_preim].
-    destruct m as [d msg].
-    unfold preim, pred1 in H_preim. simpl in H_preim.
-    unfold reset_deadline in H_preim |- *.
-    simpl in H_preim |- *.
-    apply (elimT eqP) in H_preim.
-    injection H_preim. intros -> _.
-    exists d0. split. symmetry. assumption. assumption.
-  *
-    rewrite has_count.
-    rewrite map_mset_count.
-    rewrite <- count_mem_mset.
-    rewrite <- has_count.
-    rewrite has_pred1.
-    assumption.
+    move: m Hm => [d msg] Hm.
+    move/hasP => [[d0 msg0] H_mem H_preim].
+    move: H_preim; rewrite /preim /pred1 /= /reset_deadline /=.
+    case/eqP => Hn Hd; rewrite -Hd -Hn.
+    by exists d0; split.
+  by rewrite has_count map_mset_count -count_mem_mset -has_count has_pred1.
 Qed.
 
 (* Constructs a message pool with all messages having missed delivery deadlines
