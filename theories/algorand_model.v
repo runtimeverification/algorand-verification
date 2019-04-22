@@ -1618,15 +1618,13 @@ Proof.
     destruct (target == uid) eqn:H_same.
   + { assert (target = uid) by (apply /eqP;assumption).
       subst uid;clear -H_sent_g1.
-      unfold drop_mailbox_of_user in H_sent_g1.
-      (* TODO: Karl why doesn't destruct (msg_in_transit.[? target]) work here? *)
-      destruct (target \in msg_in_transit) eqn:H_target.
-      - rewrite (in_fnd H_target) fnd_set eq_refl in H_sent_g1.
-        destruct H_sent_g1 as [d H_sent].
-        revert H_sent. apply /negP. rewrite in_mset0. reflexivity.
-      - apply negbT in H_target.
-        rewrite (not_fnd H_target) (not_fnd H_target) in H_sent_g1. assumption.
-      }
+      move: H_sent_g1; rewrite /drop_mailbox_of_user.
+      case: fndP; case: fndP => //.
+        move => Ht Hf [d Hd]; move: Hd.
+        by rewrite getf_set in_mset0.
+      move => Ht kf [d Hd].
+      by case/negP: Ht.
+    }
   + revert H_sent_g1.
     unfold drop_mailbox_of_user.
     destruct (uid \in msg_in_transit) eqn:H_uid.
