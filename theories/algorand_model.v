@@ -1103,43 +1103,14 @@ Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
 Lemma reset_msg_delays_fwd : forall (msgs : {mset R * Msg}) (m : R * Msg),
     m \in msgs -> forall now, (reset_deadline now m \in reset_user_msg_delays msgs now).
 Proof.
-  intros msgs m Hm now.
-  unfold in_mem. unfold mem. simpl.
-  (* TODO Karl : Should be able to just "rewrite <- has_pred1"
-     but implicit stuff gets in the way *)
-  change (is_true (@in_mem (Equality.sort _) (reset_deadline now m)
-           (@mem
-            (Equality.sort
-               (prod_eqType R_eqType
-                  (prod_eqType
-                     (prod_eqType
-                        (prod_eqType (prod_eqType mtype_eqType exvalue_eqType) nat_eqType)
-                        nat_eqType) (Finite.eqType UserId))))
-            (seq_predType
-               (prod_eqType R_eqType
-                  (prod_eqType
-                     (prod_eqType
-                        (prod_eqType (prod_eqType mtype_eqType exvalue_eqType) nat_eqType)
-                        nat_eqType) (Finite.eqType UserId))))
-            (@EnumMset.f
-               (prod_choiceType R_choiceType
-                  (prod_choiceType
-                     (prod_choiceType
-                        (prod_choiceType
-                           (prod_choiceType mtype_choiceType exvalue_choiceType)
-                           nat_choiceType) nat_choiceType) (Finite.choiceType UserId)))
-               (reset_user_msg_delays msgs now))))).
-  rewrite <- has_pred1.
-  rewrite has_count.
-
-  assert (0 < count_mem m msgs) by (rewrite <- has_count;rewrite has_pred1;assumption).
-  eapply leq_trans;[eassumption|clear H].
+  move => msgs m Hm now.
+  rewrite -has_pred1 /= has_count.
+  have Hcnt: (0 < count_mem m msgs) by (rewrite <- has_count;rewrite has_pred1;assumption).
+  eapply leq_trans;[eassumption|clear Hcnt].
   rewrite (count_mem_mset (reset_deadline now m) (reset_user_msg_delays msgs now)).
-  unfold reset_user_msg_delays.
-  rewrite <- map_mset_count.
+  rewrite /reset_user_msg_delays -map_mset_count.
   apply sub_count.
-  clear.
-  intro. simpl. intro H. apply /eqP. f_equal. apply /eqP. assumption.
+  by move => H /= /eqP ->.
 Qed.
 
 Lemma reset_user_msg_delays_rev (now : R) (msgs : {mset R * Msg}) (m: R*Msg):
