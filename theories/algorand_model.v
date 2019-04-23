@@ -2175,23 +2175,27 @@ Qed.
 
 (* LIVENESS *)
 
-(* An honest leader has proposed a block for a given round/period along a given path *)
-Definition proposed_block_in_path g0 g r p uid v b : Prop :=
+(* An user has proposed a block for a given round/period *)
+Definition proposed_block_in_path r p uid v b us1 us2 id ms : Prop :=
+  (committee_cred (credential uid r p 1)) /\
+  valid_block_and_hash b v /\
+  us1.(period) = p /\ us2.(period) = p /\
+  uid # us1 ~> (us2, (Proposal, val v, r, p, id) :: (Block, val b, r, p, id) :: ms).
+
+(* An block proposer is *the* leader for a given round/period along a given path *)
+Definition leader_in_path g0 g r p uid v b : Prop :=
   exists g1 g2 us1 us2 id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
   greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  user_honest uid g1 /\
-  valid_block_and_hash b v /\
-  us1.(period) = p /\ us2.(period) = p /\
-  leader_prop_value v (us2.(proposals) r p) /\
-  uid # us1 ~> (us2, (Proposal, val v, r, p, id) :: (Block, val b, r, p, id) :: ms).
+  proposed_block_in_path r p uid v b us1 us2 id ms /\
+  leader_prop_value v (us2.(proposals) r p).
 
 (* If the block proposer of period r.1 is honest, then a certificate for round r
 is produced at period r.1 *)
 Lemma prop_a : forall g0 g1 path_seq r uid v b,
     path gtransition g0 path_seq ->
     g1 = last g0 path_seq ->
-    proposed_block_in_path g0 g1 r 1 uid v b ->
+    leader_in_path g0 g1 r 1 uid v b ->
     certified_in_period path_seq r 1 v.
 Admitted.
 
