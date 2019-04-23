@@ -1684,13 +1684,29 @@ Proof.
     destruct pre;unfold set_softvotes, certvote_ok in H;simpl in * |- *.
     decompose record H.
     clear -H0. unfold valid_rps in H0;simpl in H0.
-    intuition;subst;by intuition.
+    case => //=.
+    move => corrupt0 round0 period0 step0 timer0 deadline0 p_start0 proposal0 stv0.
+    move => blocks0 softvotes0 certvotes0 nextvotes_open0 nextvotes_val0 has_certvoted0.
+    case; intros.
+    subst.
+    split => //.
+    move: H0 => [Hr1 [Hp1 Hs]].
+    subst.
+    by right.
   * subst pre'.
     destruct pre;unfold set_certvotes, certify_ok in H;simpl in * |- *.
     decompose record H.
     clear -H0. unfold advancing_rp in H0; simpl in H0.
-    by intuition.
-
+    case => //=.
+    move => corrupt0 round0 period0 step0 timer0 deadline0 p_start0 proposal0 stv0.
+    move => blocks0 softvotes0 certvotes0 nextvotes_open0 nextvotes_val0 has_certvoted0.
+    case; intros.
+    subst.
+    split => //.
+    case: H0; first by left.
+    move => [Hr Hp].
+    right.
+    by split.
   +
     (* internal transition cases *)
     change (msg \in sent:Prop) in msg_in.
@@ -1718,8 +1734,9 @@ Proof.
     Ltac splitting H :=
         first [exfalso;exact H|
                destruct H as [H | H];[|splitting H]].
-    remember (x0,sent) as ustep_out in H0.
 
+    remember (x0,sent) as ustep_out in H0.
+    move => u; case =><-.
     destruct H0;injection Hequstep_out;clear Hequstep_out;intros <- <-;
     splitting msg_in;injection msg_in;intros <- <- <- <- <-; clear msg_in;
     use_pre_hyp pre;
