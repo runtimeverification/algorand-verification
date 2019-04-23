@@ -2175,7 +2175,7 @@ Qed.
 
 (* LIVENESS *)
 
-(* An honest user has proposed a block for a given round/period along a given path *)
+(* An honest leader has proposed a block for a given round/period along a given path *)
 Definition proposed_block_in_path g0 g r p uid v b : Prop :=
   exists g1 g2 us1 us2 id ms,
   greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
@@ -2183,6 +2183,7 @@ Definition proposed_block_in_path g0 g r p uid v b : Prop :=
   user_honest uid g1 /\
   valid_block_and_hash b v /\
   us1.(period) = p /\ us2.(period) = p /\
+  leader_prop_value v (us2.(proposals) r p) /\
   uid # us1 ~> (us2, (Proposal, val v, r, p, id) :: (Block, val b, r, p, id) :: ms).
 
 (* If the block proposer of period r.1 is honest, then a certificate for round r
