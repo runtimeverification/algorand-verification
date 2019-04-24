@@ -1164,6 +1164,14 @@ Definition have_keys ustate r p s : Prop :=
    r = ustate.(round) /\ p > ustate.(period) \/
    r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
 
+Definition mtype_matches_step mtype s : Prop :=
+  match mtype with
+  | Block | Proposal | Reproposal => s = 1
+  | Softvote => s = 2
+  | Certvote => s = 3
+  | _ => s > 3
+  end.
+
 (* Computes the state resulting from forging a message to a user *)
 (* The message is first created and then queued at the target user's mailbox *)
 Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval target : GState :=
@@ -1225,10 +1233,14 @@ Inductive GTransition : g_transition_type :=
     pre ~~> replay_msg_result pre uid msg
 
 (* [Adversary action] - forge and send out a message *)
-| step_forge_msg : forall pre uid (ustate_key : uid \in pre.(users))
-                          r p s mtype mval target,
-    have_keys pre.(users).[ustate_key] r p s ->
-    pre ~~> forge_msg_result pre uid r p mtype mval target
+| step_forge_msg : forall pre sender (sender_key : sender \in pre.(users))
+                          r p s mtype mval
+                          target (target_key : target \in pre.(users)),
+    ~ pre.(users).[target_key].(corrupt) -> 
+    have_keys pre.(users).[sender_key] r p s ->
+    comm_cred_step sender r p s ->
+    mtype_matches_step mtype s ->
+    pre ~~> forge_msg_result pre sender r p mtype mval target
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
@@ -1327,10 +1339,13 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       ~ pre.(users).[ustate_key].(corrupt)
       /\ msg \in pre.(msg_history)
       /\ post = replay_msg_result pre uid msg
-  | lbl_forge_msg uid r p mtype mval target =>
-      exists (ustate_key : uid \in pre.(users)) s,
-      have_keys pre.(users).[ustate_key] r p s
-      /\ post = forge_msg_result pre uid r p mtype mval target
+  | lbl_forge_msg sender r p mtype mval target =>
+      exists (sender_key : sender \in pre.(users)) (target_key : target \in pre.(users)) s,
+      ~ pre.(users).[target_key].(corrupt)
+      /\ have_keys pre.(users).[sender_key] r p s
+      /\ comm_cred_step sender r p s
+      /\ mtype_matches_step mtype s
+      /\ post = forge_msg_result pre sender r p mtype mval target
   end.
 
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
@@ -1356,7 +1371,7 @@ Proof.
     exists (lbl_enter_partition);finish_case.
     exists (lbl_corrupt_user uid);finish_case.
     exists (lbl_replay_msg uid);finish_case.
-    exists (lbl_forge_msg uid r p mtype mval target);finish_case.
+    exists (lbl_forge_msg sender r p mtype mval target);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
 
