@@ -5,7 +5,6 @@ From mathcomp.finmap
 Require Import finmap.
 From mathcomp.finmap
 Require Import multiset.
-
 From mathcomp.finmap Require Import order.
 Import Order.Theory Order.Syntax Order.Def.
 
@@ -189,14 +188,6 @@ Definition PropRecord := (UserId * credType * Value * bool)%type.
  *)
 Definition Vote := (UserId * Value)%type.
 
-(* An enumerated data type for the different step names in a period
-*)
-Inductive StepName :=
-  | Proposing
-  | Softvoting
-  | Certvoting
-  | Nextvoting.
-
 (* The user's state structure *)
 (* Note that the user state structure and supporting functions and notations
    are all defined in local_state.v
@@ -259,12 +250,13 @@ Definition advance_period (u : UState) : UState :=
 
 (* Update function for advancing the round of a user state *)
 Definition advance_round (u : UState) : UState :=
-  {[ {[ {[ {[ {[ {[ u with round := u.(round) + 1 ]}
-                   with period := 1 ]}
-                with step := 1 ]}
+  {[ {[ {[ {[ {[ {[ {[ u with round := u.(round) + 1 ]}
+                      with period := 1 ]}
+                   with step := 1 ]}
+                with stv := fun x => None ]}
              with timer := 0%R ]}
-          with deadline := 0%R ]}
-       with p_start := u.(p_start) + u.(timer) ]}.
+           with deadline := 0%R ]}
+        with p_start := u.(p_start) + u.(timer) ]}.
 
 (* A proposition for whether a given credential qualifies its
    owner to be a committee member
@@ -345,16 +337,6 @@ Variable correct_hash : Value -> Value -> Prop.
 Definition valid_block_and_hash b v : Prop :=
   valid b /\ correct_hash v b.
 
-(* Returns the name of a given step value if valid, and None otherwise *)
-Definition step_name s : option StepName :=
-  match s with
-  | 0 => None
-  | 1 => Some Proposing
-  | 2 => Some Softvoting
-  | 3 => Some Certvoting
-  | _ => Some Nextvoting
-  end.
-
 (* Is the given message a vote (softvote, certvote or nextvote) message? *)
 Definition vote_msg (msg : Msg) : Prop :=
   match msg.1.1.1.1 with
@@ -363,8 +345,8 @@ Definition vote_msg (msg : Msg) : Prop :=
   end.
 
 (* Does the given round/period/step match the ones stored in the user state? *)
-Definition valid_rps (u : UState) r p w : Prop :=
-  u.(round) = r /\ u.(period) = p /\ step_name(u.(step)) = Some w .
+Definition valid_rps (u : UState) r p s : Prop :=
+  u.(round) = r /\ u.(period) = p /\ u.(step) = s .
 
 (* Is the vote x for this value v? *)
 Definition matchValue (x : Vote) (v : Value) : bool :=
@@ -462,7 +444,7 @@ Definition leader_reprop_value (v : Value) (prs : seq PropRecord) : Prop :=
    was not for bottom is captured by the predicate cert_may_exist *)
 Definition propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
-  valid_rps pre r p Proposing /\
+  valid_rps pre r p 1 /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
   ~ cert_may_exist pre.
@@ -472,7 +454,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
    period's winning vote was for a value v *)
 Definition repropose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
-  valid_rps pre r p Proposing /\ p > 1 /\
+  valid_rps pre r p 1 /\ p > 1 /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
   v \in prev_certvals pre.
@@ -481,7 +463,7 @@ Definition repropose_ok (pre : UState) uid v b r p : Prop :=
 (* Note that this applies regardless of whether p = 1 *)
 Definition no_propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
-  valid_rps pre r p Proposing /\
+  valid_rps pre r p 1 /\
   (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
     cert_may_exist pre \/ ~ v \in prev_certvals pre).
 
@@ -501,7 +483,7 @@ Definition propose_result (pre : UState) : UState :=
             is interpreted here as "v is a reproposal" for simplicity *)
 Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
-  valid_rps pre r p Softvoting /\
+  valid_rps pre r p 2 /\
   comm_cred_step uid r p 2 /\
   ~ cert_may_exist pre /\
   leader_prop_value v (pre.(proposals) r p) .
@@ -511,7 +493,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
    period's winning vote was for a value v *)
 Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
-  valid_rps pre r p Softvoting /\ p > 1 /\
+  valid_rps pre r p 2 /\ p > 1 /\
   comm_cred_step uid r p 2 /\
   ( (~ cert_may_exist pre /\
     (exists s, nextvote_value_quorum pre v r (p - 1) s) /\ 
@@ -531,7 +513,7 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
 (* Note that this may apply regardless of whether p = 1*)
 Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
-  valid_rps pre r p Softvoting /\
+  valid_rps pre r p 2 /\
   (comm_cred_step uid r p 2 ->
     ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
     /\ ((cert_may_exist pre \/ 
@@ -559,7 +541,7 @@ Definition softvote_result (pre : UState) : UState :=
     checking whether the action should fire at the beginning of the time period *)
 Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
-  valid_rps pre r p Certvoting /\
+  valid_rps pre r p 3 /\
   comm_cred_step uid r p 3 /\
   ~ cert_may_exist pre /\
   valid_block_and_hash b v /\
@@ -575,7 +557,7 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
     checking whether the action should fire at the beginning of the time period *)
 Definition no_certvote_ok (pre : UState) uid v b r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
-  valid_rps pre r p Certvoting /\
+  valid_rps pre r p 3 /\
   (~ comm_cred_step uid r p 3 \/
    cert_may_exist pre \/
    ~ valid_block_and_hash b v \/
@@ -610,7 +592,7 @@ Definition no_certvote_result (pre : UState) : UState :=
  *)
 Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
-  valid_rps pre r p Nextvoting /\
+  valid_rps pre r p s /\
   comm_cred_step uid r p s /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
@@ -626,7 +608,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
  *)
 Definition nextvote_open_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
-  valid_rps pre r p Nextvoting /\
+  valid_rps pre r p s /\
   comm_cred_step uid r p s /\
   (~ b \in pre.(blocks) r \/
    ~ valid_block_and_hash b v \/
@@ -642,7 +624,7 @@ Definition nextvote_open_ok (pre : UState) uid (v b : Value) r p s : Prop :=
  *)
 Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
-  valid_rps pre r p Nextvoting /\
+  valid_rps pre r p s /\
   comm_cred_step uid r p s /\
   (~ b \in pre.(blocks) r \/
    ~ valid_block_and_hash b v \/
@@ -661,17 +643,26 @@ Definition nextvote_result (pre : UState) s : UState :=
 (* Preconditions -- The bottom-value case *)
 (* Notes: - Corresponds to transition advance_period_open in the automaton model *)
 Definition adv_period_open_ok (pre : UState) r p s : Prop :=
-  valid_rps pre r p Nextvoting /\
+  valid_rps pre r p s /\
   nextvote_bottom_quorum pre r p s.
 
 (* Preconditions -- The proper value case *)
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
-  valid_rps pre r p Nextvoting /\
+  valid_rps pre r p s /\
   size [seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]  >= tau_v.
 
-(* State update -- both cases *)
-Definition adv_period_result (pre : UState) : UState := advance_period pre.
+(* State update -- The bottom-value case *)
+Definition adv_period_open_result (pre : UState) : UState := 
+  let prev_p := pre.(period) in
+    {[ (advance_period pre) 
+      with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
+
+(* State update -- The proper value case *)
+Definition adv_period_val_result (pre : UState) v : UState := 
+  let prev_p := pre.(period) in
+    {[ (advance_period pre) 
+      with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
 
 (** Advancing round propositions and user state update **)
 (* Preconditions *)
@@ -799,19 +790,19 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (no_certvote_result pre, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
-  | nextvote_val : forall uid (pre : UState) v b r p,
-      nextvote_val_ok pre uid v b r p pre.(step) ->
-      uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Val, next_val v pre.(step), r, p, uid)])
+  | nextvote_val : forall uid (pre : UState) v b r p s,
+      nextvote_val_ok pre uid v b r p s ->
+      uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
-  | nextvote_open : forall uid (pre : UState) v b r p,
-      nextvote_open_ok pre uid v b r p pre.(step) ->
-      uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Open, step_val pre.(step), r, p, uid)])
+  | nextvote_open : forall uid (pre : UState) v b r p s,
+      nextvote_open_ok pre uid v b r p s ->
+      uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
-  | nextvote_stv : forall uid (pre : UState) v v' b r p,
-      nextvote_stv_ok pre uid v b r p pre.(step) /\ pre.(stv) p = Some v' ->
-        uid # pre ~> (nextvote_result pre pre.(step), [:: (Nextvote_Val, next_val  v' pre.(step), r, p, uid)])
+  | nextvote_stv : forall uid (pre : UState) v v' b r p s,
+      nextvote_stv_ok pre uid v b r p s /\ pre.(stv) p = Some v' ->
+        uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val  v' s, r, p, uid)])
 
   (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
   | timeout : forall uid (pre : UState),
@@ -882,7 +873,7 @@ Inductive UTransitionMsg : u_transition_msg_type :=
   | deliver_nextvote_open_adv_prd : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
         adv_period_open_ok pre' r p s ->
-        uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (adv_period_result pre', [::])
+        uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (adv_period_open_result pre', [::])
 
   (* Deliver a nextvote for value while not triggering any internal action *)
   | deliver_nextvote_val : forall uid (pre : UState) r p s i v,
@@ -894,7 +885,7 @@ Inductive UTransitionMsg : u_transition_msg_type :=
   | deliver_nextvote_val_adv_prd : forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
       adv_period_val_ok pre' v r p s ->
-      uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (adv_period_result pre', [::])
+      uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (adv_period_val_result pre' v, [::])
 
   (* Deliver a certvote while not triggering any internal action *)
   | deliver_certvote : forall uid (pre : UState) v r p i,
@@ -1494,20 +1485,6 @@ Definition sensible_gstate (gs : GState) : Prop :=
   forall uid (k:uid \in gs.(users)), sensible_ustate gs.(users).[k].
   (* more constraints if we add corrupt users map and total message history *)
 
-
-Lemma step_name_to_value: forall s n,
-    step_name s = n ->
-    match n with
-    | None => s = 0
-    | Some Proposing => s = 1
-    | Some Softvoting => s = 2
-    | Some Certvoting => s = 3
-    | Some Nextvoting => s >= 4
-    end.
-Proof.
-  intros;subst. do 4 (destruct s;try reflexivity).
-Qed.
-
 Lemma step_later_deadlines : forall s,
     s > 3 -> next_deadline s = (lambda + big_lambda + (INR s - 3) * L)%R.
 Proof.
@@ -1525,7 +1502,6 @@ Proof.
   Ltac use_hyp H := unfold valid_rps in H;simpl in H; decompose record H.
   Ltac tidy :=
   match goal with
-    | [H: step_name ?step = _ |- _] => apply step_name_to_value in H;subst step
     | [ |- context C [ next_deadline (?s + 1 - 1) ] ] =>
       replace (s + 1 - 1) with s by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ)
     | [ H : is_true (3 < ?s) |- context C [next_deadline ?s] ] =>
@@ -1608,48 +1584,6 @@ Proof.
   simpl;apply /andP;by auto.
 Qed.
 
-(* Generates a condition on the step value corresponding to a step name *)
-Definition step_condition step_name n : Prop :=
-  match step_name with
-  | None => n = 0
-  | Some Proposing  => n = 1
-  | Some Softvoting => n = 2
-  | Some Certvoting => n = 3
-  | _ => n >= 4
-  end.
-
-(* The generated condition is correct *)
-Lemma step_value_name : forall n, step_condition (step_name n) n.
-Proof.
-clear.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
-
-(* A proposing step must have the value 1 *)
-Lemma proposing_is_step_1 : forall n, step_name n = Some Proposing -> n = 1 .
-Proof.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
-
-(* A softvoting step must have the value 2 *)
-Lemma softvoting_is_step_2 : forall n, step_name n = Some Softvoting -> n = 2 .
-Proof.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
-
-(* A certvoting step must have the value 3 *)
-Lemma certvoting_is_step_3 : forall n, step_name n = Some Certvoting -> n = 3 .
-Proof.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
-
-(* A nextvoting step must have a value >= 4 *)
-Lemma nextvoting_is_step_ge4 : forall n, step_name n = Some Nextvoting -> n >= 4 .
-Proof.
-do 4! [ case => /= ; first by [] ] ; by [].
-Qed.
-
-
 (* An honest user may cert-vote only at step 3 of a period *)
 (* Certvoting is enabled only at step 3 *)
 Lemma certvote_only_in_step3 : forall us uid v b r p,
@@ -1658,7 +1592,7 @@ Proof.
 move => us uid v b r p Hc.
 elim: Hc => tH [vH oH].
 elim: vH => rH [pH sH].
-by apply certvoting_is_step_3 in sH.
+by [].
 Qed.
 (*  (m, pre) ~> (post, (Certvote, v, r, p,id) :: ms) -> pre.(step) = 3. *)
 
@@ -1671,7 +1605,7 @@ Proof.
 move => us v b r p Hc.
 elim: Hc => tH [vH oH].
 elim: vH => rH [pH sH].
-by apply softvoting_is_step_2 in sH.
+by [].
 Qed.
 
 (* State us2 comes after state us1 in terms of round-period-step ordering *)
@@ -1691,7 +1625,6 @@ inversion_clear utrH.
   do 2! [right]. by do 2! [split; auto].
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - rewrite /pre'.
@@ -1706,7 +1639,6 @@ inversion_clear utrH.
   do 2! [right]. do 2! [split; auto].
 - case: H => vH oH.
   case: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   right. left. split ; first by [].
   rewrite addn1. by [].
@@ -1747,67 +1679,56 @@ move => uid us1 us2 ms utrH.
 inversion_clear utrH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply proposing_is_step_1 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H  => tH [vH oH].
   case: vH => rH [pH sH].
-  apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply softvoting_is_step_2 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
-  apply certvoting_is_step_3 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
 - elim: H => tH [vH [vbH [svH oH]]].
   elim: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
-  rewrite addn1. by [].
+  rewrite addn1. by subst.
 - case: H => tH [vH [vbH [svH oH]]].
   case: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
-  rewrite addn1. by [].
+  rewrite addn1. by subst.
 - case: H => H v'H.
   case: H => tH [vH [vbH [svH oH]]].
   case: vH => rH [pH sH].
-  apply nextvoting_is_step_ge4 in sH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
-  rewrite addn1. by [].
+  rewrite addn1. by subst.
 - case: H => vH oH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
-  rewrite addn1. by [].
+  rewrite addn1. by subst.
 Qed.
 
 (* A one-step global transition never decreases round-period-step of any user *)
