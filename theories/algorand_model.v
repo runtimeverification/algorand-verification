@@ -434,6 +434,22 @@ Definition leader_reprop_value (v : Value) (prs : seq PropRecord) : Prop :=
   | Some (_,_, v', false) => v = v'
   end.
 
+(* The timer deadline value for the NEXT step following the given step value *)
+(* Note: k is zero-based and hence the apparent difference from the algorand paper.
+         The computed deadline values are exactly as given in the paper. *)
+(* Note: Updated to accommodate the 27March change *)
+Definition next_deadline k : R :=
+  match k with
+  (* deadline for step 1 *)
+  | 0 => 0
+  (* deadline for step 2 *)
+  | 1 => (2 * lambda)%R
+  (* deadline for step 3 *)
+  | 2 => (lambda + big_lambda)%R
+  (* deadlines for steps 4, 5, 6, ... *)
+  | n => (lambda + big_lambda + (INR n - 3) * L)%R
+  end.
+
 
 (** Step 1: Proposing propositions and user state update **)
 
@@ -631,12 +647,18 @@ Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
    ~ v \in certvals pre r p) /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
 
+(* Nextvoting step preconditions *)
+(* The no-voting case *)
+Definition no_nextvote_ok (pre : UState) uid r p s : Prop :=
+  pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
+  valid_rps pre r p s /\
+  ~ comm_cred_step uid r p s.
 
 (* Nextvoting step state update for steps s >= 4 (all cases) *)
 (* Note: Updated to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
   {[ {[ pre with step := (s + 1) ]}
-            with deadline := (lambda + big_lambda + (INR s - 3) * L)%R]}.
+            with deadline := next_deadline s ]}.
 
 (** Advancing period propositions and user state update **)
 
@@ -680,22 +702,6 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
 Definition certify_result (pre : UState) : UState := advance_round pre.
 
 (** Timeout transitions **)
-
-(* The timer deadline value for the NEXT step following the given step value *)
-(* Note: k is zero-based and hence the apparent difference from the algorand paper.
-         The computed deadline values are exactly as given in the paper. *)
-(* Note: Updated to accommodate the 27March change *)
-Definition next_deadline k : R :=
-  match k with
-  (* deadline for step 1 *)
-  | 0 => 0
-  (* deadline for step 2 *)
-  | 1 => (2 * lambda)%R
-  (* deadline for step 3 *)
-  | 2 => (lambda + big_lambda)%R
-  (* deadlines for steps 4, 5, 6, ... *)
-  | n => (lambda + big_lambda + (INR n - 3) * L)%R
-  end.
 
 (* A user timeouts if a deadline is reached while waiting for some external messages
    (i.e. while observing softvotes in step 3) *)
@@ -803,6 +809,11 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   | nextvote_stv : forall uid (pre : UState) v v' b r p s,
       nextvote_stv_ok pre uid v b r p s /\ pre.(stv) p = Some v' ->
         uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val  v' s, r, p, uid)])
+
+  (* Steps >= 4: Finishing Step - no next-voting *)
+  | no_nextvote : forall uid (pre : UState) r p s,
+      no_nextvote_ok pre uid r p s ->
+      uid # pre ~> (nextvote_result pre s, [::])
 
   (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
   | timeout : forall uid (pre : UState),
@@ -1721,6 +1732,11 @@ inversion_clear utrH.
   rewrite addn1. by subst.
 - case: H => H v'H.
   case: H => tH [vH [vbH [svH oH]]].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by subst.
+- case: H => H [vH cH].
   case: vH => rH [pH sH].
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
