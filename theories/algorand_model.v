@@ -1049,30 +1049,16 @@ Qed.
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
 Proof.
-  unfold map_mset.
-  intro b.
-  generalize (mset0E b).
-  generalize (mset0 : {mset B}).
-  intro x.
-  intro Hx.
-  match goal with
-  | [ |- ?A = _] => replace A with (addn (x b) A) by (rewrite Hx;reflexivity)
-  end.
-  clear Hx.
-  generalize (EnumMset.f m). intro l. clear m.
-  revert x.
-
-  induction l;[intros;by apply addn0|].
-  intro x. simpl.
-  specialize (IHl (f a +` x)).
-  rewrite <- IHl.
-  clear IHl.
-  rewrite addnA.
-  f_equal.
-  rewrite mset1DE addnC.
-  f_equal.
-  f_equal. (* remove invisible coercion that was in the way *)
-  apply eq_sym.
+  rewrite /map_mset => b.
+  move: (mset0) (mset0E b) => x Hx.
+  set lh := count _ _.
+  have {Hx} ->: lh = (x b + lh)%nat by rewrite Hx.
+  rewrite /lh {lh}.
+  move: (EnumMset.f m) => l {m}.
+  move: l (x).
+  elim => //= x0 l IHl x1.
+  apply/eqP.
+  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym b).
 Qed.
 
 (* Recursively resets message deadlines of all the messages given *)
