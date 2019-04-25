@@ -30,32 +30,6 @@ Unset Printing Implicit Defensive.
 
 Require Import Lra.
 
-(** General Description of Assumptions in the Model
- **
-
-We generally list the assumptions made in this version of the model so far:
-
-- The set of users (identified by UserId) is finite
-- The set of values (Value) is finite
-- The system state gives each node its own clock but for now any transitions
-  that advance clocks will advance all the same amount
-- Deadlines are defined only for message delivery delays (local user actions
-  are instantaneous)
-- Messages are all broadcast messages. Network topologies are abstracted away
-  (no peer-to-peer channels). A user may broadcast a message, which may reach
-  all (honest) users at different times (guaranteed to arrive within the given
-  time bounds in the absence of network partitions).
-- We abstract over cyptographic and probabilistic computations (we assume
-  perfect cryptographic schemes, and probabilistic transitions are modeled as
-  non-deterministic transitions
-- We abstract over nonces that are assumed to be produced by an Oracle and assume
-  that randomness is unbiasable
-- Credentials are modeled by abstract totally ordered types (the interpretation
-  of a credential as an unsigned integer is not needed)
-
-**
-**)
-
 Section AlgoModel.
 
 (* We assume a finite set of users *)
@@ -63,9 +37,6 @@ Variable UserId : finType.
 
 (* And a finite set of values (blocks and block hashes) *)
 Variable Value : finType .
-
-(* An abstract representation of computing block hashes *)
-(* Variable hash : Value -> Value . *)
 
 (* An enumerated data type of all possible kinds of messages *)
 Inductive MType :=
@@ -318,9 +289,6 @@ Variable tau_b : nat.
 (* number of next-votes for a value to move to next period *)
 Variable tau_v : nat.
 
-(* upper bound on the credential to be part of the committee for step s *)
-(* this is no longer needed!! *)
-(* Variable chi   : nat -> nat. *)
 
 (** Helper functions/propositions for the user-state-level trnasitions **)
 
@@ -579,7 +547,6 @@ Definition no_certvote_ok (pre : UState) uid v b r p : Prop :=
    ~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
-(* nilp (certvals pre r p)) *)
 
 (* Certvoting step's resulting user state (successful case) *)
 (* The user has certvoted successfully, so move on to the next step and
@@ -692,7 +659,6 @@ Definition adv_period_val_result (pre : UState) v : UState :=
           - The requirement valid_rps has been removed since certification
             may happen at any time *)
 Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
-  (* valid_rps pre r p Nextvoting /\ *)
   exists b,
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
@@ -784,12 +750,6 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       certvote_ok pre uid v b r p ->
       uid # pre ~> (certvote_result pre, [:: (Certvote, val v, r, p, uid)])
 
-  (* Step 3: Certifying Step [success while NOT being a committee member]
-  | certvote2 : forall uid (pre : UState) v b r p,
-      certvote_ok pre v b r p -> ~ comm_cred_step uid r p 3 ->
-      uid # pre ~> (certvote_result pre true, [::])
-   *)
-
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall uid (pre : UState) v b r p,
       no_certvote_ok pre uid v b r p ->
@@ -844,40 +804,12 @@ Inductive UTransitionMsg : u_transition_msg_type :=
         certvote_ok pre' uid v b r p ->
         uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [:: (Certvote, val v, r, p, uid)])
 
-  (* Deliver a softvote and certvote for the value [non-committee member case] *)
-  (*
-  | deliver_softvote_certvote2 : forall uid (pre : UState) r p s i v b,
-      let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' uid v b r p -> ~ comm_cred_step uid r p s ->
-        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [::])
-   *)
-
-  (* Deliver a softvote and nextvote for the value *)
-  (* No longer needed after the 27March change *)
-  (*
-  | deliver_softvote_nextvote_val : forall (pre : UState) r p s i v b,
-      let pre' := set_softvotes pre r p (i, v) in
-        nextvote_val_ok pre' v b r p s ->
-        (* Note that this necessarily implies certvote_ok pre' v r p s cannot be true *)
-        (Some (Softvote, val v, r, p, i), pre) ~> (nextvote2_result pre' s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
-  *)
-
   (* Deliver a nextvote for bottom while not triggering any internal action *)
   | deliver_nextvote_open : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
       (* ~ nextvote_open_ok pre' v r p s -> *)
       ~ adv_period_open_ok pre' r p s ->
       uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (pre', [::])
-
-  (* Deliver a nextvote for bottom and do the nextvote_open action *)
-  (* No longer needed after the 27March change *)
-  (*
-    | deliver_nextvote_open_nextvote : forall (pre : UState) r p s i v,
-      let pre' := set_nextvotes_open pre r p s i in
-      	nextvote_open_ok pre' v r p s ->
-        ~ adv_period_open_ok pre' r p s ->
-        (Some (Nextvote_Open, step_val s, r, p, i), pre) ~>
-          (nextvote2_result pre' s, [:: (Nextvote_Open, step_val s, r, p, uid)]) *)
 
   (* Deliver a nextvote for bottom and advance the period *)
   (* Note: Advancing the period takes precedence over nextvote2_open actions *)
@@ -914,21 +846,6 @@ Inductive UTransitionMsg : u_transition_msg_type :=
       ~ vote_msg msg ->
       uid # pre ; msg ~> (deliver_nonvote_msg_result pre msg c r p, [::])
 where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
-
-(*
-Definition u_transition_type := UserId -> UState -> option Msg -> (UState * seq Msg) -> Prop.
-
-Reserved Notation "a # b -/ c ~> d" (at level 70).
-
-Inductive UTransition : u_transition_type :=
-| u_transition_msg : forall uid pre msg post,
-    uid # pre ; msg ~> post ->
-    uid # pre -/ (Some msg) ~> post
-| u_transition_internal : forall uid pre post,
-    uid # pre ~> post ->
-    uid # pre -/ None ~> post
-where "a # b -/ c ~> d" := (UTransition a b c d) : type_scope.
-*)
 
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
@@ -1089,33 +1006,6 @@ move => msgpool now uid h.
 have Hu := updf_update _ h.
 have Hu' := Hu (domf msgpool) _ h.
 by rewrite Hu'.
-Qed.
-
-(* Postpones the deadline of a message (extending its delivery delay) *)
-(* No longer used *)
-Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
-  let ext_deadline := (fst msg + r)%R in
-  (msgs `|` [mset (ext_deadline, msg.2)])%mset.
-
-(* Recursively postpones the deadlines of all the messages given *)
-(* No longer used *)
-Definition extend_user_msg_delays r msgs : {mset R * Msg} :=
-  foldl (extend_deadline r) mset0 msgs.
-
-(* Constructs a message pool with all deadlines postponed by rho *)
-(* No longer used *)
-Definition extend_msg_deadlines (msgpool : MsgPool) : MsgPool :=
-  updf msgpool (domf msgpool) (fun _ msgs => extend_user_msg_delays rho msgs).
-
-Lemma extend_msg_deadlines_domf : forall msgpool,
-  domf msgpool = domf (extend_msg_deadlines msgpool).
-Proof. by move => msgpool; rewrite -updf_domf. Qed.
-
-Lemma extend_msg_deadlines_updf : forall msgpool uid (h : uid \in domf msgpool),
-  (extend_msg_deadlines msgpool).[? uid] = Some (extend_user_msg_delays rho msgpool.[h]).
-Proof.
-move => msgpool uid h.
-by rewrite updf_update.
 Qed.
 
 (* Computes the state resulting from getting partitioned *)
@@ -1499,10 +1389,6 @@ Definition user_timers_valid : pred UState :=
 Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
   (0 <= us.(timer) <= us.(deadline))%R .
-  (* The following does not generally hold since step 2 does no update the deadline *)
-  (* It can be refined though to accommodate that *)
-  (* us.(deadline) = next_deadline(us.(step) - 1) . *)
-
 
 Definition sensible_gstate (gs : GState) : Prop :=
   (gs.(now) >= 0)%R /\
@@ -1566,16 +1452,6 @@ Proof.
   (* deliver nonvote msg needs some custom steps *)
   destruct msg as [[[[mtype ex_val] ?] ?] ?];
     destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
-  (* timeout - needs a lemma about next_deadline being monotone *)
-(*  split; first by assumption.
-  unfold timeout_ok in t. use_hyp t.
-
-  unfold next_deadline. subst.
-  intuition try lra.
-  admit. (* timer montone *)
-  replace (step + 1 - 1) with step by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ).
-  reflexivity.
-Admitted. *)
 Qed.
 
 (* The global transition relation preserves sensibility of global states *)
@@ -1620,7 +1496,6 @@ elim: Hc => tH [vH oH].
 elim: vH => rH [pH sH].
 by [].
 Qed.
-(*  (m, pre) ~> (post, (Certvote, v, r, p,id) :: ms) -> pre.(step) = 3. *)
 
 (* An honest user may soft-vote only at step 2 of a period *)
 (* Softvoting is enabled only at step 2 *)
