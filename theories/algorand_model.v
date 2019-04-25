@@ -1653,109 +1653,84 @@ Admitted.
 Lemma utransition_label_correctly : forall uid msg g1 g2,
     user_sent uid msg g1 g2 ->
     forall u, g1.(users).[? uid] = Some u ->
-     match msg with
-      | (Certvote,_,r_m,p_m,uid_m) =>
-        ((r_m > u.(round)) \/ (r_m = u.(round) /\ p_m >= u.(period)))
-          /\ uid_m = uid
-      | (_,v,r_m,p_m,uid_m) =>
-        r_m = u.(round) /\ p_m = u.(period) /\  uid_m = uid
-        /\ match v with
-           | val _ => True
-           | step_val s_m => s_m = u.(step)
-           | repr_val _ _ p_m => p_m = u.(period)
-           | next_val _ s_m => s_m = u.(step)
-           end
-      end.
-Proof.
-  intros uid msg g1 g2.
-  unfold user_sent.
-  case => [sent [[[d [body H_recv]]|H_step] msg_in]].
-  +
-  (* message delivery cases *)
-  change (msg \in sent:Prop) in msg_in.
-
-  unfold related_by in H_recv.
-  decompose record H_recv; clear H_recv.
-  rewrite in_fnd.
-  destruct msg. destruct p. destruct p. destruct p.
-  destruct g1;simpl in * |- *.
-
-  remember (x0,sent) as ustep_out in H.
-  clear H3 H0.
-  destruct H;injection Hequstep_out;clear Hequstep_out;intros <- <-;
-    try (exfalso;exact (notF msg_in));
-    match type of msg_in with
-    | is_true (_ \in [:: _]) =>
-      unfold in_mem in msg_in; simpl in msg_in;
-        rewrite Bool.orb_false_r in msg_in;
-        apply (elimT eqP) in msg_in;
-        injection msg_in;clear msg_in;
-        intros -> -> -> -> ->
+    match msg with
+    | (Certvote,_,r_m,p_m,uid_m) =>
+      ((r_m > u.(round)) \/ (r_m = u.(round) /\ p_m >= u.(period)))
+        /\ uid_m = uid
+    | (_,v,r_m,p_m,uid_m) =>
+      r_m = u.(round) /\ p_m = u.(period) /\  uid_m = uid
+      /\ match v with
+         | val _ => True
+         | step_val s_m => s_m = u.(step)
+         | repr_val _ _ p_m => p_m = u.(period)
+         | next_val _ s_m => s_m = u.(step)
+         end
     end.
-  * subst pre'.
-    destruct pre;unfold set_softvotes, certvote_ok in H;simpl in * |- *.
-    decompose record H.
-    clear -H0. unfold valid_rps in H0;simpl in H0.
-    case => //=.
-    move => corrupt0 round0 period0 step0 timer0 deadline0 p_start0 proposal0 stv0.
-    move => blocks0 softvotes0 certvotes0 nextvotes_open0 nextvotes_val0 has_certvoted0.
-    case; intros.
-    subst.
-    split => //.
-    move: H0 => [Hr1 [Hp1 Hs]].
-    subst.
-    by right.
-  * subst pre'.
-    destruct pre;unfold set_certvotes, certify_ok in H;simpl in * |- *.
-    decompose record H.
-    clear -H0. unfold advancing_rp in H0; simpl in H0.
-    case => //=.
-    move => corrupt0 round0 period0 step0 timer0 deadline0 p_start0 proposal0 stv0.
-    move => blocks0 softvotes0 certvotes0 nextvotes_open0 nextvotes_val0 has_certvoted0.
-    case; intros.
-    subst.
-    split => //.
-    case: H0; first by left.
-    move => [Hr Hp].
-    right.
-    by split.
-  +
-    (* internal transition cases *)
-    change (msg \in sent:Prop) in msg_in.
+Proof.
+  move=> uid msg g1 g2.
+  rewrite /user_sent.
+  move => [sent [H_trans msg_in]] u H_u.
+  change (msg \in sent:Prop) in msg_in.
+  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: H_trans => [[d [body H_recv]]|H_step].
+  * (* message delivery cases *)
+  destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
+                     & key_mailbox & H_msg_in_mailbox & ->).
+  destruct g1;simpl in * |- *.
+  rewrite in_fnd in H_u. injection H_u;clear H_u. intros <-.
 
-    unfold related_by in H_step.
-    decompose record H_step; clear H_step.
-    rewrite in_fnd.
-    destruct msg. destruct p. destruct p. destruct p.
+  remember (ustate_post,sent) as ustep_out in H_step.
+  destruct H_step;injection Hequstep_out;clear Hequstep_out;intros <- <-;
+  try (exfalso;exact (notF msg_in));
+  match type of msg_in with
+  | is_true (_ \in [:: _]) =>
+    unfold in_mem in msg_in; simpl in msg_in;
+      rewrite Bool.orb_false_r in msg_in;
+      apply (elimT eqP) in msg_in;
+      injection msg_in;clear msg_in;
+      intros -> -> -> -> ->
+  end;
+  match goal with [x : UState |- _] =>
+  match goal with [x' := context C [?f x] |- _] =>
+  match goal with [H : context C [?g x'] |- _] =>
+     destruct x;subst x';unfold f,g in H;simpl in H;
+     decompose record H;clear H
+  end
+  end
+  end;
+  match goal with
+  | [H : valid_rps _ _ _ _ |- _] => move:H;unfold valid_rps
+  | [H : advancing_rp _ _ _ |- _] => move:H;unfold advancing_rp
+  end;simpl;clear;
+    by intuition;subst;intuition.
+  * (* internal transition cases *)
+    destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
     destruct g1;simpl in * |- *.
+    rewrite in_fnd in H_u;injection H_u;clear H_u. intros <-.
+    move/Iter.In_mem in msg_in.
+    clear -msg_in H_step.
 
-    Ltac use_pre_hyp pre := match goal with
-      | [H : context C [?F pre] |- _] =>
-        try (
-        clear H;
-          match goal with
-          | [H : context C [_ pre] |- _] => fail 2
-          | _ => idtac
-          end;fail);
-        unfold F in H;decompose record H;clear H
-      end.
+    remember (ustate_post,sent) as ustep_out in H_step;
+    destruct H_step;
+    injection Hequstep_out;clear Hequstep_out;intros <- <-;
+    let rec use_mem H :=
+      first [exfalso;exact H
 
-    clear H H2.
-    apply (elimT (Iter.In_mem _ _)) in msg_in.
-
-    Ltac splitting H :=
-        first [exfalso;exact H|
-               destruct H as [H | H];[|splitting H]].
-
-    remember (x0,sent) as ustep_out in H0.
-    move => u; case =><-.
-    destruct H0;injection Hequstep_out;clear Hequstep_out;intros <- <-;
-    splitting msg_in;injection msg_in;intros <- <- <- <- <-; clear msg_in;
-    use_pre_hyp pre;
-    try solve [
-      match goal with [H : valid_rps ?pre _ _ _ |- _] =>
-        clear -H;unfold valid_rps in H;destruct pre;simpl in * |- *;intuition;subst;intuition
-      end].
+      |destruct H as [H|H];[injection H as <- <- <- <- <-|use_mem H]]
+    in use_mem msg_in;
+    match goal with
+    | [pre : UState |- _] =>
+      is_var pre;
+        match goal with
+        |[H : context C [?f pre] |- _] =>
+         unfold f in H;decompose record H;
+           match goal with
+           | [H:valid_rps _ _ _ _ |- _] => unfold valid_rps in H;clear -H pre
+           | [H:advancing_rp _ _ _ |- _] => unfold advancing_rp in H;clear -H pre
+           end;
+           destruct pre;simpl in * |- *
+        end
+    end;by intuition;subst;intuition.
 Qed.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
