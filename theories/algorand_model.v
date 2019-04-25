@@ -892,6 +892,23 @@ Inductive UTransition : u_transition_type :=
 where "a # b -/ c ~> d" := (UTransition a b c d) : type_scope.
 *)
 
+(* Gather all the unfoldings we might want for working with transitions into
+   a hint database for use with autounfold *)
+Create HintDb utransition_unfold discriminated.
+Hint Unfold
+     (* UTransitionInternal *)
+     propose_ok repropose_ok no_propose_ok propose_result
+     softvote_new_ok softvote_repr_ok no_softvote_ok softvote_result
+     certvote_ok no_certvote_ok certvote_result
+     nextvote_val_ok nextvote_open_ok nextvote_stv_ok nextvote_result
+     timeout_ok timeout_result
+     (* UTransitionMsg *)
+     set_softvotes certvote_ok certvote_result
+     set_nextvotes_open adv_period_open_ok
+     set_nextvotes_val adv_period_val_ok adv_period_result
+     set_certvotes certify_ok certify_result
+     deliver_nonvote_msg_result : utransition_unfold.
+
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
 
@@ -1229,6 +1246,15 @@ Inductive GTransition : g_transition_type :=
 (* Adversary action - send out a message *)
 
 where "x ~~> y" := (GTransition x y) : type_scope.
+
+Create HintDb gtransition_unfold discriminated.
+Hint Unfold
+     tick_ok tick_update tick_users
+     delivery_result
+     step_result
+     is_partitioned recover_from_partitioned
+     is_unpartitioned make_partitioned
+     corrupt_user_result : gtransition_unfold.
 
 Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
   match drop n path with
