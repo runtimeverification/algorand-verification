@@ -2223,12 +2223,65 @@ elim => //.
   by case =>-> => Hcorrupt; case =>->; right; right.
 Qed.
 
+Lemma ustate_after_transitive :
+  forall us1 us2 us3,
+    ustate_after us1 us2 ->
+    ustate_after us2 us3 ->
+    ustate_after us1 us3.
+Proof.
+move => us1 us2 us3.
+case: us1; case: us2; case: us3; rewrite /ustate_after /=; intros.
+intuition.
+- by left; eapply ltn_trans; eauto.
+- by left; subst.
+- by left; subst.
+- by left; subst.
+- by left; subst.
+- right; left; subst; split => //.
+  by eapply ltn_trans; eauto.
+- by right; left; subst.
+- by right; left; subst.
+- right; right; subst; split; split => //.
+  by eapply leq_trans; eauto.
+Qed.  
+
+Lemma gtrans_domf_users : forall gs1 gs2,
+  gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
+Proof.
+Admitted.
+
 (* Generalization of non-decreasing round-period-step results to paths *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
   greachable g1 g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
-Admitted.
+Proof.
+move => g1 g2 uid us1 us2.
+case => gtrace Hpath Hlast.
+set GS := global_state.GState UserId UState [choiceType of Msg].
+set users : GS -> _ := global_state.users _ _ _.
+elim: gtrace g1 g2 uid us1 us2 Hpath Hlast => //=.
+  move => g1 g2 uid us1 us2 Htr ->->; case =>->.
+  by right; right.
+move => g gtrace IH.
+move => g1 g2 uid us1 us2.
+move/andP => [Htrans Hpath] Hlast Hg1 Hg2.
+move/asboolP: Htrans => Htrans.
+case Hg: (users g).[? uid] => [u|].
+  have IH' := IH _ _ _ _ _ Hpath Hlast Hg Hg2.
+  have Haft := gtr_rps_non_decreasing Htrans Hg1 Hg.
+  move: Haft IH'.
+  exact: ustate_after_transitive.
+move/gtrans_domf_users: Htrans => Hdomf.
+case Hd: (uid \in domf (users g1)); last first.
+  by move/negP/negP: Hd => Hd; move: Hg1; rewrite not_fnd.
+move/idP: Hd => Hd.
+move: Hdomf.
+move/fsubsetP => Hsub.
+move: Hd; move/Hsub => Hdom.
+move: Hg.
+by rewrite in_fnd.
+Qed.
 
 (* A user has certvoted a value for a given period along a given path *)
 Definition certvoted_in_path_at ix path uid r p v : Prop :=
