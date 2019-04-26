@@ -2159,7 +2159,69 @@ Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
 Proof.
-Admitted.
+move => g1 g2 uid us1 us2.
+elim => //.
+- move => increment pre Htick.
+  set users : GState -> _ := global_state.users _ _ _.
+  move => Hu.
+  case Hd: (uid \in domf (users pre)); last first.
+    by move/negP/negP: Hd => Hd; move: Hu; rewrite not_fnd.
+  rewrite tick_users_upd //.
+  case =><-; move: Hu.
+  rewrite in_fnd; case =>->.
+  rewrite /user_advance_timer /= /ustate_after /=.  
+  by case: ifP => //=; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => msg_key [r m] Hpend key_ustate ustate_post sent Hloc.
+  move/utr_rps_non_decreasing_msg => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => ustate_key Hloc ustate_post sent.
+  move/utr_rps_non_decreasing_internal => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-; rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0 ustate_key.  
+  set users : GS -> _ := global_state.users _ _ _.
+  move => Hcorrupt Hst; move: Hst Hcorrupt.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.  
+    rewrite in_fnd //.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    rewrite -/(users pre).
+    by case =>-> => Hcorrupt; case =><-; right; right.
+  rewrite fnd_set /= Huid_eq -/(users pre).
+  by case =>-> => Hcorrupt; case =>->; right; right.
+Qed.
 
 (* Generalization of non-decreasing round-period-step results to paths *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
