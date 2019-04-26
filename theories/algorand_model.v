@@ -2061,7 +2061,7 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     g2 = last g0 path_seq ->
     g1 = last g0 (drop 1 path_seq) ->
     user_honest uid g1 ->
-    user_stv_none uid g1 p ->
+    user_stv_val uid g1 p None ->
     (exists v, certvoted_in_path path_seq uid r p v
                \/ period_advance_at 1 path_seq uid r p g1 g2) .
 Admitted.
