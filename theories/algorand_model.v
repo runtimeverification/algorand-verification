@@ -1868,8 +1868,8 @@ Definition state_before_round r (g:GState) : Prop :=
 Definition user_honest (uid:UserId) (g:GState) : bool :=
   if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
-Definition user_stv_none (uid:UserId) (g:GState) (p:nat) : bool :=
-  if g.(users).[? uid] is Some ustate then ustate.(stv) p == None else false.
+Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
+  if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
 
 (* D1: an honest node enters a period exclusively for value v *)
 (* if it enters the period with starting value $v$ *)
@@ -2023,7 +2023,34 @@ Lemma prop_a : forall g0 g1 path_seq r uid v b,
     path gtransition g0 path_seq ->
     g1 = last g0 path_seq ->
     leader_in_path g0 g1 r 1 uid v b ->
+    user_honest uid g1 ->
     certified_in_period path_seq r 1 v.
+Admitted.
+
+(* If some period r.p, p >= 2 is reached with unique starting value bot and the
+   leader is honest, then the leader’s proposal is certified. *)
+(* TODO: all users need starting value bot or just leader? *)
+Lemma prop_c : forall g0 g1 path_seq r p uid v b,
+    path gtransition g0 path_seq ->
+    g1 = last g0 path_seq ->
+    p >= 2 ->
+    all (fun u => user_stv_val u g1 p None) (domf g1.(users)) ->
+    leader_in_path g0 g1 r p uid v b ->
+    user_honest uid g1 ->
+    certified_in_period path_seq r p v.
+Admitted.
+
+(* If some period r.p with p >= 2 is reached, and all honest users have starting
+   value H(B), then a certificate for H(B) that period is produced by the honest
+   users. *)
+(* TODO: need to say quorum for certificate is only *honest* users? *)
+Lemma prop_e : forall g0 g1 path_seq r p v b,
+    path gtransition g0 path_seq ->
+    g1 = last g0 path_seq ->
+    p >= 2 ->
+    valid_block_and_hash b v ->
+    all (fun u => user_stv_val u g1 p (Some v)) (domf g1.(users)) ->
+    certified_in_period path_seq r p v.
 Admitted.
 
 (* If any honest user is in period r.p with starting value bottom, then within
