@@ -2248,7 +2248,18 @@ Qed.
 Lemma gtrans_domf_users : forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
 Proof.
-Admitted.
+move => gs1 gs2.
+elim => //.
+- move => increment pre Htick.
+  apply/fsubsetP => x Hd.
+  by rewrite -tick_users_domf.
+- move => pre uid msg_key pending Hpending key_ustate ustate_post sent Hcorrupt Huser /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+- move => pre uid ustate_key Hcorrupt ustate_post sent Huser /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+- move => pre uid ustate_key Hcorrupt /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+Qed.
 
 (* Generalization of non-decreasing round-period-step results to paths *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
