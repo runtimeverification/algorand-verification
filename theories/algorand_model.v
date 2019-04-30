@@ -2164,9 +2164,16 @@ elim => //.
 - set GS := global_state.GState UserId UState [choiceType of Msg].
   move => pre uid0.
   set users : GS -> _ := global_state.users _ _ _.
-  by admit.
-- by admit.
-Admitted.
+  move => ustate_key m Hc Hm.
+  rewrite /= =>->; case =>->.
+  by right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre sender.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => sender_key r p s mtype mval target target_key Hc Hhave Hcomm Hmatch.
+  rewrite /= =>->; case =>->.
+  by right; right.
+Qed.
 
 Lemma ustate_after_transitive :
   forall us1 us2 us3,
