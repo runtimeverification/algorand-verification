@@ -723,7 +723,7 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 1: Block Proposal [Reproposal] *)
   | repropose : forall uid (pre : UState) v b r p,
       repropose_ok pre uid v b r p ->
-      uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid) ; (Block, val b, r, p, uid)])
+      uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid)])
 
   (* Step 1: Block Proposal [failure] *)
   | no_propose : forall uid (pre : UState) v b r p,
@@ -1246,6 +1246,14 @@ Definition user_sent uid (m : Msg) (pre post : GState) : Prop :=
   ((exists d incoming, related_by (lbl_deliver uid d incoming ms) pre post)
   \/ (related_by (lbl_step_internal uid ms) pre post))
   /\ msg_list_includes m ms.
+
+(* generalizes user_sent above -- didn't want to touch the one above yet *)
+Definition user_sent_msgs uid (ms : seq Msg) (pre post : GState) : Prop :=
+  exists ms',
+  ((exists d incoming, related_by (lbl_deliver uid d incoming ms') pre post)
+  \/ (related_by (lbl_step_internal uid ms') pre post))
+  /\ subseq ms ms'.
+
 
 Lemma transitions_labeled: forall g1 g2,
     g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
@@ -1868,6 +1876,12 @@ Definition state_before_round r (g:GState) : Prop :=
 Definition user_honest (uid:UserId) (g:GState) : bool :=
   if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
+Definition user_honest_at ix path uid : bool :=
+  match drop ix path with
+  | g1 :: _ => user_honest uid g1
+  | _ => false
+  end.
+
 Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
   if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
 
@@ -2002,34 +2016,39 @@ Qed.
 
 (* LIVENESS *)
 
-(* An user has proposed a block for a given round/period *)
-Definition proposed_block_in_path r p uid v b us1 us2 id ms : Prop :=
-  (committee_cred (credential uid r p 1)) /\
-  valid_block_and_hash b v /\
-  us1.(period) = p /\ us2.(period) = p /\
-  uid # us1 ~> (us2, (Proposal, val v, r, p, id) :: (Block, val b, r, p, id) :: ms).
+(* A user has (re-)proposed a value/block for a given round/period along a
+   given path *)
+Definition proposed_in_path_at ix path uid r p v b : Prop :=
+  exists g1 g2, step_in_path_at g1 g2 ix path /\ 
+    (user_sent_msgs uid [:: (Proposal, val v, r, p, uid); (Block, val b, r, p, uid)] g1 g2
+    \/ user_sent_msgs uid [:: (Reproposal, repr_val v uid p, r, p, uid)] g1 g2).
 
-(* An block proposer is *the* leader for a given round/period along a given path *)
-Definition leader_in_path g0 g r p uid v b : Prop :=
-  exists g1 g2 us1 us2 id ms,
-  greachable g0 g1 /\ g1.(users).[? uid] = Some us1 /\
-  greachable g2 g  /\ g2.(users).[? uid] = Some us2 /\
-  proposed_block_in_path r p uid v b us1 us2 id ms /\
-  leader_prop_value v (us2.(proposals) r p).
+(* A block proposer (potential leader) for a given round/period along a path*)
+Definition block_proposer_in_path_at ix path uid r p v b : Prop :=
+  uid \in committee r p 1 /\
+  valid_block_and_hash b v /\
+  proposed_in_path_at ix path uid r p v b.
+
+(* The block proposer (the leader) for a given round/period along a path*)
+Definition leader_in_path_at ix path uid r p v b : Prop :=
+  block_proposer_in_path_at ix path uid r p v b /\
+  forall id, id \in committee r p 1 /\ id <> uid -> 
+    (credential uid r p 1 < credential id r p 1)%O.
 
 (* If the block proposer of period r.1 is honest, then a certificate for round r
 is produced at period r.1 *)
-Lemma prop_a : forall g0 g1 path_seq r uid v b,
-    path gtransition g0 path_seq ->
-    g1 = last g0 path_seq ->
-    leader_in_path g0 g1 r 1 uid v b ->
-    user_honest uid g1 ->
-    certified_in_period path_seq r 1 v.
+(* Need the assumption of no partition?? *)
+Lemma prop_a : forall ix path uid r v b,
+  leader_in_path_at ix path uid r 1 v b -> 
+  user_honest_at ix path uid ->
+  certified_in_period path r 1 v.
+Proof.
 Admitted.
 
 (* If some period r.p, p >= 2 is reached with unique starting value bot and the
    leader is honest, then the leader’s proposal is certified. *)
 (* TODO: all users need starting value bot or just leader? *)
+(* 
 Lemma prop_c : forall g0 g1 path_seq r p uid v b,
     path gtransition g0 path_seq ->
     g1 = last g0 path_seq ->
@@ -2039,6 +2058,7 @@ Lemma prop_c : forall g0 g1 path_seq r p uid v b,
     user_honest uid g1 ->
     certified_in_period path_seq r p v.
 Admitted.
+*)
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
    value H(B), then a certificate for H(B) that period is produced by the honest
@@ -2065,6 +2085,7 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     (exists v, certvoted_in_path path_seq uid r p v
                \/ period_advance_at 1 path_seq uid r p g1 g2) .
 Admitted.
+
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
 (*
 Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset UserId}) path :=
