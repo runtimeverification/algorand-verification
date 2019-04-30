@@ -1,3 +1,5 @@
+Require Import Lra.
+
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
@@ -27,8 +29,6 @@ Require Import local_state global_state.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
-
-Require Import Lra.
 
 Section AlgoModel.
 
@@ -315,6 +315,9 @@ Definition vote_msg (msg : Msg) : Prop :=
 (* Does the given round/period/step match the ones stored in the user state? *)
 Definition valid_rps (u : UState) r p s : Prop :=
   u.(round) = r /\ u.(period) = p /\ u.(step) = s .
+
+Definition advancing_rp (u : UState) r p : Prop :=
+  u.(round) < r \/ u.(round) = r /\ u.(period) <= p.
 
 (* Is the vote x for this value v? *)
 Definition matchValue (x : Vote) (v : Value) : bool :=
@@ -658,7 +661,9 @@ Definition adv_period_val_result (pre : UState) v : UState :=
 (* Notes: - Corresponds to transition certify in the automaton model
           - The requirement valid_rps has been removed since certification
             may happen at any time *)
+(* TODO - must have some assertion about message age *)
 Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
+  advancing_rp pre r p /\
   exists b,
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
@@ -847,6 +852,23 @@ Inductive UTransitionMsg : u_transition_msg_type :=
       uid # pre ; msg ~> (deliver_nonvote_msg_result pre msg c r p, [::])
 where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
 
+(* Gather all the unfoldings we might want for working with transitions into
+   a hint database for use with autounfold *)
+Create HintDb utransition_unfold discriminated.
+Hint Unfold
+     (* UTransitionInternal *)
+     propose_ok repropose_ok no_propose_ok propose_result
+     softvote_new_ok softvote_repr_ok no_softvote_ok softvote_result
+     certvote_ok no_certvote_ok certvote_result
+     nextvote_val_ok nextvote_open_ok nextvote_stv_ok nextvote_result
+     timeout_ok timeout_result
+     (* UTransitionMsg *)
+     set_softvotes certvote_ok certvote_result
+     set_nextvotes_open adv_period_open_ok
+     set_nextvotes_val adv_period_val_ok advance_period
+     set_certvotes certify_ok certify_result
+     deliver_nonvote_msg_result : utransition_unfold.
+
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
 
@@ -927,7 +949,7 @@ Definition msg_deadline (msg : Msg) now : R :=
   end.
 
 Definition merge_msg_deadline (now : R) (msg : Msg) (_ : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
-  msetU [mset (msg_deadline msg now, msg)] v.
+  (msg_deadline msg now, msg) +` v.
 
 Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
   updf prev_msgs targets (merge_msg_deadline now msg).
@@ -935,10 +957,19 @@ Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) 
 Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
   foldl (send_broadcast now targets) prev_msgs msgs.
 
+Lemma send_broadcasts_domf : forall deadline targets prev_msgs msgs uids,
+    domf prev_msgs `<=` uids ->
+    targets `<=` uids ->
+    domf (send_broadcasts deadline targets prev_msgs msgs) `<=` uids.
+Admitted.
+
 (* Returns true if the given user id is found in the map and the user state
    corresponding to that id is for a corrupt user *)
 Definition is_user_corrupt (uid : UserId) (users : {fmap UserId -> UState}) : bool :=
   if users.[? uid] is Some u then u.(corrupt) else false.
+
+Definition is_user_corrupt_gstate (uid : UserId) (g : GState) : bool :=
+  is_user_corrupt uid (g.(users)).
 
 (* Returns the given users map restricted to honest users only *)
 Definition honest_users (users : {fmap UserId -> UState}) :=
@@ -979,16 +1010,77 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
 
+Definition new_deadline now cur_deadline msg : R :=
+  let max_deadline := msg_deadline msg now in
+  Rmax cur_deadline max_deadline.
+
 (* Resets the deadline of a message having a missed deadline *)
-Definition reset_deadline now (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
-  let cur_deadline := fst msg in
-  let max_deadline := msg_deadline (snd msg) now in
-  let new_deadline := if (Rgtb now cur_deadline) then max_deadline else cur_deadline in
-  (msgs `|` [mset (new_deadline, msg.2)])%mset.
+Definition reset_deadline now (msg : R * Msg) : R * Msg :=
+  (new_deadline now msg.1 msg.2, msg.2).
+
+Definition map_mset {A B : choiceType} (f : A -> B) (m : {mset A}) : {mset B} :=
+  foldl (fun m x => f x +` m) mset0 m.
+
+Lemma map_mset_count_inj {A B :choiceType} (f: A -> B) (m : {mset A}) :
+  injective f -> forall (a :A), m a = (map_mset f m) (f a).
+Proof.
+  rewrite /map_mset => H_inj a.
+  move: (mset0) (mset0E (f a)) => x Hx.
+  have ->: m a = ((x (f a) + (count_mem a) m))%nat.
+  rewrite Hx.
+  symmetry; apply count_mem_mset.
+  move: (EnumMset.f m) => l {m}.
+  move: l x {Hx}.
+  elim => //= x l IHl x0.
+  apply/eqP.
+  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym x) (eqtype.inj_eq H_inj).
+Qed.
+
+Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
+  forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
+Proof.
+  rewrite /map_mset => b.
+  move: (mset0) (mset0E b) => x Hx.
+  set lh := count _ _.
+  have {Hx} ->: lh = (x b + lh)%nat by rewrite Hx.
+  rewrite /lh {lh}.
+  move: (EnumMset.f m) => l {m}.
+  move: l (x).
+  elim => //= x0 l IHl x1.
+  apply/eqP.
+  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym b).
+Qed.
 
 (* Recursively resets message deadlines of all the messages given *)
 Definition reset_user_msg_delays msgs now : {mset R * Msg} :=
-  foldl (reset_deadline now) mset0 msgs .
+  map_mset (reset_deadline now) msgs.
+
+Lemma reset_msg_delays_fwd : forall (msgs : {mset R * Msg}) (m : R * Msg),
+    m \in msgs -> forall now, (reset_deadline now m \in reset_user_msg_delays msgs now).
+Proof.
+  move => msgs m Hm now.
+  rewrite -has_pred1 /= has_count.
+  have Hcnt: (0 < count_mem m msgs) by rewrite -has_count has_pred1.
+  eapply leq_trans;[eassumption|clear Hcnt].
+  rewrite (count_mem_mset (reset_deadline now m) (reset_user_msg_delays msgs now)).
+  rewrite /reset_user_msg_delays -map_mset_count.
+  apply sub_count.
+  by move => H /= /eqP ->.
+Qed.
+
+Lemma reset_user_msg_delays_rev (now : R) (msgs : {mset R * Msg}) (m: R*Msg):
+  m \in reset_user_msg_delays msgs now ->
+  exists d0, m = reset_deadline now (d0,m.2) /\ (d0,m.2) \in msgs.
+Proof.
+  move => Hm.
+  suff: (has (preim (reset_deadline now) (pred1 m)) msgs).
+    move: m Hm => [d msg] Hm.
+    move/hasP => [[d0 msg0] H_mem H_preim].
+    move: H_preim; rewrite /preim /pred1 /= /reset_deadline /=.
+    case/eqP => Hn Hd; rewrite -Hd -Hn.
+    by exists d0; split.
+  by rewrite has_count map_mset_count -count_mem_mset -has_count has_pred1.
+Qed.
 
 (* Constructs a message pool with all messages having missed delivery deadlines
    updated appropriately based on the message type *)
@@ -1007,6 +1099,22 @@ have Hu := updf_update _ h.
 have Hu' := Hu (domf msgpool) _ h.
 by rewrite Hu'.
 Qed.
+
+Lemma reset_msg_delays_notin : forall (msgpool : MsgPool) now uid
+  (h : uid \notin domf msgpool),
+  (reset_msg_delays msgpool now).[? uid] = None.
+Proof.
+  move => msgpool now uid h.
+  apply not_fnd.
+  change (uid \notin domf (reset_msg_delays msgpool now)).
+  unfold reset_msg_delays.
+  by rewrite -updf_domf.
+Qed.
+
+(* Postpones the deadline of a message (extending its delivery delay) *)
+Definition extend_deadline r (msgs : {mset R * Msg}) (msg : R * Msg) : {mset R * Msg} :=
+  let ext_deadline := (fst msg + r)%R in
+  (msgs `+` [mset (ext_deadline, msg.2)])%mset.
 
 (* Computes the state resulting from getting partitioned *)
 (* Note: this no longer injects extended message delays (see the tick rule) *)
@@ -1134,6 +1242,15 @@ Inductive GTransition : g_transition_type :=
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
+Create HintDb gtransition_unfold discriminated.
+Hint Unfold
+     tick_ok tick_update tick_users
+     delivery_result
+     step_result
+     is_partitioned recover_from_partitioned
+     is_unpartitioned make_partitioned
+     corrupt_user_result : gtransition_unfold.
+
 Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
   match drop n path with
   | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
@@ -1204,13 +1321,13 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
   | lbl_tick increment =>
       tick_ok increment pre /\ post = tick_update increment pre
-  | lbl_deliver uid deadline msg sent =>
-      exists (key_mailbox : uid \in pre.(msg_in_transit)),
-      (deadline,msg) \in pre.(msg_in_transit).[key_mailbox]
-      /\ exists (key_ustate : uid \in pre.(users)) ustate_post,
-        ~ pre.(users).[key_ustate].(corrupt) /\
-        uid # pre.(users).[key_ustate] ; msg ~> (ustate_post,sent)
-        /\ post = delivery_result pre uid key_mailbox (deadline,msg) ustate_post sent
+  | lbl_deliver uid deadline delivered_msg sent =>
+      exists (key_ustate : uid \in pre.(users)) ustate_post,
+         uid # pre.(users).[key_ustate] ; delivered_msg ~> (ustate_post,sent)
+         /\ ~ pre.(users).[key_ustate].(corrupt)
+      /\ exists (key_mailbox : uid \in pre.(msg_in_transit)),
+           (deadline,delivered_msg) \in pre.(msg_in_transit).[key_mailbox]
+           /\ post = delivery_result pre uid key_mailbox (deadline,delivered_msg) ustate_post sent
   | lbl_step_internal uid sent =>
       exists (key_user : uid \in pre.(users)) ustate_post,
       ~ pre.(users).[key_user].(corrupt) /\
@@ -1241,10 +1358,10 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
 Definition msg_list_includes (m : Msg) (ms : seq Msg) : Prop :=
   m \in ms.
 
-Definition user_sent uid (m : Msg) (pre post : GState) : Prop :=
+Definition user_sent sender (m : Msg) (pre post : GState) : Prop :=
   exists ms,
-  ((exists d incoming, related_by (lbl_deliver uid d incoming ms) pre post)
-  \/ (related_by (lbl_step_internal uid ms) pre post))
+  ((exists d incoming, related_by (lbl_deliver sender d incoming ms) pre post)
+  \/ (related_by (lbl_step_internal sender ms) pre post))
   /\ msg_list_includes m ms.
 
 (* generalizes user_sent above -- didn't want to touch the one above yet *)
@@ -1272,7 +1389,6 @@ Proof.
     exists (lbl_forge_msg sender r p mtype mval target);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
-
 Qed.
 
 (* This predicate says a particular step on the path
@@ -1334,6 +1450,203 @@ Proof.
   clear -H. decompose record H;eauto.
 Qed.
 
+Ltac unfold_step_result :=
+  unfold tick_update, tick_users.
+
+Lemma corrupt_preserved_ustep_msg : forall uid upre msg upost,
+    uid # upre ; msg ~> upost ->
+    upre.(corrupt) -> upost.1.(corrupt).
+Proof.
+  destruct 1;simpl;try done.
+  * (* Only one case remains *)
+  unfold deliver_nonvote_msg_result;simpl.
+  destruct msg as [[[[? ?] ?] ?] ?];simpl.
+  destruct e;[destruct m|..];unfold set_blocks,set_proposals;simpl;done.
+Qed.
+
+Lemma corrupt_preserved_ustep_internal : forall uid upre upost,
+    uid # upre ~> upost ->
+    upre.(corrupt) -> upost.1.(corrupt).
+Proof.
+  by destruct 1.
+Qed.
+
+Lemma corrupt_preserved_gstep : forall (g1 g2 : GState),
+    GTransition g1 g2 ->
+    forall uid, is_user_corrupt_gstate uid g1 ->
+                is_user_corrupt_gstate uid g2.
+Proof.
+  move => g1 g2 Hstep uid.
+  destruct Hstep;unfold is_user_corrupt_gstate;destruct pre;
+    unfold_step_result;simpl in * |- *;try done;unfold is_user_corrupt.
+  + (* step_tick *)
+  destruct (fndP users uid);[|by (intro;exfalso)];
+  rewrite updf_update;[by destruct (users.[kf]),corrupt|assumption].
+  + (* step_deliver_msg UTransitionMsg *)
+  rewrite fnd_set.
+  destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
+  subst uid0;rewrite (in_fnd key_ustate);simpl.
+  intro; eapply corrupt_preserved_ustep_msg in H1;assumption.
+  + (* step_internal UTransitionInternal *)
+  rewrite fnd_set.
+  destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
+  subst uid0;rewrite (in_fnd ustate_key);simpl.
+  intro; apply corrupt_preserved_ustep_internal in H0;assumption.
+  + (* step_corrupt_user *)
+  rewrite fnd_set.
+  destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
+  simpl. trivial.
+Qed.
+
+Lemma honest_monotone : forall (p : seq GState) (g0 : GState) uid,
+    path gtransition g0 p ->
+    ~~ is_user_corrupt_gstate uid (last g0 p) ->
+    all (fun g => ~~ is_user_corrupt_gstate uid g) p.
+Proof.
+  intros p g0 uid. revert p.
+  induction p using last_ind;[done|].
+  rewrite rcons_path last_rcons all_rcons.
+  move => /andP [Hpath Hstep] H_x. apply /andP;split;[assumption|].
+  apply IHp. assumption. revert H_x.
+  apply contraNN. apply corrupt_preserved_gstep. apply /asboolP. assumption.
+Qed.
+
+Lemma path_steps : forall {T} (R : rel T) (P : pred T) x0 p,
+    path R x0 p ->
+    ~~ P x0 -> P (last x0 p) ->
+    exists n,
+      match drop n (x0 :: p) with
+      | x1 :: x2 :: _ => ~~ P x1 && P x2
+      | _ => false
+      end.
+Proof.
+  intros T R P x0 p H_path H_x0.
+  revert p H_path. induction p using last_ind.
+  * simpl. intros _ H_b. exfalso. revert H_b. apply /negP. assumption.
+  * rewrite last_rcons. rewrite rcons_path.
+    move => /andP [H_path H_step] H_x.
+    destruct (P (last x0 p)) eqn:H_last.
+  + destruct IHp as [n' Hind];[done..|]. exists n'.
+    destruct n';simpl in Hind |- *. destruct p;[by exfalso|assumption].
+    destruct (ltnP n' (size p));[|by (rewrite drop_oversize in Hind)].
+    rewrite drop_rcons;[destruct (drop n' p) as [|? [|]];[done..|tauto]|].
+    apply ltnW;assumption.
+  + clear IHp. exists (size p).
+    destruct (size p) eqn:H_size. simpl.
+    rewrite (size0nil H_size) in H_last |- *. simpl. by apply/andP.
+    simpl.
+    rewrite (drop_nth x0).
+    rewrite <- cats1, <- H_size.
+    rewrite drop_size_cat;[|reflexivity].
+    rewrite nth_cat.
+    rewrite H_size ltnSn.
+    change n with (n.+1.-1).
+    rewrite <- H_size, nth_last, H_last.
+    simpl. assumption.
+    rewrite size_rcons H_size.
+    rewrite ltnS. apply leqnSn.
+Qed.
+
+(* This proof will need to be adjusted once the adversary can
+   replay messages *)
+Lemma send_step_sent : forall (g0 g1:GState) (target:UserId) msg,
+    match g0.(msg_in_transit).[? target] with
+    | Some mailbox => forall d, (d,msg) \notin mailbox
+    | None => True
+    end ->
+    match g1.(msg_in_transit).[? target] with
+    | Some mailbox => exists d, (d,msg) \in mailbox
+    | None => False
+    end ->
+    GTransition g0 g1 ->
+    let (_,sender) := msg in
+    ~~is_user_corrupt_gstate sender g0 ->
+    user_sent sender msg g0 g1.
+Proof.
+  intros g0 g1 target msg H_unsent_g0 H_sent_g1.
+  destruct 1;
+    try solve[
+              exfalso;
+    destruct pre;simpl in * |- *;
+    destruct (msg_in_transit.[? target]);[|assumption];
+    match goal with
+    | [H_sent : exists d, is_true ((d,?msg) \in ?m)
+       ,H_unsent : forall d, is_true ((d,?msg) \notin ?m) |- _] =>
+      destruct H_sent as [d H_sent];revert H_sent;apply /negP;by apply H_unsent
+    end].
+  * (* deliver step *)
+    assert (msg.2 = uid).
+     (* I think this fails because we have the wrong meaning
+        of the sender msg.2? *)
+     admit.
+    assert (msg \in sent).
+    (* we must have that an entry is found in H_sent_g1,
+       and by H_unsent_g0 and properties of send_broadcasts
+       we can show the message doesn't come from the g0 mailbox,
+       so it must be derived from sent.
+     *)
+      admit.
+
+    unfold is_user_corrupt_gstate.
+    rewrite (surjective_pairing msg).
+    rewrite <- surjective_pairing.
+    intro H_honest.
+
+    unfold user_sent.
+    exists sent.
+    split;[|assumption].
+    left.
+    exists (pending.1). exists (pending.2).
+
+    rewrite H2 in H_honest |- *.
+    simpl.
+    rewrite <- surjective_pairing.
+
+    by repeat (esplit||eassumption).
+  * (* internal step *)
+  admit.
+  * (* recover partition *)
+    exfalso.
+    destruct pre. simpl in H_unsent_g0.
+    cbn -[in_mem mem] in H_sent_g1.
+    destruct (target \in msg_in_transit) eqn:H_target.
+  + rewrite reset_msg_delays_upd in H_sent_g1.
+    rewrite (in_fnd H_target) in H_unsent_g0.
+    destruct (H_sent_g1) as [d H_sent].
+    destruct (reset_user_msg_delays_rev H_sent) as [d0 [H_reset H_in]].
+    simpl in H_reset, H_in.
+    revert H_in.
+    apply /negP.
+    by apply H_unsent_g0.
+  + rewrite reset_msg_delays_notin in H_sent_g1.
+    assumption.
+    rewrite H_target.
+    reflexivity.
+    * (* corrupt user *)
+    exfalso.
+    destruct pre;simpl in * |- *.
+    destruct (target == uid) eqn:H_same.
+  + { assert (target = uid) by (apply /eqP;assumption).
+      subst uid;clear -H_sent_g1.
+      move: H_sent_g1; rewrite /drop_mailbox_of_user.
+      case: fndP; case: fndP => //.
+        move => Ht Hf [d Hd]; move: Hd.
+        by rewrite getf_set in_mset0.
+      move => Ht kf [d Hd].
+      by case/negP: Ht.
+    }
+  + revert H_sent_g1.
+    unfold drop_mailbox_of_user.
+    destruct (uid \in msg_in_transit) eqn:H_uid.
+    - rewrite (in_fnd H_uid).
+      rewrite fnd_set H_same.
+      match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
+        [case => x;apply /negP|];done.
+    - apply negbT in H_uid. rewrite (not_fnd H_uid).
+      match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
+        [case => x;apply /negP|];done.
+Admitted.
+
 Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
     path gtransition g0 p ->
     msg_received u d msg p ->
@@ -1356,27 +1669,88 @@ Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
          end.
 Admitted.
 
-Lemma honest_users_label_correctly : forall uid msg g1 g2,
-      user_sent uid msg g1 g2 ->
-      ~match g1.(users).[? uid] with
-       | Some u => u.(corrupt)
-       | None => true
-       end ->
-      match g1.(users).[? uid] with
-      | Some u =>
-      match msg with
-      | (_,v,r_m,p_m,uid_m) =>
-        r_m = u.(round) /\ p_m = u.(period) /\  uid_m = uid
-        /\ match v with
-           | val _ => True
-           | step_val s_m => s_m = u.(step)
-           | repr_val _ _ s_m => s_m = u.(step)
-           | next_val _ s_m => s_m = u.(step)
-           end
-      end
-      | None => False
-      end.
-Admitted.
+Lemma utransition_label_correctly : forall uid msg g1 g2,
+    user_sent uid msg g1 g2 ->
+    forall u, g1.(users).[? uid] = Some u ->
+    match msg with
+    | (Certvote,_,r_m,p_m,uid_m) =>
+      ((r_m > u.(round)) \/ (r_m = u.(round) /\ p_m >= u.(period)))
+        /\ uid_m = uid
+    | (_,v,r_m,p_m,uid_m) =>
+      r_m = u.(round) /\ p_m = u.(period) /\  uid_m = uid
+      /\ match v with
+         | val _ => True
+         | step_val s_m => s_m = u.(step)
+         | repr_val _ _ p_m => p_m = u.(period)
+         | next_val _ s_m => s_m = u.(step)
+         end
+    end.
+Proof.
+  move=> uid msg g1 g2.
+  rewrite /user_sent.
+  move => [sent [H_trans msg_in]] u H_u.
+  change (msg \in sent:Prop) in msg_in.
+  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: H_trans => [[d [body H_recv]]|H_step].
+  * (* message delivery cases *)
+  destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
+                     & key_mailbox & H_msg_in_mailbox & ->).
+  destruct g1;simpl in * |- *.
+  rewrite in_fnd in H_u. injection H_u;clear H_u. intros <-.
+
+  remember (ustate_post,sent) as ustep_out in H_step.
+  destruct H_step;injection Hequstep_out;clear Hequstep_out;intros <- <-;
+  try (exfalso;exact (notF msg_in));
+  match type of msg_in with
+  | is_true (_ \in [:: _]) =>
+    unfold in_mem in msg_in; simpl in msg_in;
+      rewrite Bool.orb_false_r in msg_in;
+      apply (elimT eqP) in msg_in;
+      injection msg_in;clear msg_in;
+      intros -> -> -> -> ->
+  end;
+  match goal with [x : UState |- _] =>
+  match goal with [x' := context C [?f x] |- _] =>
+  match goal with [H : context C [?g x'] |- _] =>
+     destruct x;subst x';unfold f,g in H;simpl in H;
+     decompose record H;clear H
+  end
+  end
+  end;
+  match goal with
+  | [H : valid_rps _ _ _ _ |- _] => move:H;unfold valid_rps
+  | [H : advancing_rp _ _ _ |- _] => move:H;unfold advancing_rp
+  end;simpl;clear;
+    by intuition;subst;intuition.
+  * (* internal transition cases *)
+    destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+    destruct g1;simpl in * |- *.
+    rewrite in_fnd in H_u;injection H_u;clear H_u. intros <-.
+    move/Iter.In_mem in msg_in.
+    clear -msg_in H_step.
+
+    remember (ustate_post,sent) as ustep_out in H_step;
+    destruct H_step;
+    injection Hequstep_out;clear Hequstep_out;intros <- <-;
+    let rec use_mem H :=
+      first [exfalso;exact H
+
+      |destruct H as [H|H];[injection H as <- <- <- <- <-|use_mem H]]
+    in use_mem msg_in;
+    match goal with
+    | [pre : UState |- _] =>
+      is_var pre;
+        match goal with
+        |[H : context C [?f pre] |- _] =>
+         unfold f in H;decompose record H;
+           match goal with
+           | [H:valid_rps _ _ _ _ |- _] => unfold valid_rps in H;clear -H pre
+           | [H:advancing_rp _ _ _ |- _] => unfold advancing_rp in H;clear -H pre
+           end;
+           destruct pre;simpl in * |- *
+        end
+    end;by intuition;subst;intuition.
+Qed.
 
 (** Now we have lemmas showing that transitions preserve various invariants *)
 
@@ -1415,30 +1789,26 @@ Proof.
 Qed.
 
 (* The user transition relation preserves sensibility of user states *)
-Lemma utr_preserves_sensibility : forall uid us us' m ms,
+Lemma utr_msg_preserves_sensibility : forall uid us us' m ms,
   sensible_ustate us -> uid # us ; m ~> (us', ms) ->
   sensible_ustate us'.
 Proof.
-  Ltac use_hyp H := unfold valid_rps in H;simpl in H; decompose record H.
-  Ltac tidy :=
-  match goal with
+  let use_hyp H := (unfold valid_rps in H;simpl in H; decompose record H) in
+  let tidy _ :=
+  (match goal with
     | [ |- context C [ next_deadline (?s + 1 - 1) ] ] =>
       replace (s + 1 - 1) with s by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ)
     | [ H : is_true (3 < ?s) |- context C [next_deadline ?s] ] =>
       rewrite (step_later_deadlines H)
-  end.
-  intros uid us us' m ms H_sensible Hstep.
-  remember (us',ms) as ustep_output eqn:H_output.
+  end) in
+  intros uid us us' m ms H_sensible Hstep;
+  remember (us',ms) as ustep_output eqn:H_output;
   destruct Hstep; injection H_output; intros; subst;
   match goal with
   | [H_sensible : sensible_ustate ?s |- _] => is_var s;
      destruct s;unfold sensible_ustate in * |- *;
      decompose record H_sensible;clear H_sensible;simpl in * |- *
   end;
-(*  match goal with
-  | [H: ?deadline = next_deadline _ |- _] => subst deadline
-  end;
-*)
   try (
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
@@ -1455,17 +1825,95 @@ Proof.
     | [H: set_softvotes _ _ _ _ |- _] => unfold set_softvotes in H; use_hyp H
     | [H: timeout_ok _ |- _] => unfold timout_ok in H; use_hyp H
     | _ => idtac
-    end;
-    repeat tidy;intuition lra).
+  end;
+    repeat (tidy ());intuition lra).
   (* deliver nonvote msg needs some custom steps *)
   destruct msg as [[[[mtype ex_val] ?] ?] ?];
     destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
 Qed.
 
+Lemma utr_nomsg_preserves_sensibility : forall uid us us' ms,
+  sensible_ustate us -> uid # us ~> (us', ms) ->
+  sensible_ustate us'.
+Proof.
+  let use_hyp H := (unfold valid_rps in H;simpl in H; decompose record H) in
+  let tidy _ :=
+  (match goal with
+    | [ |- context C [ next_deadline (?s + 1 - 1) ] ] =>
+      replace (s + 1 - 1) with s by (rewrite addn1;rewrite subn1;symmetry;apply Nat.pred_succ)
+    | [ H : is_true (3 < ?s) |- context C [next_deadline ?s] ] =>
+      rewrite (step_later_deadlines H)
+  end) in
+  intros uid us us' ms H_sensible Hstep;
+  remember (us',ms) as ustep_output eqn:H_output;
+  destruct Hstep; injection H_output; intros; subst;
+  match goal with
+  | [H_sensible : sensible_ustate ?s |- _] => is_var s;
+     destruct s;unfold sensible_ustate in * |- *;
+     decompose record H_sensible;clear H_sensible;simpl in * |- *
+  end;
+  try (
+    match goal with
+    | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
+    | [H: repropose_ok _ _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
+    | [H: no_propose_ok _ _ _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
+    | [H: softvote_new_ok _ _ _ _ _ |- _] => unfold softvote_new_ok in H; use_hyp H
+    | [H: softvote_repr_ok _ _ _ _ _ |- _] => unfold softvote_repr_ok in H; use_hyp H
+    | [H: no_softvote_ok _ _ _ _ _ |- _] => unfold no_softvote_ok in H; use_hyp H
+    | [H: certvote_ok _ _ _ _ _ _ |- _] => unfold certvote_ok in H; use_hyp H
+    | [H: no_certvote_ok _ _ _ _ _ _ |- _] => unfold no_certvote_ok in H; use_hyp H
+    | [H: nextvote_val_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_val_ok in H; use_hyp H
+    | [H: nextvote_open_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_open_ok in H; use_hyp H
+    | [H: nextvote_stv_ok _ _ _ _ _ _ _ /\ _ |- _] => destruct H as [H Hs]; unfold nextvote_stv_ok in H; use_hyp H
+    | [H: no_nextvote_ok _ _ _ _ _ |- _] => unfold no_nextvote_ok in H; use_hyp H
+    | [H: set_softvotes _ _ _ _ |- _] => unfold set_softvotes in H; use_hyp H
+    | [H: timeout_ok _ |- _] => unfold timout_ok in H; use_hyp H
+    | _ => idtac
+    end;
+    repeat (tidy ());intuition lra).
+   - split => //; split => //.
+     by admit.
+   - split => //; split => //.
+     by admit.
+   - split => //; split => //.
+     by admit.
+   - split => //; split => //.
+     by admit.
+Admitted.
+
 (* The global transition relation preserves sensibility of global states *)
 Lemma gtr_preserves_sensibility : forall gs gs',
   sensible_gstate gs -> gs ~~> gs' ->
   sensible_gstate gs'.
+Proof.
+  let use_hyp H := (unfold valid_rps in H;simpl in H; decompose record H) in
+  intros gs gs' H_sensible Hstep;
+  destruct Hstep.
+
+  * destruct pre. unfold tick_update, tick_users. simpl.
+    admit.
+  * apply utr_msg_preserves_sensibility in H1;
+      [|unfold sensible_gstate in H_sensible;decompose record H_sensible;done].
+    destruct pre;unfold sensible_gstate in * |- *.
+    unfold delivery_result;simpl in * |- *.
+    { intuition. clear -H6 H7. admit.
+      admit.
+      rewrite ffunE. simpl. admit.
+    }
+  * apply utr_nomsg_preserves_sensibility in H0;
+      [|unfold sensible_gstate in H_sensible;decompose record H_sensible;done].
+    destruct pre;unfold sensible_gstate in * |- *.
+    unfold step_result;simpl in * |- *.
+    { intuition. clear -H5 H6. admit.
+      admit.
+      rewrite ffunE. simpl. admit.
+    }
+  * (* recover from partition *)
+    admit.
+  * (* make partitioned *)
+    admit.
+  * (* corrupt user *)
+    admit.
 Admitted.
 
 (* Generalization of preservation of sensibility to paths *)
@@ -1650,14 +2098,153 @@ Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
   g1 ~~> g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
-Admitted.
+Proof.
+move => g1 g2 uid us1 us2.
+elim => //.
+- move => increment pre Htick.
+  set users : GState -> _ := global_state.users _ _ _.
+  move => Hu.
+  case Hd: (uid \in domf (users pre)); last first.
+    by move/negP/negP: Hd => Hd; move: Hu; rewrite not_fnd.
+  rewrite tick_users_upd //.
+  case =><-; move: Hu.
+  rewrite in_fnd; case =>->.
+  rewrite /user_advance_timer /= /ustate_after /=.  
+  by case: ifP => //=; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => msg_key [r m] Hpend key_ustate ustate_post sent Hloc.
+  move/utr_rps_non_decreasing_msg => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => ustate_key Hloc ustate_post sent.
+  move/utr_rps_non_decreasing_internal => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-; rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0 ustate_key.  
+  set users : GS -> _ := global_state.users _ _ _.
+  move => Hcorrupt Hst; move: Hst Hcorrupt.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.  
+    rewrite in_fnd //.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    rewrite -/(users pre).
+    by case =>-> => Hcorrupt; case =><-; right; right.
+  rewrite fnd_set /= Huid_eq -/(users pre).
+  by case =>-> => Hcorrupt; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => ustate_key m Hc Hm.
+  rewrite /= =>->; case =>->.
+  by right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre sender.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => sender_key r p s mtype mval target target_key Hc Hhave Hcomm Hmatch.
+  rewrite /= =>->; case =>->.
+  by right; right.
+Qed.
+
+Lemma ustate_after_transitive :
+  forall us1 us2 us3,
+    ustate_after us1 us2 ->
+    ustate_after us2 us3 ->
+    ustate_after us1 us3.
+Proof.
+move => us1 us2 us3.
+case: us1; case: us2; case: us3; rewrite /ustate_after /=; intros.
+intuition.
+- by left; eapply ltn_trans; eauto.
+- by left; subst.
+- by left; subst.
+- by left; subst.
+- by left; subst.
+- right; left; subst; split => //.
+  by eapply ltn_trans; eauto.
+- by right; left; subst.
+- by right; left; subst.
+- right; right; subst; split; split => //.
+  by eapply leq_trans; eauto.
+Qed.  
+
+Lemma gtrans_domf_users : forall gs1 gs2,
+  gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
+Proof.
+move => gs1 gs2.
+elim => //.
+- move => increment pre Htick.
+  apply/fsubsetP => x Hd.
+  by rewrite -tick_users_domf.
+- move => pre uid msg_key pending Hpending key_ustate ustate_post sent Hcorrupt Huser /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+- move => pre uid ustate_key Hcorrupt ustate_post sent Huser /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+- move => pre uid ustate_key Hcorrupt /=.
+  by apply/fsubsetP => x Hd; apply: fset1Ur.
+Qed.
 
 (* Generalization of non-decreasing round-period-step results to paths *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
   greachable g1 g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
-Admitted.
+Proof.
+move => g1 g2 uid us1 us2.
+case => gtrace Hpath Hlast.
+set GS := global_state.GState UserId UState [choiceType of Msg].
+set users : GS -> _ := global_state.users _ _ _.
+elim: gtrace g1 g2 uid us1 us2 Hpath Hlast => //=.
+  move => g1 g2 uid us1 us2 Htr ->->; case =>->.
+  by right; right.
+move => g gtrace IH.
+move => g1 g2 uid us1 us2.
+move/andP => [Htrans Hpath] Hlast Hg1 Hg2.
+move/asboolP: Htrans => Htrans.
+case Hg: (users g).[? uid] => [u|].
+  have IH' := IH _ _ _ _ _ Hpath Hlast Hg Hg2.
+  have Haft := gtr_rps_non_decreasing Htrans Hg1 Hg.
+  move: Haft IH'.
+  exact: ustate_after_transitive.
+move/gtrans_domf_users: Htrans => Hdomf.
+case Hd: (uid \in domf (users g1)); last first.
+  by move/negP/negP: Hd => Hd; move: Hg1; rewrite not_fnd.
+move/idP: Hd => Hd.
+move: Hdomf.
+move/fsubsetP => Hsub.
+move: Hd; move/Hsub => Hdom.
+move: Hg.
+by rewrite in_fnd.
+Qed.
 
 (* A user has certvoted a value for a given period along a given path *)
 Definition certvoted_in_path_at ix path uid r p v : Prop :=
@@ -1834,11 +2421,11 @@ Proof.
                   destruct G eqn:H_G;[|exfalso;assumption] end.
   rewrite H_G.
   split. assumption.
-  pose proof (honest_users_label_correctly H_sent) as H_lbl.
+  pose proof (utransition_label_correctly H_sent) as H_lbl.
   rewrite H_G in H_lbl.
-  specialize (H_lbl H_honest_at_send).
-  decompose record H_lbl.
-  destruct v;intuition congruence.
+  have H_equ: Some u = Some u by [].
+  have H_lbl' := H_lbl _ H_equ.
+  by destruct v;intuition congruence.
 Qed.
 
 (* To show there is not a fork in a particular round,
