@@ -1,12 +1,15 @@
-# Algorand verification
+# Algorand formalization
 
-A Coq formalization of Algorand.
+Coq formalization and verification of the Algorand distributed ledger.
 
 Requirements
 ------------
 
 - [`Coq 8.9`](https://coq.inria.fr)
-- [`Mathematical Components 1.7`](https://math-comp.github.io/math-comp/) (`ssreflect` suffices)
+- [`MathComp ssreflect 1.8.0`](https://math-comp.github.io/math-comp/)
+- [`MathComp algebra 1.8.0`](https://math-comp.github.io/math-comp/)
+- [`MathComp finmap 1.2.0`](https://github.com/math-comp/finmap)
+- [`Interval 3.4.0`](http://coq-interval.gforge.inria.fr)
 
 Building
 --------
@@ -16,5 +19,5 @@ We recommend installing the dependencies of the project via
 
 ```
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq-mathcomp-ssreflect coq-interval coq-mathcomp-finmap
+opam install coq-mathcomp-ssreflect coq-mathcomp-algebra coq-mathcomp-finmap coq-interval
 ```
