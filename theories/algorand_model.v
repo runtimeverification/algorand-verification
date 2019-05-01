@@ -2472,6 +2472,12 @@ Definition user_honest_at ix path uid : bool :=
 Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
   if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
 
+Definition user_stv_val_at ix path uid p stv : bool :=
+  match drop ix path with
+  | g1 :: _ => user_stv_val uid g1 p stv
+  | _ => false
+  end.
+
 (* D1: an honest node enters a period exclusively for value v *)
 (* if it enters the period with starting value $v$ *)
 (* and has not observed t_H next-votes for $\bot$ from any single step of the previous period *)
@@ -2635,17 +2641,13 @@ Admitted.
 (* If some period r.p, p >= 2 is reached with unique starting value bot and the
    leader is honest, then the leader’s proposal is certified. *)
 (* TODO: all users need starting value bot or just leader? *)
-(* 
-Lemma prop_c : forall g0 g1 path_seq r p uid v b,
-    path gtransition g0 path_seq ->
-    g1 = last g0 path_seq ->
-    p >= 2 ->
-    all (fun u => user_stv_val u g1 p None) (domf g1.(users)) ->
-    leader_in_path g0 g1 r p uid v b ->
-    user_honest uid g1 ->
-    certified_in_period path_seq r p v.
+Lemma prop_c : forall ix path uid r p v b,
+  p >= 2 ->
+  user_stv_val_at ix path uid p None ->
+  leader_in_path_at ix path uid r 1 v b ->
+  user_honest_at ix path uid ->
+  certified_in_period path r p v.
 Admitted.
-*)
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
    value H(B), then a certificate for H(B) that period is produced by the honest
