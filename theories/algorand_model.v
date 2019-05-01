@@ -2469,6 +2469,12 @@ Definition user_honest_at ix path uid : bool :=
   | _ => false
   end.
 
+Definition users_at ix path : seq UserId :=
+  match drop ix path with
+  | g1 :: _ => domf (g1.(users))
+  | _ => [::]
+  end.
+
 Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
   if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
 
@@ -2643,7 +2649,7 @@ Admitted.
 (* TODO: all users need starting value bot or just leader? *)
 Lemma prop_c : forall ix path uid r p v b,
   p >= 2 ->
-  user_stv_val_at ix path uid p None ->
+  all (fun u => user_stv_val_at ix path u p None) (users_at ix path) ->
   leader_in_path_at ix path uid r 1 v b ->
   user_honest_at ix path uid ->
   certified_in_period path r p v.
