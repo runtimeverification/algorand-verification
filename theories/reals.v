@@ -78,20 +78,20 @@ End Mixin.
 
 Definition EtaMixin R sup sup_upper_bound sup_adherent :=
   let _ := @Mixin R sup sup_upper_bound sup_adherent in
-  @Mixin (Num.ArchimedeanField.Pack (Num.ArchimedeanField.class R) R)
+  @Mixin (Num.ArchimedeanField.Pack (Num.ArchimedeanField.class R))
          sup sup_upper_bound sup_adherent.
 Section ClassDef.
 
 Record class_of (R : Type) : Type := Class {
   base : Num.ArchimedeanField.class_of R;
-  mixin_rcf : Num.real_closed_axiom (Num.NumDomain.Pack base R);
-  mixin : mixin_of (Num.ArchimedeanField.Pack base R)
+  mixin_rcf : Num.real_closed_axiom (Num.NumDomain.Pack base);
+  mixin : mixin_of (Num.ArchimedeanField.Pack base)
 }.
 
 Local Coercion base : class_of >-> Num.ArchimedeanField.class_of.
 Local Coercion base_rcf R (c : class_of R) : Num.RealClosedField.class_of R :=
-  @Num.RealClosedField.Class _ c (@mixin_rcf _ c).
-
+  @Num.RealClosedField.Class _ c (@mixin_rcf _ c). 
+  
 Structure type := Pack {sort; _ : class_of sort; _ : Type}.
 Local Coercion sort : type >-> Sortclass.
 Variables (T : Type) (cT : type).
@@ -101,35 +101,35 @@ Let xT := let: Pack T _ _ := cT in T.
 Notation xclass := (class : class_of xT).
 
 Definition rcf_axiom {R} (cR : Num.RealClosedField.class_of R) :
-   Num.real_closed_axiom (Num.NumDomain.Pack cR R) :=
+   Num.real_closed_axiom (Num.NumDomain.Pack cR) :=
   match cR with Num.RealClosedField.Class _ ax => ax end.
 Coercion rcf_axiom : Num.RealClosedField.class_of >-> Num.real_closed_axiom.
 
-Definition pack b0 (m0 : mixin_of (@Num.ArchimedeanField.Pack T b0 T)) :=
+Definition pack b0 (m0 : mixin_of (@Num.ArchimedeanField.Pack T b0)) :=
   fun bT b & phant_id (Num.ArchimedeanField.class bT) b =>
   fun (bTr : rcfType) (br : Num.RealClosedField.class_of bTr) &
       phant_id (Num.RealClosedField.class bTr) br =>
   fun  cra & phant_id (@rcf_axiom bTr br) cra =>
   fun    m & phant_id m0 m => Pack (@Class T b cra m) T.
 
-Definition eqType := @Equality.Pack cT xclass xT.
-Definition choiceType := @Choice.Pack cT xclass xT.
-Definition zmodType := @GRing.Zmodule.Pack cT xclass xT.
-Definition ringType := @GRing.Ring.Pack cT xclass xT.
-Definition comRingType := @GRing.ComRing.Pack cT xclass xT.
-Definition unitRingType := @GRing.UnitRing.Pack cT xclass xT.
-Definition comUnitRingType := @GRing.ComUnitRing.Pack cT xclass xT.
-Definition idomainType := @GRing.IntegralDomain.Pack cT xclass xT.
-Definition numDomainType := @Num.NumDomain.Pack cT xclass xT.
-Definition fieldType := @GRing.Field.Pack cT xclass xT.
-Definition join_numDomainType := @Num.NumDomain.Pack fieldType xclass xT.
-Definition realDomainType := @Num.RealDomain.Pack cT xclass xT.
-Definition numFieldType := @Num.NumField.Pack cT xclass xT.
-Definition join_realDomainType := @Num.RealDomain.Pack numFieldType xclass xT.
-Definition realFieldType := @Num.RealField.Pack cT xclass xT.
-Definition archimedeanFieldType := @Num.ArchimedeanField.Pack cT xclass xT.
-Definition rcfType := @Num.RealClosedField.Pack cT xclass xT.
-Definition join_rcfType := @Num.RealClosedField.Pack archimedeanFieldType xclass xT.
+Definition eqType := @Equality.Pack cT xclass.
+Definition choiceType := @Choice.Pack cT xclass.
+Definition zmodType := @GRing.Zmodule.Pack cT xclass.
+Definition ringType := @GRing.Ring.Pack cT xclass.
+Definition comRingType := @GRing.ComRing.Pack cT xclass.
+Definition unitRingType := @GRing.UnitRing.Pack cT xclass.
+Definition comUnitRingType := @GRing.ComUnitRing.Pack cT xclass.
+Definition idomainType := @GRing.IntegralDomain.Pack cT xclass.
+Definition numDomainType := @Num.NumDomain.Pack cT xclass.
+Definition fieldType := @GRing.Field.Pack cT xclass.
+Definition join_numDomainType := @Num.NumDomain.Pack fieldType xclass.
+Definition realDomainType := @Num.RealDomain.Pack cT xclass.
+Definition numFieldType := @Num.NumField.Pack cT xclass.
+Definition join_realDomainType := @Num.RealDomain.Pack numFieldType xclass.
+Definition realFieldType := @Num.RealField.Pack cT xclass.
+Definition archimedeanFieldType := @Num.ArchimedeanField.Pack cT xclass.
+Definition rcfType := @Num.RealClosedField.Pack cT xclass.
+Definition join_rcfType := @Num.RealClosedField.Pack archimedeanFieldType xclass.
 
 End ClassDef.
 
@@ -519,7 +519,7 @@ move/sup_adherent=> -/(_ e) []; first by rewrite subr_gt0.
 move=> z Fz; rewrite /e opprB addrCA subrr addr0 => lt_yz.
 have /sup_upper_bound /(_ _ Fz) := has_sup_floor_set x.
 rewrite -(ler_add2r (-y)) => /ler_lt_trans /(_ lt1_FxBy).
-case/andP: Fy Fz lt_yz=> /RintP[yi -> _].
+case/andP: Fy Fz lt_yz=> /RintP[yi -> _]. 
 case/andP=> /RintP[zi -> _]; rewrite -rmorphB /= ltrz1 ltr_int.
 rewrite ltr_neqAle => /andP[ne_yz le_yz].
 rewrite -[_-_]gez0_abs ?subr_ge0 // ltz_nat ltnS leqn0.
