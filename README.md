@@ -1,4 +1,4 @@
-# Algorand formalization
+# Algorand verification
 
 Coq formalization and verification of the Algorand distributed ledger.
 
@@ -21,3 +21,5 @@ We recommend installing the dependencies of the project via
 opam repo add coq-released https://coq.inria.fr/opam/released
 opam install coq-mathcomp-ssreflect coq-mathcomp-algebra coq-mathcomp-finmap coq-interval
 ```
+
+Then, run `make` in the project root directory.
