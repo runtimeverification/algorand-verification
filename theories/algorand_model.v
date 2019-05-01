@@ -2659,13 +2659,12 @@ Admitted.
    value H(B), then a certificate for H(B) that period is produced by the honest
    users. *)
 (* TODO: need to say quorum for certificate is only *honest* users? *)
-Lemma prop_e : forall g0 g1 path_seq r p v b,
-    path gtransition g0 path_seq ->
-    g1 = last g0 path_seq ->
-    p >= 2 ->
-    valid_block_and_hash b v ->
-    all (fun u => user_stv_val u g1 p (Some v)) (domf g1.(users)) ->
-    certified_in_period path_seq r p v.
+Lemma prop_e : forall ix path r p v b,
+  p >= 2 ->
+  all (fun u => user_stv_val_at ix path u p (Some v))
+      (filter (fun u => user_honest_at ix path u) (users_at ix path)) ->
+  valid_block_and_hash b v ->
+  certified_in_period path r p v.
 Admitted.
 
 (* If any honest user is in period r.p with starting value bottom, then within
