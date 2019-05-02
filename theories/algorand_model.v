@@ -3265,10 +3265,19 @@ Definition state_before_round r (g:GState) : Prop :=
   honest_users_before_round r g
   /\ honest_messages_before_round r g.
 
-Definition users_at ix path : seq UserId :=
+Definition user_honest (uid:UserId) (g:GState) : bool :=
+  if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
+
+Definition user_honest_at ix path uid : bool :=
   match drop ix path with
-  | g1 :: _ => domf (g1.(users))
-  | _ => [::]
+  | g1 :: _ => user_honest uid g1
+  | _ => false
+  end.
+
+Definition users_at ix path : {fmap UserId -> UState} :=
+  match drop ix path with
+  | g1 :: _ => g1.(users)
+  | _ => [fmap]
   end.
 
 Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
@@ -3755,10 +3764,22 @@ Admitted.
 (* TODO: all users need starting value bot or just leader? *)
 Lemma prop_c : forall ix path uid r p v b,
   p >= 2 ->
-  all (fun u => user_stv_val_at ix path u p None) (users_at ix path) ->
+  all (fun u => user_stv_val_at ix path u p None) (domf (users_at ix path)) ->
   leader_in_path_at ix path uid r 1 v b ->
   user_honest_at ix path uid ->
   certified_in_period path r p v.
+Admitted.
+
+(* softvote quorum of all honest users implies certvote quorum *)
+Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset UserId}) ix path r p v,
+  (forall voter : UserId, voter \in softvote_quorum -> user_honest_at ix path voter) ->
+  softvote_quorum `<=` committee r p 3 ->
+  tau_c <= #|softvote_quorum| ->
+  (forall voter : UserId, voter \in softvote_quorum
+                                    -> softvoted_in_path_at ix path voter r p (val v)) ->
+  (forall voter : UserId, voter \in softvote_quorum
+                                    -> certvoted_in_path path voter r p v).
+Proof.
 Admitted.
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
@@ -3768,11 +3789,22 @@ Admitted.
 Lemma prop_e : forall ix path r p v b,
   p >= 2 ->
   all (fun u => user_stv_val_at ix path u p (Some v))
-      (filter (fun u => user_honest_at ix path u) (users_at ix path)) ->
+      (filter (fun u => user_honest_at ix path u) (domf (users_at ix path))) ->
   valid_block_and_hash b v ->
   certified_in_period path r p v.
+Proof.
+  intros.
+  exists (domf (honest_users (users_at ix path))).
+  (* quorum subset of committee at step 3 *)
+  assert (domf (honest_users (users_at ix path)) `<=` committee r p 3) by admit.
+  (* at least t_H honest users *)
+  assert (tau_c <= #|domf (honest_users (users_at ix path))|) by admit.
+  repeat split; try assumption.
+  eapply honest_softvote_quorum_implies_certvote with ix; try assumption.
+  admit. (* honest users are honest *)
+  admit. (* honest users softvote their starting value *)
 Admitted.
-
+    
 (* If any honest user is in period r.p with starting value bottom, then within
 time (2*lambda+Lambda), every honest user in period r.p will either certify a
 value (i.e., will get a certificate) or move to the next period *)
