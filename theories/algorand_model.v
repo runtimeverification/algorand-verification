@@ -1,5 +1,7 @@
 Require Import Lra.
+Require Import Lia.
 
+Require Import PP.Ppsimplmathcomp.
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
@@ -2195,7 +2197,7 @@ intuition.
 - by right; left; subst.
 - right; right; subst; split; split => //.
   by eapply leq_trans; eauto.
-Qed.  
+Qed.
 
 Lemma gtrans_domf_users : forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
