@@ -3767,7 +3767,7 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
   softvote_quorum `<=` committee r p 3 ->
   tau_c <= #|softvote_quorum| ->
   (forall voter : UserId, voter \in softvote_quorum
-                                    -> softvoted_in_path_at ix path voter r p (val v)) ->
+                                    -> softvoted_in_path_at ix path voter r p v) ->
   (forall voter : UserId, voter \in softvote_quorum
                                     -> certvoted_in_path path voter r p v).
 Proof.
