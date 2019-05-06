@@ -3265,15 +3265,6 @@ Definition state_before_round r (g:GState) : Prop :=
   honest_users_before_round r g
   /\ honest_messages_before_round r g.
 
-Definition user_honest (uid:UserId) (g:GState) : bool :=
-  if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
-
-Definition user_honest_at ix path uid : bool :=
-  match drop ix path with
-  | g1 :: _ => user_honest uid g1
-  | _ => false
-  end.
-
 Definition users_at ix path : {fmap UserId -> UState} :=
   match drop ix path with
   | g1 :: _ => g1.(users)
