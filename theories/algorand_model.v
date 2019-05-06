@@ -32,10 +32,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Lemma in_fmap_domf K V  (f: @finmap_of K V (Phant (K -> V))) k:
-  (k \in f) = (k \in domf f).
-Proof. reflexivity. Qed.
-
 Section AlgoModel.
 
 (* We assume a finite set of users *)
@@ -1880,7 +1876,7 @@ Proof using.
   + (* step_tick *)
     destruct (fndP users uid).
     by rewrite updf_update //;destruct (users.[kf]), corrupt.
-    by rewrite not_fnd // in_fmap_domf -updf_domf.
+    by rewrite not_fnd // -[uid \in _]/(uid \in domf _) -updf_domf.
   + (* step_deliver_msg UTransitionMsg *)
   rewrite fnd_set.
   destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
@@ -2089,9 +2085,13 @@ Definition msg_step (msg:Msg) : nat * nat * nat :=
      | Reproposal => 1
      | Softvote => 2
      | Certvote => 3
-     | _ =>
+     | Nextvote_Val =>
        match v with
        | next_val _ s => s
+       | _ => 111
+       end
+     | Nextvote_Opem =>
+       match v with
        | step_val s => s
        | _ => 111
        end
@@ -2431,17 +2431,35 @@ Proof using.
       [|unfold sensible_gstate in H_sensible;decompose record H_sensible;done].
     destruct pre;unfold sensible_gstate in * |- *.
     unfold delivery_result;simpl in * |- *.
-    { intuition. clear -H6 H7. admit.
-      admit.
-      rewrite ffunE. simpl. admit.
+    { intuition.
+      * move :H7. clear.
+        move/(f_equal (fun f => uid \in f)).
+        change (uid \in ?f) with (uid \in domf f).
+          by rewrite dom_setf fset1U1 in_fset0.
+      * admit.
+      * rewrite ffunE. simpl.
+        set test := (uid0 == uid);destruct test eqn:H_eq;subst test.
+        assumption.
+        change (uid0 \in ?f) with (uid0 \in domf f) in k.
+        rewrite dom_setf in_fset1U H_eq /= in k.
+        by rewrite in_fnd;apply H8.
     }
   * apply utr_nomsg_preserves_sensibility in H0;
       [|unfold sensible_gstate in H_sensible;decompose record H_sensible;done].
     destruct pre;unfold sensible_gstate in * |- *.
     unfold step_result;simpl in * |- *.
-    { intuition. clear -H5 H6. admit.
-      admit.
-      rewrite ffunE. simpl. admit.
+    { intuition.
+      * move:H6; clear.
+        move/(f_equal (fun f => uid \in f)).
+        change (uid \in ?f) with (uid \in domf f).
+          by rewrite dom_setf fset1U1 in_fset0.
+      * admit.
+      * rewrite ffunE. simpl.
+        set test := (uid0 == uid);destruct test eqn:H_eq;subst test.
+        assumption.
+        change (uid0 \in ?f) with (uid0 \in domf f) in k.
+        rewrite dom_setf in_fset1U H_eq /= in k.
+        by rewrite in_fnd;apply H7.
     }
   * (* recover from partition *)
     admit.
@@ -2449,6 +2467,9 @@ Proof using.
     admit.
   * (* corrupt user *)
     admit.
+  * (* replay message *)
+    admit.
+  * (* forge message *)
 Admitted.
 
 (* Generalization of preservation of sensibility to paths *)
