@@ -3763,7 +3763,8 @@ Admitted.
 
 (* softvote quorum of all honest users implies certvote quorum *)
 Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset UserId}) ix path r p v,
-  (forall voter : UserId, voter \in softvote_quorum -> user_honest_at ix path voter) ->
+  (forall voter : UserId, voter \in softvote_quorum ->
+                                    voter \in domf (honest_users (users_at ix path))) ->
   softvote_quorum `<=` committee r p 3 ->
   tau_c <= #|softvote_quorum| ->
   (forall voter : UserId, voter \in softvote_quorum
@@ -3773,6 +3774,18 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
 Proof.
 Admitted.
 
+Lemma all_def : forall (s : seq UserId) p x,
+  all p s -> x \in s -> p x.
+Proof.
+Admitted.
+
+(* Honest user softvotes starting value *)
+Lemma stv_not_bot_softvote : forall ix path r p v uid,
+  uid \in domf (honest_users (users_at ix path)) ->
+  user_stv_val_at ix path uid p (Some v) ->
+  softvoted_in_path_at ix path uid r p v.
+Admitted.
+
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
    value H(B), then a certificate for H(B) that period is produced by the honest
    users. *)
@@ -3780,7 +3793,7 @@ Admitted.
 Lemma prop_e : forall ix path r p v b,
   p >= 2 ->
   all (fun u => user_stv_val_at ix path u p (Some v))
-      (filter (fun u => user_honest_at ix path u) (domf (users_at ix path))) ->
+      (domf (honest_users (users_at ix path))) ->
   valid_block_and_hash b v ->
   certified_in_period path r p v.
 Proof.
@@ -3792,8 +3805,10 @@ Proof.
   assert (tau_c <= #|domf (honest_users (users_at ix path))|) by admit.
   repeat split; try assumption.
   eapply honest_softvote_quorum_implies_certvote with ix; try assumption.
-  admit. (* honest users are honest *)
-  admit. (* honest users softvote their starting value *)
+  trivial.
+  intros. apply stv_not_bot_softvote.
+  assumption.
+  eapply all_def in H0; try eassumption.
 Admitted.
     
 (* If any honest user is in period r.p with starting value bottom, then within
