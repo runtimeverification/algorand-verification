@@ -1813,7 +1813,7 @@ Lemma user_honest_from_after g0 trace (H_path: path gtransition g0 trace):
   forall uid (H_in : uid \in g1.(users)),
     honest_after_step (step_of_ustate (g1.(users)[`H_in])) uid trace ->
   user_honest uid g1.
-Proof.
+Proof using.
 Admitted.
 
 Definition committee (r p s:nat) : {fset UserId} :=
@@ -3367,7 +3367,27 @@ Definition enters_exclusively_for_value (uid : UserId) (r p : nat) (v : Value) p
   ~ ustate.(corrupt) /\ ustate.(stv) p = Some v /\
   forall s, size (ustate.(nextvotes_open) r p.-1 s) < tau_b.
 
-(* Priority:HIGH *)
+Lemma stv_forward
+      g1 g2 (H_reach : greachable g1 g2)
+      uid u1 u2 p v:
+  g1.(users).[?uid] = Some u1 ->
+  u1.(stv) p = Some v ->
+  g2.(users).[?uid] = Some u2 ->
+  u1.(round) = u2.(round) ->
+  u2.(stv) p = Some v.
+Proof using.
+Admitted.
+
+(* main subargument for excl_enter_limits_cert_vote *)
+Lemma honest_certvote_respects_stv uid g1 g2 v v' r p u:
+  g1.(users).[?uid] = Some u ->
+  u.(stv) p = Some v ->
+  user_honest uid g1 ->
+  user_sent uid (Certvote, val v', r, p, uid) g1 g2 ->
+  v' = v.
+Proof using.
+Admitted.
+
 (* L6: if all honest nodes that entered a period p >= 2 did so exclusively for value v *)
 (* then an honest node cannot cert-vote for any value other than v in step 3 of period p'. *)
 Lemma excl_enter_limits_cert_vote :
@@ -3379,6 +3399,7 @@ Lemma excl_enter_limits_cert_vote :
       enters_exclusively_for_value uid r p v trace ->
       forall v', certvoted_in_path trace uid r p v' -> v' = v.
 Proof using.
+  clear.
   move => g0 trace H_path r p v H_p uid H_honest H_excl v' H_vote.
   destruct H_vote as [ix_vote H_vote].
   unfold certvoted_in_path_at in H_vote.
@@ -3404,14 +3425,49 @@ Proof using.
       move:H_pre; rewrite H /msg_step /step_lt; clear.
       rewrite !ltnn.
       by intuition.
-    * (* Refute by step order *)
-      admit.
+    * move: H_enter => [ukey_1 [ukey_2 [H_enter_lt H_enter_eq]]].
+      set ustate1: UState := g1.(users)[`ukey_1] in H_enter_lt.
+      set ustate2: UState := g2.(users)[`ukey_2] in H_enter_eq.
+      move: H_lt. apply/negP. rewrite -leqNgt.
+      clear ukey_2 ustate2 H_enter_eq.
+      (* Deduce this by looking at the step order *)
+      apply ltnW.
+      have H_uv := (in_fnd (user_sent_in_pre H_vote_send)).
+      eapply (order_state_from_step H_path
+                                    (step_in_path_onth_pre H_enter_step) (in_fnd ukey_1)
+                                    (step_in_path_onth_pre H_vote_step) H_uv).
+      rewrite -/ustate1 (utransition_label_start H_vote_send H_uv).
+      apply (step_lt_le_trans H_enter_lt).
+      simpl;clear. by intuition.
   }
   have H_reach: greachable g2 g1_v
     := steps_greachable H_path H_order H_enter_step H_vote_step.
-  (* Show that stv for uid remains the same up to g1_v,
-     analyze certvote precondition *)
-Admitted.
+
+  have H_in := user_sent_in_pre H_vote_send.
+
+  assert ((g1_v.(users)[`H_in]).(stv) p = Some v) as H_stv_send.
+  {
+  move: H_enter => [_ [ukey_2 [_ H_step_g2]]].
+
+  refine (stv_forward H_path H_reach H_lookup_enter (in_fnd H_in) _ H_stv).
+
+  rewrite (in_fnd ukey_2) in H_lookup_enter.
+  move: H_lookup_enter => [] <-.
+  have := utransition_label_start H_vote_send (in_fnd H_in).
+
+  case: H_step_g2 => -> _ _. case => -> _ _.
+  reflexivity.
+  }
+
+  (* analyze certvote step precondition *)
+  assert (H_honest_send: user_honest uid g1_v).
+  {
+    rewrite -[(r,p,3)](utransition_label_start H_vote_send (in_fnd H_in)) in H_honest.
+    exact (user_honest_from_after H_path (step_in_path_onth_pre H_vote_step) H_honest).
+  }
+  clear -H_vote_send H_stv_send H_honest_send.
+  exact (honest_certvote_respects_stv (in_fnd H_in) H_stv_send H_honest_send H_vote_send).
+Qed.
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
