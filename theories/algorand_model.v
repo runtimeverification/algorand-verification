@@ -1063,6 +1063,38 @@ Lemma send_broadcasts_domf : forall deadline targets prev_msgs msgs uids,
     domf (send_broadcasts deadline targets prev_msgs msgs) `<=` uids.
 Admitted.
 
+Lemma send_broadcast_in : forall (msgpool : MsgPool) now uid msg targets
+                                 (h : uid \in msgpool) (h' : uid \in targets),
+  (send_broadcast now targets msgpool msg).[? uid] = Some (merge_msg_deadline now msg uid msgpool.[h]).
+Proof using.
+  move => msgpool now uid msg targets h h'.
+  rewrite updf_update. trivial.
+  assumption.
+Qed.
+
+Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msg targets
+                                    (h : uid \notin domf msgpool),
+  (send_broadcast now targets msgpool msg).[? uid] = None.
+Proof using.
+  move => msgpool now uid msg targets h.
+  apply not_fnd.
+  change (uid \notin domf (send_broadcast now targets msgpool msg)).
+  unfold send_broadcast.
+  by rewrite -updf_domf.
+Qed.
+
+Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msg targets
+                                            (h : uid \in msgpool) (h' : uid \notin targets),
+  (send_broadcast now targets msgpool msg).[? uid] = msgpool.[? uid].
+Proof using.
+  move => msgpool now uid msg targets h h'.
+  unfold send_broadcast.
+  rewrite updf_update'.
+  rewrite in_fnd.
+  trivial.
+  trivial.
+Qed.
+
 Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
   ohead (drop n s).
 
