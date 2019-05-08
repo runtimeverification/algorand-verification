@@ -1050,6 +1050,22 @@ Definition msg_deadline (msg : Msg) now : R :=
 Definition merge_msg_deadline (now : R) (msg : Msg) (_ : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
   (msg_deadline msg now, msg) +` v.
 
+Lemma merge_msgs_notin : forall d msg1 now msg2 uid (msgs : MsgPool) (h : uid \in msgs),
+  (d, msg1) \notin msgs.[h] ->
+  (d, msg1) \in merge_msg_deadline now msg2 uid msgs.[h] ->
+  msg1 = msg2.
+Proof.
+  intros. unfold merge_msg_deadline in H0.
+  rewrite in_msetD in H0.
+  move/orP in H0.
+  destruct H0.
+  rewrite in_mset1 in H0.
+  move/eqP in H0.
+  inversion H0. trivial.
+  move/negP in H.
+  contradiction.
+Qed.
+
 Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
   updf prev_msgs targets (merge_msg_deadline now msg).
 
