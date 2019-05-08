@@ -576,11 +576,11 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p 2 /\ p > 1 /\
   comm_cred_step uid r p 2 /\
   ( (~ cert_may_exist pre /\
-    (exists s, nextvote_value_quorum pre v r (p - 1) s) /\ 
+    (exists s, nextvote_value_quorum pre v r (p - 1) s) /\
     leader_reprop_value v (pre.(proposals) r p))
-    \/ 
+    \/
     (cert_may_exist pre /\ pre.(stv) p = Some v) ).
-(* Victor: Technically, I think it would be correct to vote for your (non-bottom) 
+(* Victor: Technically, I think it would be correct to vote for your (non-bottom)
    starting value even if `~ cert_may_exist pre` *)
 
 (* The no-softvoting step preconditions *)
@@ -596,8 +596,8 @@ Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p 2 /\
   (comm_cred_step uid r p 2 ->
     ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
-    /\ ((cert_may_exist pre \/ 
-        (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/ 
+    /\ ((cert_may_exist pre \/
+        (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
         ~ leader_reprop_value v (pre.(proposals) r p))
        /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
 
@@ -738,15 +738,15 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
   size [seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]  >= tau_v.
 
 (* State update -- The bottom-value case *)
-Definition adv_period_open_result (pre : UState) : UState := 
+Definition adv_period_open_result (pre : UState) : UState :=
   let prev_p := pre.(period) in
-    {[ (advance_period pre) 
+    {[ (advance_period pre)
       with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
 
 (* State update -- The proper value case *)
-Definition adv_period_val_result (pre : UState) v : UState := 
+Definition adv_period_val_result (pre : UState) v : UState :=
   let prev_p := pre.(period) in
-    {[ (advance_period pre) 
+    {[ (advance_period pre)
       with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
 
 (** Advancing round propositions and user state update **)
@@ -1391,7 +1391,7 @@ Inductive GTransition : g_transition_type :=
 | step_forge_msg : forall pre sender (sender_key : sender \in pre.(users))
                           r p s mtype mval
                           target (target_key : target \in pre.(users)),
-    ~ pre.(users).[target_key].(corrupt) -> 
+    ~ pre.(users).[target_key].(corrupt) ->
     have_keys pre.(users).[sender_key] r p s ->
     comm_cred_step sender r p s ->
     mtype_matches_step mtype s ->
@@ -3844,7 +3844,7 @@ Definition leader_in_path_at ix path uid r p v b : Prop :=
     (credential uid r p 1 < credential id r p 1)%O.
 
 (* a trace is partition-free if it's either empty or it's a valid trace that
-   starts at an unparitioned state and does not involve a partitioning 
+   starts at an unparitioned state and does not involve a partitioning
    transition -- Note: not compatible with is_trace above *)
 Definition partition_free trace : Prop :=
   if ohead trace is Some g0 then
@@ -3874,7 +3874,7 @@ Lemma partition_free_step : forall g0 g1,
   is_unpartitioned g0 -> g0 ~~> g1 ->
   ~ related_by lbl_enter_partition g0 g1 ->
   is_unpartitioned g1.
-Proof. 
+Proof.
 intros g0 g1 g0unp_H g0g1step_H notpstep_H.
 unfold related_by in notpstep_H. intuition.
 unfold make_partitioned in H2. unfold flip_partition_flag in H2. simpl in * |- *.
@@ -3890,10 +3890,10 @@ Lemma partition_free_prefix : forall n trace,
 Proof.
 intros n trace prfree_H.
 generalize dependent n.
-induction n. 
+induction n.
   rewrite take0. unfold partition_free. simpl. exact I.
   unfold partition_free in * |- *. destruct trace. auto.
-simpl in * |- *. decompose record prfree_H. rewrite drop0 in H1. 
+simpl in * |- *. decompose record prfree_H. rewrite drop0 in H1.
 split; auto. rewrite drop0. split; auto.
 Admitted.
 
@@ -3910,19 +3910,19 @@ Admitted.
 (* Whether the effect of a message is recored in the user state *)
 Definition message_recorded ustate msg : Prop :=
   match msg with
-  | (Block, val b, r,_,_) => 
+  | (Block, val b, r,_,_) =>
        b \in ustate.(blocks) r
-  | (Proposal, val v, r, p, uid) => 
+  | (Proposal, val v, r, p, uid) =>
        exists c, (uid, c, v, true) \in ustate.(proposals) r p
-  | (Reproposal, repr_val v uid' p', r, p, uid) => 
+  | (Reproposal, repr_val v uid' p', r, p, uid) =>
        exists c, (uid, c, v, false) \in ustate.(proposals) r p
-  | (Softvote, val v, r, p, uid) => 
+  | (Softvote, val v, r, p, uid) =>
        (uid, v) \in ustate.(softvotes) r p
-  | (Certvote, val v, r, p, uid) => 
+  | (Certvote, val v, r, p, uid) =>
        (uid, v) \in ustate.(certvotes) r p
-  | (Nextvote_Open, step_val s, r, p, uid) => 
+  | (Nextvote_Open, step_val s, r, p, uid) =>
        uid \in ustate.(nextvotes_open) r p s
-  | (Nextvote_Val, next_val v s, r, p, uid) => 
+  | (Nextvote_Val, next_val v s, r, p, uid) =>
        (uid, v) \in ustate.(nextvotes_val) r p s
   | _ => True
   end.
@@ -3945,7 +3945,7 @@ Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
     partition_free (g1 :: trace) ->
     Rle deadline (last g0 (g1 :: trace)).(now) ->
     exists ix g, ohead (drop ix (g1 :: trace)) = Some g
-      /\ (forall target, target \in honest_users g.(users) -> 
+      /\ (forall target, target \in honest_users g.(users) ->
             msg_timely_delivered msg deadline g target).
 Admitted.
 
@@ -3956,7 +3956,7 @@ is produced at period r.1 *)
 Lemma prop_a : forall g0 g1 trace uid r v b,
   path gtransition g0 (g1 :: trace) ->
   partition_free (g0 :: g1 :: trace) ->
-  leader_in_path_at 0 (g0 :: g1 :: trace) uid r 1 v b -> 
+  leader_in_path_at 0 (g0 :: g1 :: trace) uid r 1 v b ->
   user_honest_at 0 (g0 :: g1 :: trace) uid ->
   certified_in_period trace r 1 v.
 Proof.
@@ -3965,7 +3965,7 @@ destruct leader_H as [proposer_H crommitte_H].
 destruct proposer_H as [poleader_H [vb_H proposed_H]].
 destruct proposed_H as [g' prop_sent_H].
 destruct prop_sent_H as [g'' [prop_step_H prop_sent_H]]. destruct prop_step_H. subst.
-  (* Need to identify: - the step and state at which the message is received 
+  (* Need to identify: - the step and state at which the message is received
                       - the user who is receiving the message *)
 destruct prop_sent_H as [propsent_H | repropsent_H].
   destruct propsent_H as [propsent_H blocksent_H].
@@ -4033,7 +4033,7 @@ Proof.
   assumption.
   eapply all_def in H0; try eassumption.
 Admitted.
-    
+
 (* If any honest user is in period r.p with starting value bottom, then within
 time (2*lambda+Lambda), every honest user in period r.p will either certify a
 value (i.e., will get a certificate) or move to the next period *)
