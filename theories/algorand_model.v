@@ -2048,7 +2048,7 @@ Lemma send_step_sent : forall (g0 g1:GState) (target:UserId) msg,
     GTransition g0 g1 ->
     let (_,sender) := msg in
     user_honest sender g0 ->
-    user_sent sender msg g0 g1.
+    user_sent sender msg g0 g1 \/ msg \in g0.(msg_history).
 Proof using.
   intros g0 g1 target msg H_unsent_g0 H_sent_g1.
   destruct 1;
@@ -2079,6 +2079,7 @@ Proof using.
     rewrite <- surjective_pairing.
     intro H_honest.
 
+    left.
     unfold user_sent.
     exists sent.
     split;[assumption|].
@@ -2097,6 +2098,7 @@ Proof using.
     rewrite <- surjective_pairing.
     intro H_honest.
 
+    left.
     unfold user_sent.
     exists sent.
     split;[assumption|].
@@ -2147,7 +2149,9 @@ Proof using.
       match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
         [case => x;apply /negP|];done.
   * (* replay message *)
+    admit.
   * (* forge message result *)
+    admit.
 Admitted.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
