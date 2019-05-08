@@ -2131,6 +2131,7 @@ Proof using.
     rewrite <- surjective_pairing.
 
     by repeat (esplit||eassumption).
+
   * (* internal step *)
     assert (msg \in sent). admit.
     assert (msg.2 = uid). admit.
@@ -2148,6 +2149,7 @@ Proof using.
     simpl.
 
     by repeat (esplit||eassumption).
+
   * (* recover partition *)
     exfalso.
     destruct pre. simpl in H_unsent_g0.
@@ -2188,10 +2190,55 @@ Proof using.
     - apply negbT in H_uid. rewrite (not_fnd H_uid).
       match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
         [case => x;apply /negP|];done.
+
   * (* replay message *)
-    admit.
+    rewrite (surjective_pairing msg).
+    rewrite <- surjective_pairing.
+    intro H_honest.
+    right.
+    assert (msg = msg0).
+    (* replay msg0 must be msg *)
+    destruct pre. simpl in H_unsent_g0.
+    cbn -[in_mem mem] in H_sent_g1.
+    destruct (target \in msg_in_transit) eqn:H_target.
+    destruct (target \in [fset uid]) eqn:H_target2.
+  + rewrite send_broadcast_in in H_sent_g1.
+    rewrite (in_fnd H_target) in H_unsent_g0.
+    - destruct (H_sent_g1) as [d H_sent].
+      eapply merge_msgs_notin.
+      apply H_unsent_g0.
+      apply H_sent. apply H_target2.
+    - rewrite send_broadcast_notin_targets in H_sent_g1.
+      rewrite (in_fnd H_target) in H_sent_g1.
+      rewrite (in_fnd H_target) in H_unsent_g0.
+      destruct (H_sent_g1) as [d H_sent].
+      exfalso.
+      revert H_sent.
+      apply /negP.
+      apply H_unsent_g0.
+      apply H_target.
+      apply /negP.
+      rewrite H_target2.
+      trivial.
+  + rewrite send_broadcast_notin in H_sent_g1.
+    contradiction.
+    rewrite H_target.
+    reflexivity.
+    subst.
+    assumption.
+
   * (* forge message result *)
-    admit.
+    rewrite (surjective_pairing msg).
+    rewrite <- surjective_pairing.
+    intro H_honest.
+    exfalso.
+    unfold user_honest in H_honest.
+    (* see above *)
+    assert (msg.2 = sender). admit.
+    rewrite H3 in H_honest.
+    rewrite in_fnd in H_honest.
+    inversion H0. rewrite H4 in H_honest.
+    inversion H_honest.
 Admitted.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
