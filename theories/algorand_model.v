@@ -1576,14 +1576,6 @@ Proof using.
   change (sender \in domf (users.[sender <- x0])); rewrite dom_setf; apply fset1U1.
 Qed.
 
-(* generalizes user_sent above -- didn't want to touch the one above yet *)
-Definition user_sent_msgs uid (ms : seq Msg) (pre post : GState) : Prop :=
-  exists ms',
-  ((exists d incoming, related_by (lbl_deliver uid d incoming ms') pre post)
-  \/ (related_by (lbl_step_internal uid ms') pre post))
-  /\ subseq ms ms'.
-
-
 Lemma transitions_labeled: forall g1 g2,
     g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
 Proof using.
@@ -3828,14 +3820,16 @@ Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset U
   s > 3 ->
 *)
 
-(* LIVENESS *)
+
+(** LIVENESS **)
 
 (* A user has (re-)proposed a value/block for a given round/period along a
    given path *)
 Definition proposed_in_path_at ix path uid r p v b : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path /\
-    (user_sent_msgs uid [:: (Proposal, val v, r, p, uid); (Block, val b, r, p, uid)] g1 g2
-    \/ user_sent_msgs uid [:: (Reproposal, repr_val v uid p, r, p, uid)] g1 g2).
+    (user_sent uid (Proposal, val v, r, p, uid) g1 g2 /\
+     user_sent uid (Block, val b, r, p, uid) g1 g2 \/
+     user_sent uid (Reproposal, repr_val v uid p, r, p, uid) g1 g2).
 
 (* A block proposer (potential leader) for a given round/period along a path*)
 Definition block_proposer_in_path_at ix path uid r p v b : Prop :=
@@ -3849,15 +3843,135 @@ Definition leader_in_path_at ix path uid r p v b : Prop :=
   forall id, id \in committee r p 1 /\ id <> uid ->
     (credential uid r p 1 < credential id r p 1)%O.
 
+(* a trace is partition-free if it's either empty or it's a valid trace that
+   starts at an unparitioned state and does not involve a partitioning 
+   transition -- Note: not compatible with is_trace above *)
+Definition partition_free trace : Prop :=
+  if ohead trace is Some g0 then
+    is_unpartitioned g0 /\
+    path gtransition g0 (drop 1 trace) /\
+    forall n, ~ step_at trace n lbl_enter_partition
+  else True.
+
+Lemma partition_state : forall g,
+  is_unpartitioned g ->
+  is_partitioned (make_partitioned g).
+Proof.
+  intros g unp_H.
+  unfold is_unpartitioned,is_partitioned in unp_H.
+  unfold is_partitioned, make_partitioned, flip_partition_flag.
+  simpl. assumption.
+Qed.
+
+(* is_partitioned as a proposition *)
+Lemma is_partitionedP : forall g : GState,
+  reflect
+    (g.(network_partition) = true)
+    (is_partitioned g).
+Admitted.
+
+Lemma partition_free_step : forall g0 g1,
+  is_unpartitioned g0 -> g0 ~~> g1 ->
+  ~ related_by lbl_enter_partition g0 g1 ->
+  is_unpartitioned g1.
+Proof. 
+intros g0 g1 g0unp_H g0g1step_H notpstep_H.
+unfold related_by in notpstep_H. intuition.
+unfold make_partitioned in H2. unfold flip_partition_flag in H2. simpl in * |- *.
+(* almost all cases are straightforward *)
+destruct g0g1step_H ; auto.
+(* except recover_from_partitioned, which is handled separately *)
+  unfold is_unpartitioned in g0unp_H. rewrite H1 in g0unp_H. auto.
+Qed.
+
+Lemma partition_free_prefix : forall n trace,
+  partition_free trace ->
+  partition_free (take n trace).
+Proof.
+intros n trace prfree_H.
+generalize dependent n.
+induction n. 
+  rewrite take0. unfold partition_free. simpl. exact I.
+  unfold partition_free in * |- *. destruct trace. auto.
+simpl in * |- *. decompose record prfree_H. rewrite drop0 in H1. 
+split; auto. rewrite drop0. split; auto.
+Admitted.
+
+Lemma partition_free_suffix : forall n trace,
+  partition_free trace ->
+  partition_free (drop n trace).
+Proof.
+intros n trace prfree_H.
+generalize dependent n.
+induction n. rewrite drop0. assumption.
+unfold partition_free in * |- *.
+Admitted.
+
+(* Whether the effect of a message is recored in the user state *)
+Definition message_recorded ustate msg : Prop :=
+  match msg with
+  | (Block, val b, r,_,_) => 
+       b \in ustate.(blocks) r
+  | (Proposal, val v, r, p, uid) => 
+       exists c, (uid, c, v, true) \in ustate.(proposals) r p
+  | (Reproposal, repr_val v uid' p', r, p, uid) => 
+       exists c, (uid, c, v, false) \in ustate.(proposals) r p
+  | (Softvote, val v, r, p, uid) => 
+       (uid, v) \in ustate.(softvotes) r p
+  | (Certvote, val v, r, p, uid) => 
+       (uid, v) \in ustate.(certvotes) r p
+  | (Nextvote_Open, step_val s, r, p, uid) => 
+       uid \in ustate.(nextvotes_open) r p s
+  | (Nextvote_Val, next_val v s, r, p, uid) => 
+       (uid, v) \in ustate.(nextvotes_val) r p s
+  | _ => True
+  end.
+
+(* The effect of the message is recorded in the state of the target user on or
+   before the message's deadline *)
+Definition msg_timely_delivered msg deadline gstate target : Prop :=
+  Rle gstate.(now) deadline /\
+  exists ustate, gstate.(users).[? target] = Some ustate /\
+  message_recorded ustate msg.
+
+(* If a message is sent along a partition-free trace, and the trace is long enough,
+   then the message is received by all honest users in a timely fashion
+ *)
+(* Note: this probably needs revision *)
+Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
+  let deadline := msg_deadline msg g0.(now) in
+    user_sent sender msg g0 g1 ->
+    path gtransition g0 (g1 :: trace) ->
+    partition_free (g1 :: trace) ->
+    Rle deadline (last g0 (g1 :: trace)).(now) ->
+    exists ix g, ohead (drop ix (g1 :: trace)) = Some g
+      /\ (forall target, target \in honest_users g.(users) -> 
+            msg_timely_delivered msg deadline g target).
+Admitted.
+
+
 (* If the block proposer of period r.1 is honest, then a certificate for round r
 is produced at period r.1 *)
 (* Need the assumption of no partition?? *)
-Lemma prop_a : forall ix path uid r v b,
-  leader_in_path_at ix path uid r 1 v b ->
-  user_honest_at ix path uid ->
-  certified_in_period path r 1 v.
+Lemma prop_a : forall g0 g1 trace uid r v b,
+  path gtransition g0 (g1 :: trace) ->
+  partition_free (g0 :: g1 :: trace) ->
+  leader_in_path_at 0 (g0 :: g1 :: trace) uid r 1 v b -> 
+  user_honest_at 0 (g0 :: g1 :: trace) uid ->
+  certified_in_period trace r 1 v.
 Proof.
+intros g0 g1 trace sender r v b tr_H pfree_tr_H leader_H honest_H.
+destruct leader_H as [proposer_H crommitte_H].
+destruct proposer_H as [poleader_H [vb_H proposed_H]].
+destruct proposed_H as [g' prop_sent_H].
+destruct prop_sent_H as [g'' [prop_step_H prop_sent_H]]. destruct prop_step_H. subst.
+  (* Need to identify: - the step and state at which the message is received 
+                      - the user who is receiving the message *)
+destruct prop_sent_H as [propsent_H | repropsent_H].
+  destruct propsent_H as [propsent_H blocksent_H].
+  pose proof (@sent_msg_timely_received sender (Proposal, val v, r, 1, sender) g' g'' trace). simpl in * |- *.
 Admitted.
+
 
 (* If some period r.p, p >= 2 is reached with unique starting value bot and the
    leader is honest, then the leader’s proposal is certified. *)
