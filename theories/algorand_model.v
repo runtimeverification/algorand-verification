@@ -3449,7 +3449,7 @@ Proof using.
   {
   move: H_enter => [_ [ukey_2 [_ H_step_g2]]].
 
-  refine (stv_forward H_path H_reach H_lookup_enter (in_fnd H_in) _ H_stv).
+  apply (stv_forward H_reach H_lookup_enter H_stv (in_fnd H_in)).
 
   rewrite (in_fnd ukey_2) in H_lookup_enter.
   move: H_lookup_enter => [] <-.
