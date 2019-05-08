@@ -2091,7 +2091,21 @@ Proof using.
 
     by repeat (esplit||eassumption).
   * (* internal step *)
-  admit.
+    assert (msg \in sent). admit.
+    assert (msg.2 = uid). admit.
+    rewrite (surjective_pairing msg).
+    rewrite <- surjective_pairing.
+    intro H_honest.
+
+    unfold user_sent.
+    exists sent.
+    split;[assumption|].
+    right.
+
+    rewrite H2 in H_honest |- *.
+    simpl.
+
+    by repeat (esplit||eassumption).
   * (* recover partition *)
     exfalso.
     destruct pre. simpl in H_unsent_g0.
@@ -2132,6 +2146,8 @@ Proof using.
     - apply negbT in H_uid. rewrite (not_fnd H_uid).
       match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
         [case => x;apply /negP|];done.
+  * (* replay message *)
+  * (* forge message result *)
 Admitted.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
