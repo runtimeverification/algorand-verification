@@ -422,9 +422,9 @@ Definition vote_values (vs: seq Vote) : seq Value :=
   undup [seq x.2 | x <- vs] .
 
 (* The number of softvotes of a given value in a given user state for the round
-   and period given (assumes u.(softvotes) r p is duplicate-free) *)
+   and period given (does not use the invariant that u.(softvotes) r p is duplicate-free) *)
 Definition soft_weight (v:Value) (u:UState) r p : nat :=
-  size [seq x <- u.(softvotes) r p | matchValue x v] .
+  size [seq x <- undup (u.(softvotes) r p) | matchValue x v] .
 
 (* The sequence of values with high enough softvotes in a given user state for given round and period *)
 (* i.e. the sequence of values in softvotes having votes greater than or equal to the threshold *)
@@ -954,17 +954,18 @@ where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
 Create HintDb utransition_unfold discriminated.
 Hint Unfold
      (* UTransitionInternal *)
-     propose_ok repropose_ok no_propose_ok propose_result
-     softvote_new_ok softvote_repr_ok no_softvote_ok softvote_result
-     certvote_ok no_certvote_ok certvote_result
-     nextvote_val_ok nextvote_open_ok nextvote_stv_ok nextvote_result
-     timeout_ok timeout_result
+     propose_result      propose_ok repropose_ok no_propose_ok
+     softvote_result     softvote_new_ok softvote_repr_ok no_softvote_ok
+     certvote_result     certvote_ok
+     no_certvote_result  no_certvote_ok
+     nextvote_result     nextvote_val_ok nextvote_open_ok nextvote_stv_ok no_nextvote_ok
+     timeout_result      timeout_ok
      (* UTransitionMsg *)
-     set_softvotes certvote_ok certvote_result
-     set_nextvotes_open adv_period_open_ok
-     set_nextvotes_val adv_period_val_ok advance_period
-     set_certvotes certify_ok certify_result
-     deliver_nonvote_msg_result : utransition_unfold.
+     set_softvotes       certvote_ok         certvote_result
+     set_nextvotes_open  adv_period_open_ok  adv_period_open_result
+     set_nextvotes_val   adv_period_val_ok   adv_period_val_result
+     set_certvotes       certify_ok          certify_result
+     vote_msg deliver_nonvote_msg_result : utransition_unfold.
 
 (* Global transition relation type *)
 Definition g_transition_type := relation GState.
@@ -3278,44 +3279,215 @@ Proof using.
 Admitted.
 
 (* A user has nextvoted bottom for a given period along a given path *)
-Definition nextvoted_open_in_path trace r p s uid : Prop :=
-  exists ix g1 g2,
-  step_in_path_at g1 g2 ix trace
-  /\ user_sent uid (Nextvote_Open, step_val s, r, p, uid) g1 g2.
+Definition nextvoted_open_in_path_at ix path uid r p s : Prop :=
+  user_sent_at ix path uid (Nextvote_Open, step_val s,r,p,uid).
+
+Definition nextvoted_open_in_path path r p s uid : Prop :=
+  exists ix, nextvoted_open_in_path_at ix path uid r p s.
 
 (* A user has nextvoted a value for a given period along a given path *)
-Definition nextvoted_value_in_path trace r p s uid v : Prop :=
-  exists ix g1 g2,
-  step_in_path_at g1 g2 ix trace
-  /\ user_sent uid (Nextvote_Val, next_val v s, r, p, uid) g1 g2.
+Definition nextvoted_value_in_path path r p s uid v : Prop :=
+  exists ix, user_sent_at ix path uid (Nextvote_Val, next_val v s, r, p, uid).
 
-(* Priority:HIGH
-   Top-level result,
-   just need to compare message steps to show any nextvote must have come
-   after certvote,
-   examine user state at/after certvote to note it saw softvotes,
-   examine state before nextvote to show open nextvote means not enough
-   softvotes, and appeal to monotonicity of the observations.
- *)
-(* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
-*)
-Lemma certvote_excludes_nextvote_open_in_p path uid r p s v:
-  honest_after_step (r,p,s) uid path ->
-  certvoted_in_path path uid r p v -> ~ nextvoted_open_in_path path r p s uid .
+Lemma certvote_postcondition uid v r p g1 g2:
+  user_sent uid (Certvote,val v,r,p,uid) g1 g2 ->
+  forall u, g2.(users).[?uid] = Some u ->
+  v \in certvals u r p /\
+        exists b, b \in u.(blocks) r /\ valid_block_and_hash b v.
 Proof using.
-  move => H_honest [ix_cv [g1_cv [g2_cv [H_step_cv H_vote_cv]]]]
-                   [ix_nv [g1_nv [g2_nv [H_step_nv H_vote_nv]]]].
 Admitted.
 
+Lemma nextvote_open_step g0 trace (H_path: path gtransition g0 trace)
+      ix uid r p s:
+  user_sent_at ix trace uid (Nextvote_Open, step_val s, r, p, uid) ->
+  honest_after_step (r,p,s) uid trace ->
+  3 < s.
+Proof using.
+Admitted.
+
+Lemma nextvote_val_step g0 trace (H_path: path gtransition g0 trace)
+      ix uid v r p s:
+  user_sent_at ix trace uid (Nextvote_Val, next_val v s, r, p, uid) ->
+  honest_after_step (r,p,s) uid trace ->
+  3 < s.
+Admitted.
+
+Lemma nextvote_open_precondition g1 g2 uid r p s:
+  user_sent uid (Nextvote_Open, step_val s, r, p, uid) g1 g2 ->
+  forall u, g1.(users).[?uid] = Some u ->
+  nextvote_open_ok u uid r p s.
+Proof using.
+Admitted.
+
+Lemma nextvote_val_precondition g1 g2 uid v r p s:
+  user_sent uid (Nextvote_Val, next_val v s, r, p, uid) g1 g2 ->
+  forall u, g1.(users).[?uid] = Some u ->
+  exists b, nextvote_val_ok u uid v b r p s.
+Admitted.
+
+Lemma softvotes_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  forall r p, pre.(softvotes) r p \subset post.(softvotes) r p.
+Proof using.
+  move => uid pre post msgs step r p.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+Lemma softvotes_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  forall r p,
+    pre.(softvotes) r p \subset post.(softvotes) r p.
+Proof using.
+  move => uid pre post m msgs step r p.
+  remember (post,msgs) as result eqn:H_result;
+    destruct step;case:H_result => [? ?];subst;
+  destruct pre;simpl;autounfold with utransition_unfold;
+    repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end;
+  try (by apply subxx_hint);
+  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+Qed.
+
+Lemma softvotes_monotone g1 g2 (H_reach:greachable g1 g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  forall u2, g2.(users).[?uid] = Some u2 ->
+  forall r p,
+    u1.(softvotes) r p \subset u2.(softvotes)  r p.
+Proof using.
+Admitted.
+
+Lemma soft_weight_monotone g1 g2 (H_reach:greachable g1 g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  forall u2, g2.(users).[?uid] = Some u2 ->
+  forall v r p,
+    soft_weight v u1 r p <= soft_weight v u2 r p.
+Proof using.
+  move => u1 H_u1 u2 H_u2 v r p.
+  unfold soft_weight.
+  rewrite !filter_undup.
+  rewrite -!(elimT card_uniqP) ?undup_uniq //.
+  apply subset_leq_card.
+  rewrite (eq_subset (mem_undup _)) (eq_subset_r (mem_undup _)).
+
+  apply/subsetP => x.
+  rewrite !mem_filter.
+  move/andP => [->] /=.
+  apply/subsetP: x.
+
+  exact (softvotes_monotone H_reach H_u1 H_u2 r p).
+Qed.
+
+Lemma blocks_monotone g1 g2 (H_reach: greachable g1 g2) uid:
+  forall u1, g1.(users).[? uid] = Some u1 ->
+  forall u2, g2.(users).[? uid] = Some u2 ->
+  forall r, u1.(blocks) r \subset u2.(blocks) r.
+Proof using.
+Admitted.
+
+(* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
+*)
+Lemma certvote_excludes_nextvote_open_in_p g0 trace (H_path:path gtransition g0 trace) uid r p s v:
+  honest_after_step (r,p,s) uid trace ->
+  certvoted_in_path trace uid r p v -> ~ nextvoted_open_in_path trace r p s uid .
+Proof using.
+  clear -H_path.
+  move => H_honest [ix_cv H_cv] [ix_nv H_nv].
+  move: (H_cv) => [g1_cv [g2_cv [H_step_cv H_vote_cv]]].
+  move: (H_nv) => [g1_nv [g2_nv [H_step_nv H_vote_nv]]].
+  assert (ix_cv < ix_nv) as H_lt.
+  {
+  apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) (step_in_path_onth_pre H_step_nv)
+                             (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
+  rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
+  rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
+  simpl. have: 3 < s := nextvote_open_step H_path H_nv H_honest. clear. by intuition.
+  }
+  have H_reach: greachable g2_cv g1_nv := steps_greachable H_path H_lt H_step_cv H_step_nv.
+
+  have H_key2_cv := user_sent_in_post H_vote_cv.
+  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
+  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
+
+  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
+
+  have H_key1_nv := user_sent_in_pre H_vote_nv.
+  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
+  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
+  have := nextvote_open_precondition H_vote_nv H_lookup_nv.
+  unfold nextvote_open_ok.
+  move => [] _ [] _ [] _ [] H_no_softvotes _.
+
+  clear -H_reach H_softvotes H_lookup_cv H_lookup_nv H_no_softvotes.
+  specialize (H_no_softvotes v).
+  have: v \in certvals ustate_nv r p.
+  {
+    move: H_softvotes => [H] _. move: H.
+    rewrite !mem_filter.
+    move/andP => [H_tau H_votes]. apply/andP.
+    split.
+      by apply/(leq_trans H_tau) /(soft_weight_monotone H_reach H_lookup_cv H_lookup_nv).
+      have H_subset := softvotes_monotone H_reach H_lookup_cv H_lookup_nv r p.
+      move: H_subset H_votes.
+      unfold vote_values.
+      destruct ustate_cv, ustate_nv;simpl; clear.
+      move => H_subset.
+      rewrite !mem_undup.
+      move/mapP => [x H_in H_v].
+      apply/mapP. exists x;[|assumption].
+      move: {H_v}x H_in.
+      apply/subsetP.
+      by assumption.
+  }
+  move => H_certval_nv.
+  move: H_softvotes =>  [_ [b [H_b H_valid]]].
+
+  refine (H_no_softvotes H_certval_nv b _ H_valid).
+  apply/subsetP: {H_valid}b H_b.
+  by apply (blocks_monotone H_reach H_lookup_cv H_lookup_nv).
+Qed.
+
 (* Priority:HIGH
    Top-level result,
-   much structure can be shared with nextvoted_value_in_path
+   much of proof shared with certvote_excludes_nextvote_open_in_p
  *)
 (* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
-Lemma certvote_nextvote_value_in_p : forall path uid r p v v',
-  certvoted_in_path path uid r p v ->
-  forall s, nextvoted_value_in_path path r p s uid v' ->
+Lemma certvote_nextvote_value_in_p g0 trace (H_path: path gtransition g0 trace) uid r p v s v':
+  honest_after_step (r,p,s) uid trace ->
+  certvoted_in_path trace uid r p v ->
+  nextvoted_value_in_path trace r p s uid v' ->
   v = v'.
+Proof using.
+  move => H_honest [ix_cv H_cv] [ix_nv H_nv].
+  move: (H_cv) => [g1_cv [g2_cv [H_step_cv H_vote_cv]]].
+  move: (H_nv) => [g1_nv [g2_nv [H_step_nv H_vote_nv]]].
+  assert (ix_cv < ix_nv).
+  {
+  apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) (step_in_path_onth_pre H_step_nv)
+                             (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
+  rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
+  rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
+  simpl. have: 3 < s := nextvote_val_step H_path H_nv H_honest. clear. by intuition.
+  }
+  have H_key2_cv := user_sent_in_post H_vote_cv.
+  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
+  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
+
+  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
+
+  have H_key1_nv := user_sent_in_pre H_vote_nv.
+  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
+  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
+
+  have := nextvote_val_precondition H_vote_nv H_lookup_nv.
+  move => [] b. unfold nextvote_val_ok.
+  move => [_ [_ [_ [_ [_ H_certval]]]]].
+
+  assert (tau_s <= soft_weight v' ustate_nv r p) as H_v'
+      by (move: H_certval;rewrite mem_filter => /andP [] //).
+  assert (tau_s <= soft_weight v ustate_cv r p) as H_v
+      by (move:H_softvotes;rewrite mem_filter => [] [] /andP [] //).
+
+  (* Now need to argue quorum intersection *)
 Admitted.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
@@ -3400,7 +3572,7 @@ Proof.
   }
   {
     move: (g1.(users)[`H_user_in]) H_start_label => u. clear.
-    destruct u;simpl. clear. case. by destruct v;case.
+    by destruct u, v;case.
   }
 Qed.
 
@@ -4146,11 +4318,6 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
 Proof.
 Admitted.
 
-Lemma all_def : forall (s : seq UserId) p x,
-  all p s -> x \in s -> p x.
-Proof.
-Admitted.
-
 (* Honest user softvotes starting value *)
 Lemma stv_not_bot_softvote : forall ix path r p v uid,
   uid \in domf (honest_users (users_at ix path)) ->
@@ -4180,7 +4347,7 @@ Proof.
   trivial.
   intros. apply stv_not_bot_softvote.
   assumption.
-  eapply all_def in H0; try eassumption.
+  move/allP in H0. unfold prop_in1 in H0.
 Admitted.
 
 (* If any honest user is in period r.p with starting value bottom, then within
