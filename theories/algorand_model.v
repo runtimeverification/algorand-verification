@@ -2600,7 +2600,7 @@ Proof using delays_order delays_positive.
      by admit.
    - split => //; split => //.
      by admit.
-  Admitted.
+Abort.
 *)
 
 (* Priority:LIVENESS *)
@@ -2659,7 +2659,7 @@ Proof using.
   * (* replay message *)
     admit.
   * (* forge message *)
-  Admitted.
+Abort.
 *)
 
 (* Generalization of preservation of sensibility to paths *)
@@ -4205,7 +4205,7 @@ Lemma is_partitionedP : forall g : GState,
   reflect
     (g.(network_partition) = true)
     (is_partitioned g).
-  Admitted.
+Abort.
 
 Lemma partition_free_step : forall g0 g1,
   is_unpartitioned g0 -> g0 ~~> g1 ->
@@ -4232,7 +4232,7 @@ induction n.
   unfold partition_free in * |- *. destruct trace. auto.
 simpl in * |- *. decompose record prfree_H. rewrite drop0 in H1.
 split; auto. rewrite drop0. split; auto.
-  Admitted.
+Abort.
 
 Lemma partition_free_suffix : forall n trace,
   partition_free trace ->
@@ -4242,7 +4242,7 @@ intros n trace prfree_H.
 generalize dependent n.
 induction n. rewrite drop0. assumption.
 unfold partition_free in * |- *.
-  Admitted.
+Abort.
 
 (* Whether the effect of a message is recored in the user state *)
 Definition message_recorded ustate msg : Prop :=
@@ -4284,7 +4284,7 @@ Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
     exists ix g, ohead (drop ix (g1 :: trace)) = Some g
       /\ (forall target, target \in honest_users g.(users) ->
             msg_timely_delivered msg deadline g target).
-  Admitted.
+Abort.
 
 
 (* If the block proposer of period r.1 is honest, then a certificate for round r
@@ -4307,7 +4307,7 @@ destruct prop_sent_H as [g'' [prop_step_H prop_sent_H]]. destruct prop_step_H. s
 destruct prop_sent_H as [propsent_H | repropsent_H].
   destruct propsent_H as [propsent_H blocksent_H].
   pose proof (@sent_msg_timely_received sender (Proposal, val v, r, 1, sender) g' g'' trace). simpl in * |- *.
-  Admitted.
+Abort.
 
 
 (* If some period r.p, p >= 2 is reached with unique starting value bot and the
@@ -4319,7 +4319,7 @@ Lemma prop_c : forall ix path uid r p v b,
   leader_in_path_at ix path uid r 1 v b ->
   user_honest_at ix path uid ->
   certified_in_period path r p v.
-  Admitted.
+Abort.
 
 (* softvote quorum of all honest users implies certvote quorum *)
 Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset UserId}) ix path r p v,
@@ -4332,14 +4332,14 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
   (forall voter : UserId, voter \in softvote_quorum
                                     -> certvoted_in_path path voter r p v).
 Proof.
-  Admitted.
+Abort.
 
 (* Honest user softvotes starting value *)
 Lemma stv_not_bot_softvote : forall ix path r p v uid,
   uid \in domf (honest_users (users_at ix path)) ->
   user_stv_val_at ix path uid p (Some v) ->
   softvoted_in_path_at ix path uid r p v.
-  Admitted.
+Abort.
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
    value H(B), then a certificate for H(B) that period is produced by the honest
@@ -4364,7 +4364,7 @@ Proof.
   intros. apply stv_not_bot_softvote.
   assumption.
   move/allP in H0. unfold prop_in1 in H0.
-  Admitted.
+Abort.
 
 (* If any honest user is in period r.p with starting value bottom, then within
 time (2*lambda+Lambda), every honest user in period r.p will either certify a
@@ -4377,7 +4377,7 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     user_stv_val uid g1 p None ->
     (exists v, certvoted_in_path path_seq uid r p v
                \/ period_advance_at 1 path_seq uid r p g1 g2) .
-  Admitted.
+Abort.
 *)
 
 End AlgoModel.
