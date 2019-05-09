@@ -1796,9 +1796,29 @@ Proof using.
           destruct u;simpl in * |- *. congruence.
       }
       (* corrupt/replay *)
-      admit.
+      {
+        match goal with
+          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
+        end.
+        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
+        rewrite fnd_set eq_refl.
+        rewrite in_fnd.
+        injection 1. revert H_honest. generalize (users.[ustate_key]).
+        clear. move => u H_honest. move/(f_equal corrupt).
+        destruct u;simpl in * |- *. congruence.
+      }
       (* corrupt/forge *)
-      admit.
+      {
+        match goal with
+          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
+        end.
+        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
+        rewrite fnd_set eq_refl.
+        rewrite in_fnd.
+        injection 1. revert H_honest. generalize (users.[ustate_key]).
+        clear. move => u H_honest. move/(f_equal corrupt).
+        destruct u;simpl in * |- *. congruence.
+      }
     }
   + (* replay *)
     admit.
