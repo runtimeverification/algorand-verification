@@ -685,13 +685,12 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
             committee membership constraint)
           - Updated to accommodate the 27March change
  *)
-Definition nextvote_open_ok (pre : UState) uid (v b : Value) r p s : Prop :=
+Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
-  (~ b \in pre.(blocks) r \/
-   ~ valid_block_and_hash b v \/
-   ~ v \in certvals pre r p) /\
+  (forall v, v \in certvals pre r p -> forall b, b \in pre.(blocks) r ->
+     ~valid_block_and_hash b v) /\
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
 
 (* Nextvoting step preconditions *)
@@ -705,9 +704,8 @@ Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
-  (~ b \in pre.(blocks) r \/
-   ~ valid_block_and_hash b v \/
-   ~ v \in certvals pre r p) /\
+  (forall v, v \in certvals pre r p -> forall b, b \in pre.(blocks) r ->
+     ~valid_block_and_hash b v) /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
 
 (* Nextvoting step preconditions *)
@@ -859,8 +857,8 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
-  | nextvote_open : forall uid (pre : UState) v b r p s,
-      nextvote_open_ok pre uid v b r p s ->
+  | nextvote_open : forall uid (pre : UState) r p s,
+      nextvote_open_ok pre uid r p s ->
       uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
