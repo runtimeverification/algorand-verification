@@ -3418,7 +3418,7 @@ Proof using.
   move: g1 H_path H_last u1 H_u1.
   induction trace.
   * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
-  * simpl [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p.
     specialize (IHtrace a H_path H_last).
     have [umid [H_umid H_sub]] := softvotes_gtransition H_step H_u1.
     specialize (H_sub r p).
@@ -3447,12 +3447,73 @@ Proof using.
   exact (softvotes_monotone H_reach H_u1 H_u2 r p).
 Qed.
 
+Lemma blocks_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  forall r, pre.(blocks) r \subset post.(blocks) r.
+Proof using.
+  move => uid pre post msgs step r.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+Lemma blocks_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  forall r,
+    pre.(blocks) r \subset post.(blocks) r.
+Proof using.
+  move => uid pre post m msgs step r;
+  remember (post,msgs) as result eqn:H_result;
+    destruct step;case:H_result => [? ?];subst;
+  destruct pre;simpl;autounfold with utransition_unfold;
+    repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b
+           | _ => progress simpl end;
+  try (by apply subxx_hint);
+  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+Qed.
+
+Lemma blocks_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+             /\ forall r, u1.(blocks) r \subset u2.(blocks) r.
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
 Lemma blocks_monotone g1 g2 (H_reach: greachable g1 g2) uid:
   forall u1, g1.(users).[? uid] = Some u1 ->
   forall u2, g2.(users).[? uid] = Some u2 ->
   forall r, u1.(blocks) r \subset u2.(blocks) r.
 Proof using.
-Admitted.
+  clear -H_reach.
+  move => u1 H_u1 u2 H_u2.
+  destruct H_reach as [trace H_path H_last].
+  move: g1 H_path H_last u1 H_u1.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := blocks_gtransition H_step H_u1.
+    specialize (H_sub r).
+    specialize (IHtrace umid H_umid r).
+    refine (subset_trans H_sub IHtrace).
+Qed.
 
 (* L3: If an honest user cert-votes for a value in step 3, the user will NOT next-vote bottom in the same period
 *)
