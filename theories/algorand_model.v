@@ -32,6 +32,10 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Inductive Unused : Prop := .
+Ltac unused := by apply Unused_rect.
+Ltac admit_unused := by apply Unused_rect.
+
 Section AlgoModel.
 
 (* We assume a finite set of users *)
@@ -1072,11 +1076,13 @@ Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgP
   foldl (send_broadcast now targets) prev_msgs msgs.
 
 (* Priority:LOW. may be a technical lemma for reasoning about broadcasts *)
-Lemma send_broadcasts_domf : forall deadline targets prev_msgs msgs uids,
+Lemma send_broadcasts_domf (unused:Unused) : forall deadline targets prev_msgs msgs uids,
     domf prev_msgs `<=` uids ->
     targets `<=` uids ->
     domf (send_broadcasts deadline targets prev_msgs msgs) `<=` uids.
-Admitted.
+Proof.
+  unused.
+Qed.
 
 Lemma send_broadcast_in : forall (msgpool : MsgPool) now uid msg targets
                                  (h : uid \in msgpool) (h' : uid \in targets),
@@ -2075,7 +2081,7 @@ Qed.
  *)
 (* This proof will need to be adjusted once the adversary can
    replay messages *)
-Lemma send_step_sent : forall (g0 g1:GState) (target:UserId) msg,
+Lemma send_step_sent (unused:Unused) : forall (g0 g1:GState) (target:UserId) msg,
     match g0.(msg_in_transit).[? target] with
     | Some mailbox => forall d, (d,msg) \notin mailbox
     | None => True
@@ -2104,14 +2110,14 @@ Proof using.
     assert (msg.2 = uid).
      (* I think this fails because we have the wrong meaning
         of the sender msg.2? *)
-     admit.
+     by admit_unused.
     assert (msg \in sent).
     (* we must have that an entry is found in H_sent_g1,
        and by H_unsent_g0 and properties of send_broadcasts
        we can show the message doesn't come from the g0 mailbox,
        so it must be derived from sent.
      *)
-      admit.
+      by admit_unused.
 
     unfold is_user_corrupt_gstate.
     rewrite (surjective_pairing msg).
@@ -2132,8 +2138,8 @@ Proof using.
     by repeat (esplit||eassumption).
 
   * (* internal step *)
-    assert (msg \in sent). admit.
-    assert (msg.2 = uid). admit.
+    assert (msg \in sent). by admit_unused.
+    assert (msg.2 = uid). by admit_unused.
     rewrite (surjective_pairing msg).
     rewrite <- surjective_pairing.
     intro H_honest.
@@ -2233,12 +2239,12 @@ Proof using.
     exfalso.
     unfold user_honest in H_honest.
     (* see above *)
-    assert (msg.2 = sender). admit.
+    assert (msg.2 = sender). by admit_unused.
     rewrite H3 in H_honest.
     rewrite in_fnd in H_honest.
     inversion H0. rewrite H4 in H_honest.
     inversion H_honest.
-Admitted.
+Qed.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
     let: (mtype,v,r_m,p_m,uid_m) := msg in
@@ -2546,6 +2552,7 @@ Proof using delays_order.
 Qed.
 
 (* Priority:LIVENESS *)
+(*
 Lemma utr_nomsg_preserves_sensibility : forall uid us us' ms,
   sensible_ustate us -> uid # us ~> (us', ms) ->
   sensible_ustate us'.
@@ -2593,10 +2600,12 @@ Proof using delays_order delays_positive.
      by admit.
    - split => //; split => //.
      by admit.
-Admitted.
+  Admitted.
+*)
 
 (* Priority:LIVENESS *)
 (* The global transition relation preserves sensibility of global states *)
+(*
 Lemma gtr_preserves_sensibility : forall gs gs',
   sensible_gstate gs -> gs ~~> gs' ->
   sensible_gstate gs'.
@@ -2650,9 +2659,11 @@ Proof using.
   * (* replay message *)
     admit.
   * (* forge message *)
-Admitted.
+  Admitted.
+*)
 
 (* Generalization of preservation of sensibility to paths *)
+(*
 Lemma greachable_preserves_sensibility : forall g0 g,
   greachable g0 g -> sensible_gstate g0 -> sensible_gstate g.
 Proof using.
@@ -2666,6 +2677,7 @@ move: Ht.
 move/asboolP.
 exact: gtr_preserves_sensibility.
 Qed.
+*)
 
 (* SAFETY *)
 
@@ -3271,12 +3283,13 @@ Proof using. elim => //=; last by move => a l IH x; rewrite IH. Qed.
 (* Priority:HIGH
    Proof should be very similar to no_two_certvotes_in_p *)
 (* L2: An honest user soft-votes for at most one value in a period *)
-Lemma no_two_softvotes_in_p : forall path uid r p,
+Lemma no_two_softvotes_in_p (unused:Unused) : forall path uid r p,
   softvoted_once_in_path path r p uid \/ forall v, ~ softvoted_in_path path uid r p v.
 Proof using.
+  unused.
 (* once a user softvotes (certvotes) in step 2 (3), the user moves on to subsequent steps and never softvotes (certvotes) again in that period. *)
 (* appeal to steps being nondecreasing *)
-Admitted.
+Qed.
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path_at ix path uid r p s : Prop :=
@@ -3339,7 +3352,7 @@ Lemma softvotes_utransition_deliver:
   forall r p,
     pre.(softvotes) r p \subset post.(softvotes) r p.
 Proof using.
-  move => uid pre post m msgs step r p.
+  move => uid pre post m msgs step r p;
   remember (post,msgs) as result eqn:H_result;
     destruct step;case:H_result => [? ?];subst;
   destruct pre;simpl;autounfold with utransition_unfold;
@@ -3738,7 +3751,7 @@ Qed.
 (* Use this to relate an honest user having received a quorum of messages
    to some honest user having sent those messages *)
 (* Hopefully the statement can be cleaned up *)
-Lemma pending_honest_sent : forall g0 trace (H_path: path gtransition g0 trace),
+Lemma pending_honest_sent (unused:Unused) : forall g0 trace (H_path: path gtransition g0 trace),
     forall r, state_before_round r g0 ->
     forall g_pending pending_ix,
       onth trace pending_ix = Some g_pending ->
@@ -3751,7 +3764,9 @@ Lemma pending_honest_sent : forall g0 trace (H_path: path gtransition g0 trace),
     exists send_ix g1 g2,
       step_in_path_at g1 g2 send_ix trace
       /\ user_sent sender pending_msg g1 g2.
-Admitted.
+Proof.
+  unused.
+Qed.
 
 Lemma honest_at_from_at_step r p s uid trace:
       honest_at_step r p s uid trace ->
@@ -4144,6 +4159,7 @@ Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset U
 
 (** LIVENESS **)
 
+(*
 (* A user has (re-)proposed a value/block for a given round/period along a
    given path *)
 Definition proposed_in_path_at ix path uid r p v b : Prop :=
@@ -4189,7 +4205,7 @@ Lemma is_partitionedP : forall g : GState,
   reflect
     (g.(network_partition) = true)
     (is_partitioned g).
-Admitted.
+  Admitted.
 
 Lemma partition_free_step : forall g0 g1,
   is_unpartitioned g0 -> g0 ~~> g1 ->
@@ -4216,7 +4232,7 @@ induction n.
   unfold partition_free in * |- *. destruct trace. auto.
 simpl in * |- *. decompose record prfree_H. rewrite drop0 in H1.
 split; auto. rewrite drop0. split; auto.
-Admitted.
+  Admitted.
 
 Lemma partition_free_suffix : forall n trace,
   partition_free trace ->
@@ -4226,7 +4242,7 @@ intros n trace prfree_H.
 generalize dependent n.
 induction n. rewrite drop0. assumption.
 unfold partition_free in * |- *.
-Admitted.
+  Admitted.
 
 (* Whether the effect of a message is recored in the user state *)
 Definition message_recorded ustate msg : Prop :=
@@ -4268,7 +4284,7 @@ Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
     exists ix g, ohead (drop ix (g1 :: trace)) = Some g
       /\ (forall target, target \in honest_users g.(users) ->
             msg_timely_delivered msg deadline g target).
-Admitted.
+  Admitted.
 
 
 (* If the block proposer of period r.1 is honest, then a certificate for round r
@@ -4291,7 +4307,7 @@ destruct prop_sent_H as [g'' [prop_step_H prop_sent_H]]. destruct prop_step_H. s
 destruct prop_sent_H as [propsent_H | repropsent_H].
   destruct propsent_H as [propsent_H blocksent_H].
   pose proof (@sent_msg_timely_received sender (Proposal, val v, r, 1, sender) g' g'' trace). simpl in * |- *.
-Admitted.
+  Admitted.
 
 
 (* If some period r.p, p >= 2 is reached with unique starting value bot and the
@@ -4303,7 +4319,7 @@ Lemma prop_c : forall ix path uid r p v b,
   leader_in_path_at ix path uid r 1 v b ->
   user_honest_at ix path uid ->
   certified_in_period path r p v.
-Admitted.
+  Admitted.
 
 (* softvote quorum of all honest users implies certvote quorum *)
 Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset UserId}) ix path r p v,
@@ -4316,14 +4332,14 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
   (forall voter : UserId, voter \in softvote_quorum
                                     -> certvoted_in_path path voter r p v).
 Proof.
-Admitted.
+  Admitted.
 
 (* Honest user softvotes starting value *)
 Lemma stv_not_bot_softvote : forall ix path r p v uid,
   uid \in domf (honest_users (users_at ix path)) ->
   user_stv_val_at ix path uid p (Some v) ->
   softvoted_in_path_at ix path uid r p v.
-Admitted.
+  Admitted.
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
    value H(B), then a certificate for H(B) that period is produced by the honest
@@ -4348,7 +4364,7 @@ Proof.
   intros. apply stv_not_bot_softvote.
   assumption.
   move/allP in H0. unfold prop_in1 in H0.
-Admitted.
+  Admitted.
 
 (* If any honest user is in period r.p with starting value bottom, then within
 time (2*lambda+Lambda), every honest user in period r.p will either certify a
@@ -4361,6 +4377,7 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     user_stv_val uid g1 p None ->
     (exists v, certvoted_in_path path_seq uid r p v
                \/ period_advance_at 1 path_seq uid r p g1 g2) .
-Admitted.
+  Admitted.
+*)
 
 End AlgoModel.
