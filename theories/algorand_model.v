@@ -1879,16 +1879,6 @@ Proof.
   done.
 Qed.
 
-(* Priority:MED basic lemma for propagating honest backwards *)
-Lemma user_honest_from_after g0 trace (H_path: path gtransition g0 trace):
-  forall ix g1,
-    onth trace ix = Some g1 ->
-  forall uid (H_in : uid \in g1.(users)),
-    honest_after_step (step_of_ustate (g1.(users)[`H_in])) uid trace ->
-  user_honest uid g1.
-Proof using.
-Admitted.
-
 Definition committee (r p s:nat) : {fset UserId} :=
   [fset uid : UserId | `[<committee_cred (credential uid r p s)>] ].
 
@@ -3254,6 +3244,31 @@ Proof using.
   clear.
   unfold step_in_path_at.
   destruct (drop ix trace) as [|? [|]];(tauto || intuition congruence).
+Qed.
+
+(* basic lemma for propagating honest backwards *)
+Lemma user_honest_from_after g0 trace (H_path: path gtransition g0 trace):
+  forall ix g1,
+    onth trace ix = Some g1 ->
+  forall uid (H_in : uid \in g1.(users)),
+    honest_after_step (step_of_ustate (g1.(users)[`H_in])) uid trace ->
+  user_honest uid g1.
+Proof using.
+  move => ix g1 H_onth uid H_in H_honest_after.
+  destruct H_honest_after as [ix' H_honest_after].
+  destruct (onth trace ix') eqn:H_onth'.
+  destruct (uid \in global_state.users UserId UState [choiceType of Msg] g) eqn:H_in'.
+  rewrite in_fnd in H_honest_after.
+  destruct H_honest_after as [H_honest H_lt].
+  apply honest_monotone with g.
+  apply at_greachable with g0 trace ix ix'; try assumption.
+  assert (ix < ix'). eapply order_ix_from_steps; eassumption. auto.
+  unfold user_honest. rewrite in_fnd.
+  move/negP in H_honest. assumption.
+
+  exfalso. move/negP in H_in'. rewrite not_fnd in H_honest_after. assumption.
+  move/negP in H_in'. assumption.
+  exfalso. assumption.
 Qed.
 
 (* L1: An honest user cert-votes for at most one value in a period *)
