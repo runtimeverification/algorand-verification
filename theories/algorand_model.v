@@ -677,6 +677,7 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
+  3 < s /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
   v \in certvals pre r p.
@@ -693,6 +694,7 @@ Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
+  3 < s /\
   (forall v, v \in certvals pre r p -> forall b, b \in pre.(blocks) r ->
      ~valid_block_and_hash b v) /\
   (p > 1 -> nextvote_bottom_quorum pre r (p - 1) s ).
@@ -708,6 +710,7 @@ Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
+  3 < s /\
   (forall v, v \in certvals pre r p -> forall b, b \in pre.(blocks) r ->
      ~valid_block_and_hash b v) /\
   p > 1 /\ ~ nextvote_bottom_quorum pre r (p - 1) s.
@@ -3345,21 +3348,6 @@ Lemma certvote_postcondition uid v r p g1 g2:
 Proof using.
 Admitted.
 
-Lemma nextvote_open_step g0 trace (H_path: path gtransition g0 trace)
-      ix uid r p s:
-  user_sent_at ix trace uid (Nextvote_Open, step_val s, r, p, uid) ->
-  honest_after_step (r,p,s) uid trace ->
-  3 < s.
-Proof using.
-Admitted.
-
-Lemma nextvote_val_step g0 trace (H_path: path gtransition g0 trace)
-      ix uid v r p s:
-  user_sent_at ix trace uid (Nextvote_Val, next_val v s, r, p, uid) ->
-  honest_after_step (r,p,s) uid trace ->
-  3 < s.
-Admitted.
-
 Lemma nextvote_open_precondition g1 g2 uid r p s:
   user_sent uid (Nextvote_Open, step_val s, r, p, uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
@@ -3540,28 +3528,30 @@ Proof using.
   move => H_honest [ix_cv H_cv] [ix_nv H_nv].
   move: (H_cv) => [g1_cv [g2_cv [H_step_cv H_vote_cv]]].
   move: (H_nv) => [g1_nv [g2_nv [H_step_nv H_vote_nv]]].
+
+  have H_key1_nv := user_sent_in_pre H_vote_nv.
+  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
+  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
+  have H_nv_precond := nextvote_open_precondition H_vote_nv H_lookup_nv.
+
+  have H_key2_cv := user_sent_in_post H_vote_cv.
+  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
+  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
+  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
+
   assert (ix_cv < ix_nv) as H_lt.
   {
   apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) (step_in_path_onth_pre H_step_nv)
                              (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
   rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
   rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
-  simpl. have: 3 < s := nextvote_open_step H_path H_nv H_honest. clear. by intuition.
+  move:H_nv_precond;clear;simpl;unfold nextvote_open_ok;tauto.
   }
+
   have H_reach: greachable g2_cv g1_nv := steps_greachable H_path H_lt H_step_cv H_step_nv.
 
-  have H_key2_cv := user_sent_in_post H_vote_cv.
-  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
-  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
-
-  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
-
-  have H_key1_nv := user_sent_in_pre H_vote_nv.
-  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
-  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
-  have := nextvote_open_precondition H_vote_nv H_lookup_nv.
-  unfold nextvote_open_ok.
-  move => [] _ [] _ [] _ [] H_no_softvotes _.
+  move: H_nv_precond. unfold nextvote_open_ok.
+  move => [] _ [] _ [] _ [] _ [] H_no_softvotes _.
 
   clear -H_reach H_softvotes H_lookup_cv H_lookup_nv H_no_softvotes.
   specialize (H_no_softvotes v).
@@ -3606,27 +3596,28 @@ Proof using.
   move => H_honest [ix_cv H_cv] [ix_nv H_nv].
   move: (H_cv) => [g1_cv [g2_cv [H_step_cv H_vote_cv]]].
   move: (H_nv) => [g1_nv [g2_nv [H_step_nv H_vote_nv]]].
+
+  have H_key1_nv := user_sent_in_pre H_vote_nv.
+  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
+  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
+  have H_nv_precond := nextvote_val_precondition H_vote_nv H_lookup_nv.
+
+  have H_key2_cv := user_sent_in_post H_vote_cv.
+  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
+  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
+  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
+
   assert (ix_cv < ix_nv).
   {
   apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) (step_in_path_onth_pre H_step_nv)
                              (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
   rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
   rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
-  simpl. have: 3 < s := nextvote_val_step H_path H_nv H_honest. clear. by intuition.
+  move:H_nv_precond =>[b];clear;simpl;unfold nextvote_val_ok;tauto.
   }
-  have H_key2_cv := user_sent_in_post H_vote_cv.
-  set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
-  have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
 
-  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
-
-  have H_key1_nv := user_sent_in_pre H_vote_nv.
-  set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
-  have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
-
-  have := nextvote_val_precondition H_vote_nv H_lookup_nv.
-  move => [] b. unfold nextvote_val_ok.
-  move => [_ [_ [_ [_ [_ H_certval]]]]].
+  have {H_nv_precond}H_certval : v' \in certvals ustate_nv r p
+    by move: H_nv_precond => [] b;unfold nextvote_val_ok;tauto.
 
   assert (tau_s <= soft_weight v' ustate_nv r p) as H_v'
       by (move: H_certval;rewrite mem_filter => /andP [] //).
