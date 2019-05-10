@@ -3380,7 +3380,8 @@ Qed.
 Lemma nextvote_val_precondition g1 g2 uid v r p s:
   user_sent uid (Nextvote_Val, next_val v s, r, p, uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
-  exists b, nextvote_val_ok u uid v b r p s.
+  (exists b, nextvote_val_ok u uid v b r p s) \/
+  (exists b v', nextvote_stv_ok u uid v' b r p s) .
 Admitted.
 
 Lemma softvotes_utransition_internal:
@@ -3635,9 +3636,14 @@ Proof using.
                              (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
   rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
   rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
+
+  destruct H_nv_precond as [H_nv_precond | H_nv_precond].
   move:H_nv_precond =>[b];clear;simpl;unfold nextvote_val_ok;tauto.
+  (* stv case of nextvote_val_precondition *)
+  admit.
   }
 
+  destruct H_nv_precond as [H_nv_precond | H_nv_precond].
   have {H_nv_precond}H_certval : v' \in certvals ustate_nv r p
     by move: H_nv_precond => [] b;unfold nextvote_val_ok;tauto.
 
@@ -3647,6 +3653,19 @@ Proof using.
       by (move:H_softvotes;rewrite mem_filter => [] [] /andP [] //).
 
   (* Now need to argue quorum intersection *)
+  admit.
+
+  (* stv case of nextvote_val_precondition *)
+  exfalso.
+  destruct H_nv_precond as [b [v0 H_stv]].
+  destruct H_stv as [H_time [H_rps [H_ccs [H_nv_step [H_not_valid [H_p H_no_quorum]]]]]].
+  destruct H_softvotes as [H_certvals [b' [H_blocks H_valid]]].
+  (* discharge this using soft_weight_monotone *)
+  assert (v \in certvals ustate_nv r p) by admit.
+  (* discharge this using blocks_monotone *)
+  assert (b' \in local_state.blocks UserId Value PropRecord Vote ustate_nv r) by admit.
+  edestruct H_not_valid; eassumption.
+
 Admitted.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
