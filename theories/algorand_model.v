@@ -3353,7 +3353,29 @@ Lemma nextvote_open_precondition g1 g2 uid r p s:
   forall u, g1.(users).[?uid] = Some u ->
   nextvote_open_ok u uid r p s.
 Proof using.
-Admitted.
+  move => H_sent u H_u.
+  destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
+  * { (* message delivery cases *)
+      destruct H_step as (key_ustate & ustate_post & H_step & H_honest
+                          & key_mailbox & H_msg_in_mailbox & ->).
+      remember (ustate_post,ms) as ustep_out in H_step.
+      destruct H_step; injection Hequstep_out; clear Hequstep_out;
+      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      simpl in H_msg; destruct H_msg; try contradiction; inversion H0.
+    }
+  * { (* internal transition cases *)
+      destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+      remember (ustate_post,ms) as ustep_out in H_step.
+      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_user] = u).
+      rewrite in_fnd in H_u; inversion H_u; trivial.
+      rewrite H in H_step. clear H.
+      destruct H_step; injection Hequstep_out; clear Hequstep_out;
+        intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction;
+      simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
+      try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
+      subst; assumption.
+    }
+Qed.
 
 Lemma nextvote_val_precondition g1 g2 uid v r p s:
   user_sent uid (Nextvote_Val, next_val v s, r, p, uid) g1 g2 ->
