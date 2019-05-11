@@ -1616,6 +1616,10 @@ Definition user_sent sender (m : Msg) (pre post : GState) : Prop :=
   /\ ((exists d incoming, related_by (lbl_deliver sender d incoming ms) pre post)
       \/ (related_by (lbl_step_internal sender ms) pre post)).
 
+Definition user_sent_at ix path uid msg :=
+  exists g1 g2, step_in_path_at g1 g2 ix path
+                /\ user_sent uid msg g1 g2.
+
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
   sender \in pre.(users).
 Proof using.
@@ -1829,10 +1833,9 @@ Proof using.
 Admitted.
 
 Definition step_at path ix lbl :=
-  match drop ix path with
-  | pre :: post :: _ => related_by lbl pre post
-  | _ => False
-  end.
+  exists g1 g2,
+    step_in_path_at g1 g2 ix path
+    /\ related_by lbl g1 g2.
 
 Definition msg_received uid msg_deadline msg path : Prop :=
   exists n ms, step_at path n
@@ -2280,19 +2283,93 @@ Definition msg_step (msg:Msg) : nat * nat * nat :=
        end
      end).
 
-(* Priority:HIGH
+(* To show there is not a fork in a particular round,
+   we will take a history that extends before any honest
+   node has made a transition in that round *)
+Definition user_before_round r (u : UState) : Prop :=
+  (u.(round) < r \/
+   (u.(round) = r /\
+    u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
+  /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
+  /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
+  /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
+
+Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
+  forall i (Hi : i \in g.(users)),
+    ~~ (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
+
+Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
+  forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
+  forall deadline msg, (deadline,msg) \in mailbox ->
+     let: (_,_,r',_,u) := msg in
+     r' > r -> is_user_corrupt_gstate u g.
+
+Definition state_before_round r (g:GState) : Prop :=
+  honest_users_before_round r g
+  /\ honest_messages_before_round r g.
+
+(* A message from an honest user was actually sent in the trace *)
+(* Use this to relate an honest user having received a quorum of messages
+   to some honest user having sent those messages *)
+(* Hopefully the statement can be cleaned up *)
+Lemma pending_honest_sent: forall g0 trace (H_path: path gtransition g0 trace),
+    forall r, state_before_round r g0 ->
+    forall g_pending pending_ix,
+      onth trace pending_ix = Some g_pending ->
+    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) pending,
+      pending \in g_pending.(msg_in_transit).[key_msg] ->
+    let (_,pending_msg) := pending in
+    let: (_,_,r',_,sender) := pending_msg in
+    honest_after_step (msg_step pending_msg) sender trace ->
+    r <= r' ->
+    exists send_ix g1 g2,
+      step_in_path_at g1 g2 send_ix trace
+      /\ user_sent sender pending_msg g1 g2.
+Proof using.
+Admitted.
+
+(*
    This lemma connects message receipt to the sending of a message,
    used to reach back to an earlier honest transition.
  *)
-Lemma received_was_sent : forall (p: seq GState) g0 u d msg,
-    path gtransition g0 p ->
-    msg_received u d msg p ->
-    let (_,sender) := msg in
-    honest_after_step (msg_step msg) (sender:UserId) p ->
-    exists ix g1 g2,
-      step_in_path_at g1 g2 ix p
-      /\ user_sent sender msg g1 g2.
-Admitted.
+Lemma received_was_sent g0 trace (H_path:path gtransition g0 trace)
+    r0 (H_start: state_before_round r0 g0)
+    u d msg (H_recv: msg_received u d msg trace):
+    let: (_,_,r,_,sender) := msg in
+    r0 <= r ->
+    honest_after_step (msg_step msg) (sender:UserId) trace ->
+    exists ix, user_sent_at ix trace sender msg.
+Proof using.
+  clear -H_path H_start H_recv.
+  move: H_recv => [ix_r [ms H_deliver]].
+  rewrite {1}[msg]surjective_pairing
+          [msg.1]surjective_pairing
+          [msg.1.1]surjective_pairing
+          [msg.1.1.1]surjective_pairing.
+  set msg_r := msg.1.1.2.
+  set sender := msg.2.
+  move => H_round H_honest_sender.
+
+  move:H_deliver => [g1_d [g2_d [H_step_d H_rel_d]]].
+  have {H_step_d}H_g1_d := step_in_path_onth_pre H_step_d.
+
+  move:H_rel_d => [ukey1 [upost H_step]].
+  move:H_step => [H_ustep] [H_honest_recv] [key_mailbox] [H_msg_in H_g2_d].
+  clear g2_d H_g2_d.
+
+  pose proof (pending_honest_sent H_path H_start H_g1_d H_msg_in).
+  simpl in H.
+  rewrite {1}[msg]surjective_pairing
+          [msg.1]surjective_pairing
+          [msg.1.1]surjective_pairing
+          [msg.1.1.1]surjective_pairing in H.
+  fold sender msg_r in H.
+  specialize (H H_honest_sender H_round).
+  exact H.
+Qed.
 
 Definition ustate_after us1 us2 : Prop :=
   us1.(round) < us2.(round)
@@ -3005,10 +3082,6 @@ move: Hg.
 by rewrite in_fnd.
 Qed.
 
-Definition user_sent_at ix path uid msg :=
-  exists g1 g2, step_in_path_at g1 g2 ix path
-                /\ user_sent uid msg g1 g2.
-
 (* A user has certvoted a value for a given period along a given path *)
 Definition certvoted_in_path_at ix path uid r p v : Prop :=
   user_sent_at ix path uid (Certvote,val v,r,p,uid).
@@ -3436,6 +3509,9 @@ Proof.
     }
 Qed.
 
+(* Several lemmas here showing that some of the
+   sets in the UState may only increase over time,
+   or within a round *)
 Lemma softvotes_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
   forall r p, pre.(softvotes) r p \subset post.(softvotes) r p.
@@ -3761,15 +3837,16 @@ Definition honest_in_period (r p:nat) uid path :=
 
 (* L5 An honest node can enter period p'>1 only if at least one
       honest node participated in period p'-1 *)
-Lemma adv_period_from_honest_in_prev :
-  forall n g0 trace uid r p,
+Lemma adv_period_from_honest_in_prev g0 trace (H_path: path gtransition g0 trace)
+  r0 (H_start: state_before_round r0 g0):
+  forall n uid r p,
     p > 0 ->
-    path gtransition g0 trace ->
+    r0 <= r ->
     (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
     exists uid', honest_in_period r (p.-1) uid' trace.
 Proof.
-  intros n g0 trace uid r p.
-  intros H_p H_path H_adv.
+  intros n uid r p.
+  intros H_p H_r H_adv.
   apply period_advance_only_by_next_votes in H_adv.
   destruct H_adv as (s & v & next_voters & H_voters_cred & H_voters_size & ?).
   pose proof (path_prefix n.+2 H_path) as H_path_prefix.
@@ -3778,8 +3855,13 @@ Proof.
   exists uid_honest.
   specialize (H uid_honest H_honest_voter).
   unfold received_next_vote in H.
+  set msg_bit:= (match v with | Some v => (Nextvote_Val, next_val v s)
+               | None => (Nextvote_Open, step_val s)
+       end) in H.
   destruct H as [d H].
-  pose proof (received_was_sent H_path_prefix H) as H1.
+  pose proof (received_was_sent H_path_prefix H_start H) as H1.
+  rewrite {1}[msg_bit]surjective_pairing in H1.
+  specialize (H1 H_r).
   cbn -[user_sent step_in_path_at msg_step] in H1.
   lapply H1;[clear H1|destruct v;assumption].
   intros (ix & g1 & g2 & H_step & H_sent).
@@ -3805,38 +3887,6 @@ Proof.
     by destruct u, v;case.
   }
 Qed.
-
-(* To show there is not a fork in a particular round,
-   we will take a history that extends before any honest
-   node has made a transition in that round *)
-Definition user_before_round r (u : UState) : Prop :=
-  (u.(round) < r \/
-   (u.(round) = r /\
-    u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
-  /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
-  /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
-  /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
-  /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
-  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
-  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
-
-Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
-  forall i (Hi : i \in g.(users)),
-    ~~ (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
-
-Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
-  forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
-  forall deadline msg, (deadline,msg) \in mailbox ->
-     let: (_,_,r',_,u) := msg in
-     r' > r ->
-     match g.(users).[? u] return Prop with
-     | None => True
-     | Some ustate => ustate.(corrupt)
-     end.
-
-Definition state_before_round r (g:GState) : Prop :=
-  honest_users_before_round r g
-  /\ honest_messages_before_round r g.
 
 Definition users_at ix path : {fmap UserId -> UState} :=
   match drop ix path with
@@ -4060,27 +4110,6 @@ Proof using.
   }
   clear -H_vote_send H_stv_send H_honest_send.
   exact (honest_certvote_respects_stv (in_fnd H_in) H_stv_send H_honest_send H_vote_send).
-Qed.
-
-(* A message from an honest user was actually sent in the trace *)
-(* Use this to relate an honest user having received a quorum of messages
-   to some honest user having sent those messages *)
-(* Hopefully the statement can be cleaned up *)
-Lemma pending_honest_sent (unused:Unused) : forall g0 trace (H_path: path gtransition g0 trace),
-    forall r, state_before_round r g0 ->
-    forall g_pending pending_ix,
-      onth trace pending_ix = Some g_pending ->
-    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) pending,
-      pending \in g_pending.(msg_in_transit).[key_msg] ->
-    let (_,pending_msg) := pending in
-    let: (_,_,r',_,sender) := pending_msg in
-    honest_after_step (msg_step pending_msg) sender trace ->
-    r <= r' ->
-    exists send_ix g1 g2,
-      step_in_path_at g1 g2 send_ix trace
-      /\ user_sent sender pending_msg g1 g2.
-Proof.
-  unused.
 Qed.
 
 Lemma honest_at_from_at_step r p s uid trace:
