@@ -3834,16 +3834,113 @@ Definition enters_exclusively_for_value (uid : UserId) (r p : nat) (v : Value) p
   ~ ustate.(corrupt) /\ ustate.(stv) p = Some v /\
   forall s, size (ustate.(nextvotes_open) r p.-1 s) < tau_b.
 
+Lemma stv_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  pre.(round) = post.(round) ->
+  pre.(period) = post.(period) ->
+  forall p, pre.(stv) p = post.(stv) p.
+Proof using.
+  move => uid pre post msgs step.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+Lemma stv_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  pre.(round) = post.(round) ->
+  pre.(period) = post.(period) ->
+  forall p, pre.(stv) p = post.(stv) p.
+Proof using.
+  move => uid pre post m msgs step H_round H_period.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;
+    try by (destruct pre;simpl;autounfold with utransition_unfold;done).
+  * {
+      exfalso;move: H_period;clear;destruct pre;simpl;clear.
+      rewrite -[period in period = _]addn0. move/addnI. done.
+    }
+  * {
+      exfalso;move: H_period;clear;destruct pre;simpl;clear.
+      rewrite -[period in period = _]addn0. move/addnI. done.
+    }
+  * { exfalso;unfold certify_ok in H;decompose record H;clear H.
+      move:H0. rewrite /advancing_rp H_round;clear;simpl.
+      by case =>[|[]];[rewrite ltnNge leq_addr
+                      |rewrite -[r in _ = r]addn0;move/addnI].
+    }
+  * { clear.
+      unfold deliver_nonvote_msg_result.
+      destruct msg as [[[[]]]]. simpl.
+      by destruct e;[destruct m|..].
+    }
+Qed.
+
+Lemma stv_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+  /\  (u1.(round)  = u2.(round)  ->
+       u1.(period) = u2.(period) ->
+       forall p, u1.(stv) p = u2.(stv) p).
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply stv_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply stv_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
 Lemma stv_forward
       g1 g2 (H_reach : greachable g1 g2)
-      uid u1 u2 p v:
+      uid u1 u2:
   g1.(users).[?uid] = Some u1 ->
-  u1.(stv) p = Some v ->
   g2.(users).[?uid] = Some u2 ->
   u1.(round) = u2.(round) ->
-  u2.(stv) p = Some v.
+  u1.(period) = u2.(period) ->
+  forall p, u1.(stv) p = u2.(stv) p.
 Proof using.
-Admitted.
+  clear -H_reach.
+  move => H_u1 H_u2 H_r H_p.
+  destruct H_reach as [trace H_path H_last].
+  move: g1 H_path H_last u1 H_u1 H_r H_p.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 H_r H_p p.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := stv_gtransition H_step H_u1.
+    specialize (IHtrace umid H_umid).
+    have H_le_u1_umid := gtr_rps_non_decreasing H_step H_u1 H_umid.
+    have H_le_umid_u2 := greachable_rps_non_decreasing
+                           (ex_intro2 _ _ trace H_path H_last) H_umid H_u2.
+    have H_r': u1.(round) = umid.(round). {
+      move: H_r H_p H_le_u1_umid H_le_umid_u2.
+      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
+      intuition. have := ltn_trans H H0. by rewrite ltnn.
+    }
+    have H_p': u1.(period) = umid.(period). {
+      move: H_r H_p H_le_u1_umid H_le_umid_u2.
+      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
+      intuition. have := ltn_trans H H0. by rewrite ltnn.
+      subst. by rewrite ltnn in H.
+      subst. by rewrite ltnn in H0.
+      have := ltn_trans H2 H3. by rewrite ltnn.
+    }
+    specialize (H_sub H_r' H_p').
+    rewrite H_sub. clear H_sub.
+    apply IHtrace;congruence.
+Qed.
 
 (* main subargument for excl_enter_limits_cert_vote *)
 Lemma honest_certvote_respects_stv uid g1 g2 v v' r p u:
@@ -3916,14 +4013,15 @@ Proof using.
   {
   move: H_enter => [_ [ukey_2 [_ H_step_g2]]].
 
-  apply (stv_forward H_reach H_lookup_enter H_stv (in_fnd H_in)).
+  have := stv_forward H_reach H_lookup_enter (in_fnd H_in).
 
+  have H_start := utransition_label_start H_vote_send (in_fnd H_in).
+  case:H_start => -> -> _.
   rewrite (in_fnd ukey_2) in H_lookup_enter.
-  move: H_lookup_enter => [] <-.
-  have := utransition_label_start H_vote_send (in_fnd H_in).
-
-  case: H_step_g2 => -> _ _. case => -> _ _.
-  reflexivity.
+  case: H_lookup_enter => H_lookup_enter.
+  rewrite H_lookup_enter in H_step_g2.
+  case:H_step_g2 => -> -> _.
+  by move => <-.
   }
 
   (* analyze certvote step precondition *)
