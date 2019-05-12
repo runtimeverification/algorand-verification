@@ -532,7 +532,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   valid_rps pre r p 1 /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
-  ~ pre.(cert_may_exist).
+  (p > 1 -> ~ pre.(cert_may_exist)).
 
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
@@ -546,11 +546,12 @@ Definition repropose_ok (pre : UState) uid v b r p : Prop :=
 
 (* The no-propose step preconditions *)
 (* Note that this applies regardless of whether p = 1 *)
-Definition no_propose_ok (pre : UState) uid v b r p : Prop :=
+Definition no_propose_ok (pre : UState) uid r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p 1 /\
+  forall b v,
   (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
-    pre.(cert_may_exist) \/ ~ v \in prev_certvals pre).
+    p > 1 /\ pre.(cert_may_exist) /\ ~ v \in prev_certvals pre).
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
@@ -570,7 +571,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\
   comm_cred_step uid r p 2 /\
-  ~ pre.(cert_may_exist) /\
+  (p > 1 -> ~ pre.(cert_may_exist)) /\
   leader_prop_value v (pre.(proposals) r p) .
 
 (* The Softvoting-a-reproposal step preconditions *)
@@ -596,11 +597,12 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
      had a quorum for bottom
  *)
 (* Note that this may apply regardless of whether p = 1*)
-Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
+Definition no_softvote_ok (pre : UState) uid r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\
+  forall v,
   (comm_cred_step uid r p 2 ->
-    ((pre.(cert_may_exist) \/ ~ leader_prop_value v (pre.(proposals) r p))
+    (( p > 1 /\ pre.(cert_may_exist) \/ ~ leader_prop_value v (pre.(proposals) r p))
     /\ ((pre.(cert_may_exist) \/
         (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
         ~ leader_reprop_value v (pre.(proposals) r p))
@@ -640,11 +642,12 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
 *)
 (* Note the time period is left-closed unlike the algorand paper to easily allow
     checking whether the action should fire at the beginning of the time period *)
-Definition no_certvote_ok (pre : UState) uid v b r p : Prop :=
+Definition no_certvote_ok (pre : UState) uid r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
+  forall b v,
   (~ comm_cred_step uid r p 3 \/
-   pre.(cert_may_exist) \/
+   (p > 1 /\ pre.(cert_may_exist)) \/
    ~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
@@ -835,8 +838,8 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid)])
 
   (* Step 1: Block Proposal [failure] *)
-  | no_propose : forall uid (pre : UState) v b r p,
-      no_propose_ok pre uid v b r p ->
+  | no_propose : forall uid (pre : UState) r p,
+      no_propose_ok pre uid r p ->
       uid # pre ~> (propose_result pre, [::])
 
   (* Step 2: Filtering Step [new value] *)
@@ -850,8 +853,8 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
 
   (* Step 2: Filtering Step [no value] *)
-  | no_softvote : forall uid (pre : UState) v r p,
-      no_softvote_ok pre uid v r p ->
+  | no_softvote : forall uid (pre : UState) r p,
+      no_softvote_ok pre uid r p ->
       uid # pre ~> (softvote_result pre, [::])
 
   (* Step 3: Certifying Step [success] *)
@@ -860,8 +863,8 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (certvote_result pre, [:: (Certvote, val v, r, p, uid)])
 
   (* Step 3: Certifying Step [failure] *)
-  | no_certvote : forall uid (pre : UState) v b r p,
-      no_certvote_ok pre uid v b r p ->
+  | no_certvote : forall uid (pre : UState) r p,
+      no_certvote_ok pre uid r p ->
       uid # pre ~> (no_certvote_result pre, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
@@ -2673,12 +2676,12 @@ Proof using delays_order delays_positive.
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
     | [H: repropose_ok _ _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
-    | [H: no_propose_ok _ _ _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
+    | [H: no_propose_ok _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
     | [H: softvote_new_ok _ _ _ _ _ |- _] => unfold softvote_new_ok in H; use_hyp H
     | [H: softvote_repr_ok _ _ _ _ _ |- _] => unfold softvote_repr_ok in H; use_hyp H
-    | [H: no_softvote_ok _ _ _ _ _ |- _] => unfold no_softvote_ok in H; use_hyp H
+    | [H: no_softvote_ok _ _ _ _ |- _] => unfold no_softvote_ok in H; use_hyp H
     | [H: certvote_ok _ _ _ _ _ _ |- _] => unfold certvote_ok in H; use_hyp H
-    | [H: no_certvote_ok _ _ _ _ _ _ |- _] => unfold no_certvote_ok in H; use_hyp H
+    | [H: no_certvote_ok _ _ _ _ |- _] => unfold no_certvote_ok in H; use_hyp H
     | [H: nextvote_val_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_val_ok in H; use_hyp H
     | [H: nextvote_open_ok _ _ _ _ _ _ _ |- _] => unfold nextvote_open_ok in H; use_hyp H
     | [H: nextvote_stv_ok _ _ _ _ _ _ _ /\ _ |- _] => destruct H as [H Hs]; unfold nextvote_stv_ok in H; use_hyp H
