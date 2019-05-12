@@ -185,6 +185,7 @@ Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
 Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
 Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
 Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
+Notation cert_may_exist := (local_state.cert_may_exist UserId Value PropRecord Vote).
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
@@ -454,16 +455,16 @@ Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
 Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
   exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
 
-(* Whether a quorum for bottom was seen in the last period
+(* Whether a quorum for bottom was not seen in the last period
    of the current round (for some step during that period) *)
-(* This corresponds roughly to cert_may_exist field in the automaton model *)
-(* Notes: - modified based on Victor's comment
- *)
+(* No longer used -- replaced by the state flag cert_may_exist *)
+(*
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
   p > 1 /\ forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
 (* to be shown as an invariant (?): exists s, nextvote_quorum_for_some_value u r (p - 1) s *)
+*)
 
 (* Proposal record ordering induced by ordering on credentials *)
 Definition reclt (rec rec' : PropRecord) : bool := (rec.1.1.2 < rec'.1.1.2)%O.
@@ -531,7 +532,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   valid_rps pre r p 1 /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
-  ~ cert_may_exist pre.
+  ~ pre.(cert_may_exist).
 
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
@@ -549,7 +550,7 @@ Definition no_propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p 1 /\
   (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
-    cert_may_exist pre \/ ~ v \in prev_certvals pre).
+    pre.(cert_may_exist) \/ ~ v \in prev_certvals pre).
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
@@ -569,7 +570,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\
   comm_cred_step uid r p 2 /\
-  ~ cert_may_exist pre /\
+  ~ pre.(cert_may_exist) /\
   leader_prop_value v (pre.(proposals) r p) .
 
 (* The Softvoting-a-reproposal step preconditions *)
@@ -579,13 +580,13 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\ p > 1 /\
   comm_cred_step uid r p 2 /\
-  ( (~ cert_may_exist pre /\
+  ( (~ pre.(cert_may_exist) /\
     (exists s, nextvote_value_quorum pre v r (p - 1) s) /\
     leader_reprop_value v (pre.(proposals) r p))
     \/
-    (cert_may_exist pre /\ pre.(stv) p = Some v) ).
+    (pre.(cert_may_exist) /\ pre.(stv) p = Some v) ).
 (* Victor: Technically, I think it would be correct to vote for your (non-bottom)
-   starting value even if `~ cert_may_exist pre` *)
+   starting value even if `~ pre.(cert_may_exist)` *)
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -599,11 +600,11 @@ Definition no_softvote_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\
   (comm_cred_step uid r p 2 ->
-    ((cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
-    /\ ((cert_may_exist pre \/
+    ((pre.(cert_may_exist) \/ ~ leader_prop_value v (pre.(proposals) r p))
+    /\ ((pre.(cert_may_exist) \/
         (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
         ~ leader_reprop_value v (pre.(proposals) r p))
-       /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
+       /\ (~ pre.(cert_may_exist) \/ ~ pre.(stv) p = Some v)))).
 
 (* The softvoting step (new or reproposal) post-state *)
 (* NOTE: We keep the current deadline at 2 * lambda and let certvoting handle
@@ -627,7 +628,7 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
   comm_cred_step uid r p 3 /\
-  (p > 1 -> ~ cert_may_exist pre) /\
+  (p > 1 -> ~ pre.(cert_may_exist)) /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
   v \in certvals pre r p .
@@ -643,7 +644,7 @@ Definition no_certvote_ok (pre : UState) uid v b r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
   (~ comm_cred_step uid r p 3 \/
-   cert_may_exist pre \/
+   pre.(cert_may_exist) \/
    ~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
@@ -745,14 +746,16 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
 (* State update -- The bottom-value case *)
 Definition adv_period_open_result (pre : UState) : UState :=
   let prev_p := pre.(period) in
-    {[ (advance_period pre)
-      with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
+    {[ {[ (advance_period pre)
+            with cert_may_exist := false ]}
+            with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
 
 (* State update -- The proper value case *)
 Definition adv_period_val_result (pre : UState) v : UState :=
   let prev_p := pre.(period) in
-    {[ (advance_period pre)
-      with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
+    {[ {[ (advance_period pre)
+            with cert_may_exist := true ]}
+            with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
 
 (** Advancing round propositions and user state update **)
 (* Preconditions *)
@@ -768,7 +771,10 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
 
 (* State update *)
-Definition certify_result r (pre : UState) : UState := advance_round {[pre with round := r]}.
+Definition certify_result r (pre : UState) : UState :=
+  advance_round
+  {[ {[ pre with round := r ]}
+            with cert_may_exist := false ]}.
 
 (** Timeout transitions **)
 

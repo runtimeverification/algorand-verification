@@ -17,6 +17,7 @@ Variable Vote : Type.
 
 Record UState :=
   mkUState {
+    (* A flag indicating whether the user is corrupt *)
     corrupt       : bool;
     (* The user's current round (starts at 1) *)
     round         : nat;
@@ -28,7 +29,7 @@ Record UState :=
     timer         : R;
     (* The user's next deadline time value (since the beginning of the current period) *)
     deadline      : R;
-   (* The (local) time at which the user's current period started (i.e. local clock = p_start + timer *)
+    (* The (local) time at which the user's current period started (i.e. local clock = p_start + timer *)
     p_start       : R;
     (* A sequence of proposal/reproposal records for the given round/period *)
     proposals     : nat -> nat -> seq PropRecord;
@@ -43,38 +44,42 @@ Record UState :=
     (* A sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_open: nat -> nat -> nat -> seq UserId;
     (* A sequence of value-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote
+    nextvotes_val : nat -> nat -> nat -> seq Vote;
+    (* A flag indicating whether advancing to the current period was because of seeing a quorum of nextvotes for a non-bottom value *)
+    cert_may_exist : bool
   }.
 
 
 
-Definition set_UState_corrupt a v := mkUState v (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_corrupt a v := mkUState v (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_round a v := mkUState (corrupt a) v (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_round a v := mkUState (corrupt a) v (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_period a v := mkUState (corrupt a) (round a) v (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_period a v := mkUState (corrupt a) (round a) v (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_step a v := mkUState (corrupt a) (round a) (period a) v (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_step a v := mkUState (corrupt a) (round a) (period a) v (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_timer a v := mkUState (corrupt a) (round a) (period a) (step a) v (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_timer a v := mkUState (corrupt a) (round a) (period a) (step a) v (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_deadline a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) v (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_deadline a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) v (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_p_start a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) v (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_p_start a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) v (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_proposals a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) v (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_proposals a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) v (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_stv a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) v (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_stv a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) v (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_blocks a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) v (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_blocks a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) v (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_softvotes a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) v (certvotes a) (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_softvotes a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) v (certvotes a) (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_certvotes a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) v (nextvotes_open a) (nextvotes_val a).
+Definition set_UState_certvotes a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) v (nextvotes_open a) (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_nextvotes_open a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) v (nextvotes_val a).
+Definition set_UState_nextvotes_open a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) v (nextvotes_val a) (cert_may_exist a).
 
-Definition set_UState_nextvotes_val a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) v.
+Definition set_UState_nextvotes_val a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) v (cert_may_exist a).
+
+Definition set_UState_cert_may_exist a v := mkUState (corrupt a) (round a) (period a) (step a) (timer a) (deadline a) (p_start a) (proposals a) (stv a) (blocks a) (softvotes a) (certvotes a) (nextvotes_open a) (nextvotes_val a) v.
 
 End LocalState.
 
@@ -108,6 +113,8 @@ Notation "{[ a 'with' 'nextvotes_open' := v ]}" := (set_UState_nextvotes_open  _
 
 Notation "{[ a 'with' 'nextvotes_val' := v ]}" := (set_UState_nextvotes_val  _ _ _ _ a v).
 
+Notation "{[ a 'with' 'cert_may_exist' := v ]}" := (set_UState_cert_may_exist  _ _ _ _ a v).
+
 
 Arguments set_UState_corrupt  _ _ _ _ _ _/.
 
@@ -136,3 +143,5 @@ Arguments set_UState_certvotes  _ _ _ _ _ _/.
 Arguments set_UState_nextvotes_open  _ _ _ _ _ _/.
 
 Arguments set_UState_nextvotes_val  _ _ _ _ _ _/.
+
+Arguments set_UState_cert_may_exist  _ _ _ _ _ _/.
