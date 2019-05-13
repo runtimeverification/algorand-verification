@@ -4029,8 +4029,6 @@ Proof using.
     apply IHtrace;congruence.
 Qed.
 
-(* main subargument for excl_enter_limits_cert_vote *)
-
 Definition round_advance_at n path uid r g1 g2 : Prop :=
   step_in_path_at g1 g2 n path /\
   {ukey_1: uid \in g1.(users) &
@@ -4040,60 +4038,189 @@ Definition round_advance_at n path uid r g1 g2 : Prop :=
   step_lt (step_of_ustate ustate1) (r,1,1)
   /\ step_of_ustate ustate2 = (r,1,1)}}.
 
+(* cert_may_exist flag properties *)
+
+Lemma cert_flag_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  pre.(round) = post.(round) ->
+  pre.(period) = post.(period) ->
+  pre.(cert_may_exist) = post.(cert_may_exist).
+Proof using.
+  move => uid pre post msgs step.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+Lemma cert_flag_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  pre.(round) = post.(round) ->
+  pre.(period) = post.(period) ->
+  pre.(cert_may_exist) = post.(cert_may_exist).
+Proof using.
+  move => uid pre post m msgs step H_round H_period.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;
+    try by (destruct pre;simpl;autounfold with utransition_unfold;done).
+  * {
+      exfalso;move: H_period;clear;destruct pre;simpl;clear.
+      rewrite -[period in period = _]addn0. move/addnI. done.
+    }
+  * {
+      exfalso;move: H_period;clear;destruct pre;simpl;clear.
+      rewrite -[period in period = _]addn0. move/addnI. done.
+    }
+  * { exfalso;unfold certify_ok in H;decompose record H;clear H.
+      move:H0. rewrite /advancing_rp H_round;clear;simpl.
+      by case =>[|[]];[rewrite ltnNge leq_addr
+                      |rewrite -[r in _ = r]addn0;move/addnI].
+    }
+  * { clear.
+      unfold deliver_nonvote_msg_result.
+      destruct msg as [[[[]]]]. simpl.
+      by destruct e;[destruct m|..].
+    }
+Qed.
+
+Lemma cert_flag_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+  /\  (u1.(round)  = u2.(round)  ->
+       u1.(period) = u2.(period) ->
+       u1.(cert_may_exist) = u2.(cert_may_exist)).
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_flag_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_flag_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
+Lemma cert_flag_forward
+      g1 g2 (H_reach : greachable g1 g2)
+      uid u1 u2:
+  g1.(users).[?uid] = Some u1 ->
+  g2.(users).[?uid] = Some u2 ->
+  u1.(round) = u2.(round) ->
+  u1.(period) = u2.(period) ->
+  u1.(cert_may_exist) = u2.(cert_may_exist).
+Proof using.
+  clear -H_reach.
+  move => H_u1 H_u2 H_r H_p.
+  destruct H_reach as [trace H_path H_last].
+  move: g1 H_path H_last u1 H_u1 H_r H_p.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 H_r H_p.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := cert_flag_gtransition H_step H_u1.
+    specialize (IHtrace umid H_umid).
+    have H_le_u1_umid := gtr_rps_non_decreasing H_step H_u1 H_umid.
+    have H_le_umid_u2 := greachable_rps_non_decreasing
+                           (ex_intro2 _ _ trace H_path H_last) H_umid H_u2.
+    have H_r': u1.(round) = umid.(round). {
+      move: H_r H_p H_le_u1_umid H_le_umid_u2.
+      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
+      intuition. have := ltn_trans H H0. by rewrite ltnn.
+    }
+    have H_p': u1.(period) = umid.(period). {
+      move: H_r H_p H_le_u1_umid H_le_umid_u2.
+      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
+      intuition. have := ltn_trans H H0. by rewrite ltnn.
+      subst. by rewrite ltnn in H.
+      subst. by rewrite ltnn in H0.
+      have := ltn_trans H2 H3. by rewrite ltnn.
+    }
+    specialize (H_sub H_r' H_p').
+    rewrite H_sub. clear H_sub.
+    apply IHtrace;congruence.
+Qed.
+
+(* When p > 1, the flag cert_may_exist and the stv value for p are always consistent *)
+Lemma stv_cert_flag_consistent : forall g uid (uid_key: uid \in g.(users)) ustate p,
+  g.(users).[uid_key] = ustate ->
+  p > 1 ->
+  ustate.(period) = p ->
+  (~ ustate.(cert_may_exist) <-> ustate.(stv) p = None).
+Proof using.
+  intros g uid ukey ustate p H_ustate H_posp H_up.
+  split.
+Admitted.
+
 (* Not clear if this will ever be needed *)
+(*
 Lemma stv_none_after_certify uid g1 (uid_key1: uid \in g1.(users)) g2 (uid_key2: uid \in g2.(users)) n trace r:
   round_advance_at n trace uid r g1 g2 ->
   exists u2, g2.(users).[? uid] = Some u2 /\ u2.(stv) u2.(period) = None.
-Admitted.
+*)
 
-(* Will likely be needed for honest_softvote_respects_stv but the formulation can hopefully be simplified *)
+(* May be needed for honest_softvote_respects_stv but the formulation can hopefully be simplified *)
+(*
 Lemma stv_none_after_bottom_quorum uid g (uid_key: uid \in g.(users)) r p:
   exists u, g.(users).[uid_key] = u ->
-  u.(round) = r -> u.(period) = p -> 
+  u.(round) = r -> u.(period) = p ->
   p > 1 -> ~ u.(cert_may_exist) ->
-  forall trace g0 g1 g2, 
+  forall trace g0 g1 g2,
   path gtransition g0 trace ->
   last g0 trace = g ->
   exists n u2, period_advance_at n trace uid r p g1 g2 /\
   g2.(users).[? uid] = Some u2 /\
   u2.(period) = p /\ ~ u2.(cert_may_exist) /\ u2.(stv) p = None.
-Admitted.
+*)
+
 
 Lemma honest_softvote_respects_stv uid g1 g2 v v' r p u:
   g1.(users).[?uid] = Some u ->
+  p > 1 ->
   u.(stv) p = Some v ->
   user_honest uid g1 ->
   user_sent uid (Softvote, val v', r, p, uid) g1 g2 ->
   v' = v.
 Proof using.
-  intros H_ustate H_stv H_honest H_sent.
+  intros H_ustate H_posp H_stv H_honest H_sent.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
   destruct H_step as [H_ukey H];
   rewrite (in_fnd H_ukey) in H_ustate; injection H_ustate as <-; subst;
   decompose record H; clear H.
     (* deliver transition cases *)
-    inversion H1;subst;exfalso; try (rewrite in_nil in H_msg;done).
-    (* one sub-case remains *) 
+    inversion H1; subst; exfalso; try (rewrite in_nil in H_msg;done).
+    (* one sub-case remains *)
     rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
   (* internal transition cases *)
-  inversion H0;subst. 
+  inversion H0;subst.
     + rewrite in_cons in H_msg. rewrite mem_seq1 in H_msg.
     move/orP in H_msg. destruct H_msg;move/eqP in H;injection H;discriminate.
     + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
     + rewrite in_nil in H_msg. done.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg => [? ? ?];subst;clear H_msg.
-    destruct H5. decompose record H2. clear H2. 
+    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg as <- <- <-.
+    destruct H5. decompose record H2. clear H2.
+    unfold valid_rps in H3. decompose record H3. clear H3.
     (* when p > 1, ~ cert_may_exist, and stv p = None in that case, and hence contradiction *)
-    (* when p = 1, stv p can only be None, and hence contradition *)
-    admit.
-    + rewrite mem_seq1 in H_msg. destruct H5. decompose record H2;clear H2.
-    destruct H7. 
-      - decompose record H2;clear H2. move/eqP in H_msg. injection H_msg => [? ? ?];subst;clear H_msg.
-      (* p > 1 and ~ cert_may_exist, so stv p = None and hence contradiction *)
-      admit.
-      - decompose record H2;clear H2.
+    pose proof (@stv_cert_flag_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
+    intuition. rewrite H4 in H_stv. discriminate.
+    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg as <- <- <-.
+    destruct H5. decompose record H2;clear H2.
+    unfold valid_rps in H3. decompose record H3. clear H3.
+    destruct H7.
+      - decompose record H3;clear H3.
+      (* p > 1 and ~ cert_may_exist, so stv p = None (by lemma) and hence contradiction *)
+      pose proof (@stv_cert_flag_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
+      intuition. rewrite H12 in H_stv. discriminate.
+      - decompose record H3;clear H3.
       (* cert_may_exist holds, stv p = Some v as required *)
-      admit.
+      rewrite H7 in H_stv. injection H_stv. auto.
     + rewrite in_nil in H_msg. done.
     + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
     + rewrite in_nil in H_msg. done.
@@ -4102,7 +4229,7 @@ Proof using.
     + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
     + rewrite in_nil in H_msg. done.
     + rewrite in_nil in H_msg. done.
-Admitted.
+Qed.
 
 (* main subargument for excl_enter_limits_cert_vote *)
 Lemma honest_certvote_respects_stv uid g1 g2 v v' r p u:
