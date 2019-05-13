@@ -1552,6 +1552,19 @@ Proof using.
   simpl. apply IHn.
 Qed.
 
+Lemma step_in_path_take (g1 g2 : GState) n (path : seq GState) :
+  step_in_path_at g1 g2 n path
+  -> step_in_path_at g1 g2 n (take n.+2 path).
+Proof using.
+  revert path; induction n.
+  intro path.
+  destruct path;[done|];destruct path;done.
+  intros path.
+  unfold step_in_path_at.
+  destruct path. done.
+  simpl. apply IHn.
+Qed.
+
 Inductive GLabel : Type :=
 | lbl_tick :  posreal -> GLabel
 | lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
