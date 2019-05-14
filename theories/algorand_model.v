@@ -4532,7 +4532,7 @@ Proof.
     destruct H7.
       - decompose record H3;clear H3.
       (* p > 1 and ~ cert_may_exist, so stv p = None (by lemma) and hence contradiction *)
-      pose proof (@stv_cert_flag_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
+      pose proof (@cert_stv_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
       intuition. rewrite H12 in H_stv. discriminate.
       - decompose record H3;clear H3.
       (* cert_may_exist holds, stv p = Some v as required *)
