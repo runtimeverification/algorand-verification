@@ -4014,7 +4014,8 @@ Definition period_advance_at n path uid r p g1 g2 : Prop :=
   {ukey_2: uid \in g2.(users) &
   let ustate1 := g1.(users).[ukey_1] in
   let ustate2 := g2.(users).[ukey_2] in
-  step_lt (step_of_ustate ustate1) (r,p,1)
+  ustate1.(round) = ustate2.(round)
+  /\ step_lt (step_of_ustate ustate1) (r,p,0)
   /\ step_of_ustate ustate2 = (r,p,1)}}.
 
 (* Priority:MED
@@ -4032,8 +4033,11 @@ Lemma period_advance_only_by_next_votes : forall g0 trace uid r p
          received_next_vote uid voter r p.-1 s v path_prefix.
 Proof.
   intros g0 trace uid r p H_path n H_adv pref.
-  destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_lt H_rps]]]]]].
+  destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]]]].
   assert (H_gtrans : g1 ~~> g2) by (eapply transition_from_path; eassumption).
+
+  eapply step_lt_le_trans with (c:=(r,p,1)) in H_lt.
+  2: { simpl; intuition. }
 
   destruct H_gtrans.
 
@@ -4063,8 +4067,8 @@ Proof.
   { (* message delivery cases *)
     unfold delivery_result in H_rps.
     rewrite setfNK in H_rps.
-    destruct (uid == uid0) eqn:Huid.
-    move/eqP in Huid. subst.
+    destruct (uid == uid0) eqn:H_uid.
+    move/eqP in H_uid. subst.
     simpl in H_rps.
     assert (H_g1_key_ustate_opt :
               Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
@@ -4073,18 +4077,15 @@ Proof.
 
     inversion H_g1_key_ustate_opt as [H_g1_key_ustate]. clear H_g1_key_ustate_opt.
     rewrite H_g1_key_ustate in H_lt; rewrite <- H_rps in H_lt.
+    rewrite H_g1_key_ustate in H_round.
     unfold step_of_ustate in H_lt.
 
     remember (ustate_post,sent) as ustep_out in H1.
     remember ((global_state.users UserId UState [choiceType of Msg] pre) [` key_ustate]) as u in H1.
 
-    destruct H1; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps.
-
-    exfalso. unfold set_softvotes in pre'. simpl in pre'. subst. subst pre'.
-    apply step_lt_irrefl in H_lt; contradiction.
-
-    exfalso. unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'.
-    apply step_lt_irrefl in H_lt; contradiction.
+    destruct H1; injection Hequstep_out; clear Hequstep_out; intros <- <-;
+      try (inversion H_rps; exfalso; subst; subst pre';
+           apply step_lt_irrefl in H_lt; contradiction).
 
     (* good case *)
     (* unfold certvote_result in H_lt. *)
@@ -4095,19 +4096,20 @@ Proof.
     (* destruct H_lt. *)
     admit.
 
-    exfalso. unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'.
-    apply step_lt_irrefl in H_lt; contradiction.
-
     (* other good case *)
     admit.
 
-    exfalso. unfold set_certvotes in pre'. simpl in pre'. subst. subst pre'.
-    apply step_lt_irrefl in H_lt; contradiction.
+    exfalso.
+    rewrite setfNK in H_round.
+    assert (H_uid : (uid == uid) = true). apply/eqP; trivial.
+    rewrite H_uid in H_round.
 
-    (* how to arise from a contradiction with round advancing? *)
-    exfalso. unfold certify_result in H_lt.
-    unfold set_certvotes in pre'. subst. subst pre'. simpl in H_lt.
-    admit.
+    subst pre0.
+    inversion H_rps as [H_r0].
+    simpl in H_lt. rewrite H_r0 in H_lt.
+    destruct H1 as [H_adv _]. unfold advancing_rp in H_adv.
+    rewrite H_round in H_adv. clear -H_adv.
+    by simpl in H_adv; ppsimpl; lia.
 
     exfalso. subst.
     unfold deliver_nonvote_msg_result in *.
@@ -4140,15 +4142,13 @@ Proof.
 
     destruct H0; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps;
       try (destruct H0 as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]];
-           clear -H4 H_s; destruct s; inversion H_s;
-           inversion H4; rewrite addn1 in H4; inversion H4).
+           clear -H4 H_s; by ppsimpl; lia).
 
     subst; try apply step_lt_irrefl in H_lt; try contradiction.
 
     destruct H0 as [H_nv_stv H_stv].
     destruct H_nv_stv as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]].
-    clear -H4 H_s. destruct s. inversion H_s.
-    inversion H4. rewrite addn1 in H4. inversion H4.
+    clear -H4 H_s. by ppsimpl; lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
     admit.
@@ -4770,16 +4770,16 @@ Proof using.
         by rewrite -(step_at_nth_pre H_enter_step g0) -(step_at_nth_pre H_vote_step g0) //.
       replace g2_v with g2 in * |- *
         by rewrite -(step_at_nth_post H_enter_step g0) -(step_at_nth_post H_vote_step g0) //.
-      move: H_enter => [ekey1 [_ [H_pre _]]].
+      move: H_enter => [ekey1 [ekey2 [H_round [H_pre H_rps]]]].
       pose proof (utransition_label_start H_vote_send (in_fnd ekey1)).
       move:H_pre; rewrite H /msg_step /step_lt; clear.
       rewrite !ltnn.
       by intuition.
-    * move: H_enter => [ukey_1 [ukey_2 [H_enter_lt H_enter_eq]]].
+    * move: H_enter => [ukey_1 [ukey_2 [H_round [H_enter_lt H_enter_eq]]]].
       set ustate1: UState := g1.(users)[`ukey_1] in H_enter_lt.
       set ustate2: UState := g2.(users)[`ukey_2] in H_enter_eq.
       move: H_lt. apply/negP. rewrite -leqNgt.
-      clear ukey_2 ustate2 H_enter_eq.
+      clear ukey_2 H_round ustate2 H_enter_eq.
       (* Deduce this by looking at the step order *)
       apply ltnW.
       have H_uv := (in_fnd (user_sent_in_pre H_vote_send)).
@@ -4797,7 +4797,7 @@ Proof using.
 
   assert ((g1_v.(users)[`H_in]).(stv) p = Some v) as H_stv_send.
   {
-  move: H_enter => [_ [ukey_2 [_ H_step_g2]]].
+  move: H_enter => [ukey_1 [ukey_2 [H_round [H_pre H_step_g2]]]].
 
   have := stv_forward H_reach H_lookup_enter (in_fnd H_in).
 
