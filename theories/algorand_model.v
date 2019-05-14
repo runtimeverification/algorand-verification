@@ -126,6 +126,8 @@ Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal)
     id  : sender's user id
  *)
 Definition Msg : Type := MType * ExValue * nat * nat * UserId.
+Definition msg_sender (m:Msg): UserId := m.2.
+Definition msg_round (m:Msg): nat := m.1.1.2.
 
 (* Messages are grouped by the target user.
 
@@ -329,6 +331,14 @@ Definition step_lt (step1 step2: nat * nat * nat) :=
   let: (r2,p2,s2) := step2 in
   r1 < r2 \/ r1 = r2 /\ (p1 < p2 \/ p1 = p2 /\ s1 < s2).
 
+Lemma step_ltW a b:
+  step_lt a b -> step_le a b.
+Proof using.
+  clear.
+  destruct a as [[? ?] ?],b as [[? ?]?].
+  unfold step_lt,step_le;intuition.
+Qed.
+
 Lemma step_le_trans a b c:
   step_le a b -> step_le b c -> step_le a c.
 Proof using.
@@ -426,10 +436,14 @@ Definition matchValue (x : Vote) (v : Value) : bool :=
 Definition vote_values (vs: seq Vote) : seq Value :=
   undup [seq x.2 | x <- vs] .
 
+Definition softvoters_for (v:Value) (u:UState) r p : {fset UserId} :=
+  [fset x.1 | x in u.(softvotes) r p & matchValue x v].
+
 (* The number of softvotes of a given value in a given user state for the round
    and period given (does not use the invariant that u.(softvotes) r p is duplicate-free) *)
 Definition soft_weight (v:Value) (u:UState) r p : nat :=
-  size [seq x <- undup (u.(softvotes) r p) | matchValue x v] .
+  size (softvoters_for v u r p).
+    (*[seq x <- undup (u.(softvotes) r p) | matchValue x v] . *)
 
 (* The sequence of values with high enough softvotes in a given user state for given round and period *)
 (* i.e. the sequence of values in softvotes having votes greater than or equal to the threshold *)
@@ -710,7 +724,7 @@ Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
             additional constraints given explicitly)
           - Updated to accommodate the 27March change
  *)
-Definition nextvote_stv_ok (pre : UState) uid (v b : Value) r p s : Prop :=
+Definition nextvote_stv_ok (pre : UState) uid r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
   valid_rps pre r p s /\
   comm_cred_step uid r p s /\
@@ -878,9 +892,9 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
-  | nextvote_stv : forall uid (pre : UState) v v' b r p s,
-      nextvote_stv_ok pre uid v b r p s /\ pre.(stv) p = Some v' ->
-        uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val  v' s, r, p, uid)])
+  | nextvote_stv : forall uid (pre : UState) v r p s,
+      nextvote_stv_ok pre uid r p s /\ pre.(stv) p = Some v ->
+        uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val  v s, r, p, uid)])
 
   (* Steps >= 4: Finishing Step - no next-voting *)
   | no_nextvote : forall uid (pre : UState) r p s,
@@ -1156,6 +1170,27 @@ Proof.
   by case: (drop n (take k s)).
 Qed.
 
+Lemma onth_nth T (s:seq T) ix x:
+  onth s ix = Some x -> (forall x0, nth x0 s ix = x).
+Proof using.
+  unfold onth.
+  unfold ohead.
+  move => H_drop x0.
+  rewrite -[ix]addn0 -nth_drop.
+  destruct (drop ix s);simpl;congruence.
+Qed.
+
+Lemma onth_take_last T (s:seq T) n x:
+  onth s n = some x ->
+  forall x0, last x0 (take n.+1 s) = x.
+Proof using.
+  clear.
+  move => H_x x0.
+  have H_size := onth_size H_x.
+  rewrite -nth_last size_takel // nth_take //.
+    by apply onth_nth.
+Qed.
+
 Definition at_step n (path : seq GState) (P : pred GState) : bool :=
   match drop n path with
   | (g::_) => P g
@@ -1398,7 +1433,8 @@ Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval target 
   let msg := (mtype, mval, r, p, uid) in
   let msgs' := send_broadcasts pre.(now) [fset target] (* (domf (honest_users pre.(users))) *)
                  pre.(msg_in_transit) [:: msg] in
-  {[ pre with msg_in_transit := msgs' ]}.
+  {[ {[ pre with msg_in_transit := msgs' ]}
+            with msg_history := (msg |` pre.(msg_history))%mset ]}.
 
 (* The global transition relation *)
 
@@ -1910,12 +1946,12 @@ Qed.
 Definition committee (r p s:nat) : {fset UserId} :=
   [fset uid : UserId | `[<committee_cred (credential uid r p s)>] ].
 
-Definition quroum_honest_overlap_statement tau : Prop :=
+Definition quorum_honest_overlap_statement tau : Prop :=
   forall trace r p s (quorum1 quorum2 : {fset UserId}),
     quorum1 `<=` committee r p s ->
-    #| quorum1 | >= tau ->
+    #|` quorum1 | >= tau ->
     quorum2 `<=` committee r p s ->
-    #| quorum2 | >= tau ->
+    #|` quorum2 | >= tau ->
     exists honest_voter,
       honest_voter \in quorum1
       /\ honest_voter \in quorum2
@@ -1924,12 +1960,12 @@ Definition quroum_honest_overlap_statement tau : Prop :=
 Definition quorum_has_honest_statement tau : Prop :=
   forall trace r p s (quorum : {fset UserId}),
     quorum `<=` committee r p s ->
-    #| quorum | >= tau ->
+    #|` quorum | >= tau ->
    exists honest_voter, honest_voter \in quorum /\
      honest_after_step (r,p,s) honest_voter trace.
 
 Lemma quorum_has_honest_from_overlap_stmt tau:
-  quroum_honest_overlap_statement tau ->
+  quorum_honest_overlap_statement tau ->
   quorum_has_honest_statement tau.
 Proof using.
   clear.
@@ -1969,24 +2005,28 @@ Qed.
 Definition interquorum_property tau1 tau2 (P: UserId -> Prop) trace :=
   forall r1 p1 s1 (quorum1 : {fset UserId}),
     quorum1 `<=` committee r1 p1 s1 ->
-    #| quorum1 | >= tau1 ->
+    #|` quorum1 | >= tau1 ->
     (forall uid, uid \in quorum1 ->
      honest_after_step (r1,p1,s1) uid trace ->
      P uid) ->
   forall r2 p2 s2 (quorum2 : {fset UserId}),
     quorum2 `<=` committee r2 p2 s2 ->
-    #| quorum2 | >= tau2 ->
+    #|` quorum2 | >= tau2 ->
     (exists honest_P_uid, honest_P_uid \in quorum2
      /\ P honest_P_uid
      /\ honest_after_step (r2,p2,s2) honest_P_uid trace).
 
-Hypothesis quorums_b_honest_overlap : quroum_honest_overlap_statement tau_b.
+Hypothesis quorums_b_honest_overlap : quorum_honest_overlap_statement tau_b.
 Definition quorum_b_has_honest : quorum_has_honest_statement tau_b
   := quorum_has_honest_from_overlap_stmt quorums_b_honest_overlap.
 
-Hypothesis quorums_c_honest_overlap : quroum_honest_overlap_statement tau_c.
+Hypothesis quorums_c_honest_overlap : quorum_honest_overlap_statement tau_c.
 Definition quorum_c_has_honest : quorum_has_honest_statement tau_c
   := quorum_has_honest_from_overlap_stmt quorums_c_honest_overlap.
+
+Hypothesis quorums_s_honest_overlap : quorum_honest_overlap_statement tau_s.
+Definition quorum_s_has_honest : quorum_has_honest_statement tau_s
+  := quorum_has_honest_from_overlap_stmt quorums_s_honest_overlap.
 
 Ltac unfold_step_result :=
   unfold tick_update, tick_users.
@@ -2108,6 +2148,47 @@ Proof using.
     rewrite size_rcons H_size.
     rewrite ltnS. apply leqnSn.
 Qed.
+
+Lemma path_prefix : forall T R p (x:T) n,
+    path R x p -> path R x (take n p).
+Proof using.
+  induction p;[done|].
+  move => /= x n /andP [Hr Hpath].
+  destruct n. done.
+  simpl;apply /andP;by auto.
+Qed.
+
+Lemma path_gsteps_onth
+      g0 trace (H_path : path gtransition g0 trace)
+      ix_p g_p (H_g_p : onth trace ix_p = Some g_p):
+    forall (P : pred GState),
+    ~~ P g0 -> P g_p ->
+    (* exists n g1 g2, step_in_path_at g1 g2 n (g0::trace) /\ ~~ P g1 /\ P g2. *)
+    exists n g1 g2, step_in_path_at g1 g2 n trace /\ ~~ P g1 /\ P g2.
+Proof using.
+  have H_path' := path_prefix ix_p.+1 H_path.
+  move => P H_nP_g0 H_P_g_p.
+  pose proof (path_steps H_path' H_nP_g0).
+  have H_size_trace := onth_size H_g_p.
+  rewrite -nth_last nth_take size_takel // (onth_nth H_g_p) in H.
+  specialize (H H_P_g_p).
+
+  move:H. clear -H_nP_g0. move => [n H].
+
+  suff: exists n g1 g2, step_in_path_at g1 g2 n (g0::trace) /\ ~~ P g1 /\ P g2 by admit.
+  exists n.
+  unfold step_in_path_at.
+  destruct (drop n (g0 :: take ix_p.+1 trace)) as [|x l] eqn: H_eq;[|destruct l];[done..|].
+  rewrite -[trace](cat_take_drop ix_p.+1).
+
+  move/andP in H. exists x, g.
+
+  destruct n;simpl in H_eq |- *.
+  case:H_eq;intros -> ->;simpl;tauto.
+  rewrite drop_cat H_eq.
+  replace (n < size (take ix_p.+1 trace)) with true. simpl;tauto.
+  symmetry. rewrite ltnNge. apply/negP. move/drop_oversize. rewrite H_eq. discriminate.
+Admitted.
 
 (* Priority:MED A structural lemma saying that if a message appears in a mailbox
    during a step and the sender is honest at the time then
@@ -2333,6 +2414,49 @@ Definition state_before_round r (g:GState) : Prop :=
   honest_users_before_round r g
   /\ honest_messages_before_round r g.
 
+Definition opred (T : Type) (P : pred T) : pred (option T) :=
+  fun o => match o with
+           | None => false
+           | Some v => P v
+           end.
+
+Definition is_pending (target:UserId) (msg_body:Msg) : pred GState :=
+  fun g => opred (fun (ms:{mset R * Msg}) => has (fun p => p.2 == msg_body) ms)
+                 (g.(msg_in_transit).[?target]).
+
+Lemma new_msg_from_send_or_replay g1 g2:
+    forall target (key_msg : target \in g2.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g2.(msg_in_transit).[key_msg] ->
+    let sender := msg_sender pending_msg in
+    user_sent sender pending_msg g1 g2
+    \/ pending_msg \in g1.(msg_history).
+Proof using.
+Admitted.
+
+Definition pending_in_history_after (r:nat)
+           (msg_in_transit:{fmap UserId -> {mset R * Msg}}) (msg_history:{mset Msg}) : Prop :=
+  forall uid (key : uid \in msg_in_transit) d pending_msg,
+    (d,pending_msg) \in msg_in_transit.[key] ->
+  r <= msg_round pending_msg ->
+  pending_msg \in msg_history.
+
+Lemma pending_in_history_after_invariant g1 g2 (H_step: g1 ~~> g2):
+  forall r, pending_in_history_after r (g1.(msg_in_transit)) (g1.(msg_history))
+         -> pending_in_history_after r (g2.(msg_in_transit)) (g2.(msg_history)).
+Proof using.
+Admitted.
+
+Lemma pending_in_history g0 trace (H_path: path gtransition g0 trace)
+    r (H_start:state_before_round r g0):
+    forall g ix,
+      onth trace ix = Some g ->
+    forall uid (key : uid \in g.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g.(msg_in_transit).[key] ->
+    r <= msg_round pending_msg ->
+    pending_msg \in g.(msg_history).
+Proof.
+Admitted.
+
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
    to some honest user having sent those messages *)
@@ -2341,15 +2465,12 @@ Lemma pending_honest_sent: forall g0 trace (H_path: path gtransition g0 trace),
     forall r, state_before_round r g0 ->
     forall g_pending pending_ix,
       onth trace pending_ix = Some g_pending ->
-    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) pending,
-      pending \in g_pending.(msg_in_transit).[key_msg] ->
-    let (_,pending_msg) := pending in
-    let: (_,_,r',_,sender) := pending_msg in
+    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g_pending.(msg_in_transit).[key_msg] ->
+    let sender := msg_sender pending_msg in
     honest_after_step (msg_step pending_msg) sender trace ->
-    r <= r' ->
-    exists send_ix g1 g2,
-      step_in_path_at g1 g2 send_ix trace
-      /\ user_sent sender pending_msg g1 g2.
+    r <= msg_round pending_msg ->
+    exists send_ix, user_sent_at send_ix trace sender pending_msg.
 Proof using.
 Admitted.
 
@@ -2382,13 +2503,7 @@ Proof using.
   move:H_step => [H_ustep] [H_honest_recv] [key_mailbox] [H_msg_in H_g2_d].
   clear g2_d H_g2_d.
 
-  pose proof (pending_honest_sent H_path H_start H_g1_d H_msg_in).
-  simpl in H.
-  rewrite {1}[msg]surjective_pairing
-          [msg.1]surjective_pairing
-          [msg.1.1]surjective_pairing
-          [msg.1.1.1]surjective_pairing in H.
-  fold sender msg_r in H.
+  pose proof (pending_honest_sent H_path H_start H_g1_d H_msg_in) as H.
   specialize (H H_honest_sender H_round).
   exact H.
 Qed.
@@ -2793,15 +2908,6 @@ Qed.
 
 (* SAFETY *)
 
-Lemma path_prefix : forall T R p (x:T) n,
-    path R x p -> path R x (take n p).
-Proof using.
-  induction p;[done|].
-  move => /= x n /andP [Hr Hpath].
-  destruct n. done.
-  simpl;apply /andP;by auto.
-Qed.
-
 (* An honest user may cert-vote only at step 3 of a period *)
 (* Certvoting is enabled only at step 3 *)
 Lemma certvote_only_in_step3 : forall us uid v b r p,
@@ -3055,7 +3161,7 @@ rewrite -!ustate_after_iff_step_le.
 apply step_le_trans.
 Qed.
 
-Lemma gtrans_domf_users : forall gs1 gs2,
+Lemma gtrans_domf_users: forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
 Proof using.
 move => gs1 gs2.
@@ -3069,6 +3175,19 @@ elim => //.
   by apply/fsubsetP => x Hd; apply: fset1Ur.
 - move => pre uid ustate_key Hcorrupt /=.
   by apply/fsubsetP => x Hd; apply: fset1Ur.
+Qed.
+
+Lemma greachable_domf_users: forall g1 g2,
+    greachable g1 g2 -> domf g1.(users) `<=` domf g2.(users).
+Proof using.
+  move => g1 g2 [trace H_path H_last].
+  revert trace g1 H_path H_last.
+  elim => //=.
+  - by move => _ _ <-.
+  - move => a l IH g1 /andP [/asboolP H_step H_path] H_last.
+    apply gtrans_domf_users in H_step.
+    apply /(fsubset_trans H_step){H_step}.
+    by apply IH.
 Qed.
 
 (* Generalization of non-decreasing round-period-step results to paths *)
@@ -3114,7 +3233,7 @@ Definition certvoted_in_path path uid r p v : Prop :=
 Definition certified_in_period trace r p v :=
   exists (certvote_quorum:{fset UserId}),
      certvote_quorum `<=` committee r p 3
-  /\ #| certvote_quorum | >= tau_c
+  /\ #|` certvote_quorum | >= tau_c
   /\ forall (voter:UserId), voter \in certvote_quorum ->
        certvoted_in_path trace voter r p v.
 
@@ -3128,7 +3247,7 @@ Definition softvoted_in_path path uid r p v : Prop :=
 Definition enough_softvotes_in_period trace r p v :=
   exists (softvote_quorum:{fset UserId}),
      softvote_quorum `<=` committee r p 2
-  /\ #| softvote_quorum | >= tau_s
+  /\ #|` softvote_quorum | >= tau_s
   /\ forall (voter:UserId), voter \in softvote_quorum ->
        softvoted_in_path trace voter r p v.
 
@@ -3142,7 +3261,7 @@ Definition nextvoted_bot_in_path path uid r p s : Prop :=
 Definition enough_nextvotes_bot_in_step trace r p s :=
   exists (nextvote_quorum:{fset UserId}),
      nextvote_quorum `<=` committee r p s
-  /\ #| nextvote_quorum | >= tau_b
+  /\ #|` nextvote_quorum | >= tau_b
   /\ forall (voter:UserId), voter \in nextvote_quorum ->
        nextvoted_bot_in_path trace voter r p s.
 
@@ -3156,7 +3275,7 @@ Definition nextvoted_val_in_path path uid r p s v : Prop :=
 Definition enough_nextvotes_val_in_step trace r p s v :=
   exists (nextvote_quorum:{fset UserId}),
      nextvote_quorum `<=` committee r p s
-  /\ #| nextvote_quorum | >= tau_b
+  /\ #|` nextvote_quorum | >= tau_b
   /\ forall (voter:UserId), voter \in nextvote_quorum ->
        nextvoted_val_in_path trace voter r p s v.
 
@@ -3197,16 +3316,6 @@ Proof using.
   clear.
   unfold step_in_path_at.
   elim: ix path => [|n IHn] [] //= a [];tauto.
-Qed.
-
-Lemma onth_nth T (s:seq T) ix x:
-  onth s ix = Some x -> (forall x0, nth x0 s ix = x).
-Proof using.
-  unfold onth.
-  unfold ohead.
-  move => H_drop x0.
-  rewrite -[ix]addn0 -nth_drop.
-  destruct (drop ix s);simpl;congruence.
 Qed.
 
 Lemma path_drop' T (R:rel T) x p (H:path R x p) n:
@@ -3421,16 +3530,17 @@ Definition softvoted_once_in_path path r p uid : Prop :=
 Lemma take_rcons T : forall (s : seq T) (x : T), take (size s) (rcons s x) = s.
 Proof using. elim => //=; last by move => a l IH x; rewrite IH. Qed.
 
+
 (* Priority:HIGH
    Proof should be very similar to no_two_certvotes_in_p *)
 (* L2: An honest user soft-votes for at most one value in a period *)
-Lemma no_two_softvotes_in_p (unused:Unused) : forall path uid r p,
-  softvoted_once_in_path path r p uid \/ forall v, ~ softvoted_in_path path uid r p v.
+Lemma no_two_softvotes_in_p : forall g0 trace (H_path : path gtransition g0 trace) uid r p,
+    honest_after_step (r,p,1) uid trace ->
+    forall ix1 v1, softvoted_in_path_at ix1 trace uid r p v1 ->
+    forall ix2 v2, softvoted_in_path_at ix2 trace uid r p v2 ->
+                   ix1 = ix2 /\ v1 = v2.
 Proof using.
-  unused.
-(* once a user softvotes (certvotes) in step 2 (3), the user moves on to subsequent steps and never softvotes (certvotes) again in that period. *)
-(* appeal to steps being nondecreasing *)
-Qed.
+Admitted.
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path_at ix path uid r p s : Prop :=
@@ -3512,7 +3622,7 @@ Lemma nextvote_val_precondition g1 g2 uid v r p s:
   user_sent uid (Nextvote_Val, next_val v s, r, p, uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
   (exists b, nextvote_val_ok u uid v b r p s) \/
-  (exists b v', nextvote_stv_ok u uid v' b r p s) .
+  (nextvote_stv_ok u uid r p s /\ u.(stv) p = Some v).
 Proof.
   move => H_sent u H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
@@ -3535,7 +3645,7 @@ Proof.
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
       left; exists b; subst; assumption.
-      right; exists b; exists v0; subst; apply H.
+      right;subst;assumption.
     }
 Qed.
 
@@ -3617,18 +3727,14 @@ Lemma soft_weight_monotone g1 g2 (H_reach:greachable g1 g2) uid:
     soft_weight v u1 r p <= soft_weight v u2 r p.
 Proof using.
   move => u1 H_u1 u2 H_u2 v r p.
-  unfold soft_weight.
-  rewrite !filter_undup.
-  rewrite -!(elimT card_uniqP) ?undup_uniq //.
-  apply subset_leq_card.
-  rewrite (eq_subset (mem_undup _)) (eq_subset_r (mem_undup _)).
-
-  apply/subsetP => x.
-  rewrite !mem_filter.
-  move/andP => [->] /=.
-  apply/subsetP: x.
-
-  exact (softvotes_monotone H_reach H_u1 H_u2 r p).
+  have H_mono := softvotes_monotone H_reach H_u1 H_u2 r p.
+  apply fsubset_leq_card.
+  unfold softvoters_for.
+  move: (u1.(softvotes)) (u2.(softvotes)) H_mono;clear => s1 s2 /subsetP H_mono.
+  apply subset_imfset.
+  simpl.
+  move => x /andP [H_x_s1 H_val].
+  by apply/andP;split;[apply/H_mono|].
 Qed.
 
 Lemma blocks_utransition_internal:
@@ -3763,34 +3869,61 @@ Proof using.
   by apply (blocks_monotone H_reach H_lookup_cv H_lookup_nv).
 Qed.
 
+Lemma softvote_credentials_checked
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r -> forall v p,
+      softvoters_for v u r p `<=` committee r p 1.
+Proof using.
+Admitted.
+
+Lemma softvotes_sent
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r -> forall voter v p,
+      (voter,v) \in u.(softvotes) r p ->
+      softvoted_in_path trace voter r p v.
+Proof using.
+Admitted.
+
 (* Priority:HIGH
    Top-level result,
    much of proof shared with certvote_excludes_nextvote_open_in_p
  *)
 (* L3’: If an honest user cert-votes for a value in step 3, the user can only next-vote that value in the same period *)
-Lemma certvote_nextvote_value_in_p g0 trace (H_path: path gtransition g0 trace) uid r p v s v':
+Lemma certvote_nextvote_value_in_p
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start : state_before_round r0 g0) uid r p s v v':
   honest_after_step (r,p,s) uid trace ->
+  r0 <= r ->
   certvoted_in_path trace uid r p v ->
   nextvoted_value_in_path trace r p s uid v' ->
   v = v'.
-Proof using.
-  move => H_honest [ix_cv H_cv] [ix_nv H_nv].
+Proof using quorums_s_honest_overlap.
+  clear -H_path H_start quorums_s_honest_overlap.
+  move => H_honest H_r [ix_cv H_cv] [ix_nv H_nv].
   move: (H_cv) => [g1_cv [g2_cv [H_step_cv H_vote_cv]]].
   move: (H_nv) => [g1_nv [g2_nv [H_step_nv H_vote_nv]]].
 
+  have H_g1_nv := step_in_path_onth_pre H_step_nv.
   have H_key1_nv := user_sent_in_pre H_vote_nv.
   set ustate_nv : UState := g1_nv.(users)[`H_key1_nv].
   have H_lookup_nv : _ = Some ustate_nv := in_fnd H_key1_nv.
   have H_nv_precond := nextvote_val_precondition H_vote_nv H_lookup_nv.
 
+  have H_g2_cv := step_in_path_onth_post H_step_cv.
   have H_key2_cv := user_sent_in_post H_vote_cv.
   set ustate_cv : UState := g2_cv.(users)[`H_key2_cv].
   have H_lookup_cv : _ = Some ustate_cv := in_fnd H_key2_cv.
-  have H_softvotes := certvote_postcondition H_vote_cv H_lookup_cv.
+  have H_cv_cond := certvote_postcondition H_vote_cv H_lookup_cv.
 
   assert (ix_cv < ix_nv).
   {
-  apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) (step_in_path_onth_pre H_step_nv)
+  apply (order_ix_from_steps H_path (step_in_path_onth_pre H_step_cv) H_g1_nv
                              (key1:=user_sent_in_pre H_vote_cv) (key2:=user_sent_in_pre H_vote_nv)).
   rewrite (utransition_label_start H_vote_cv);[|by apply in_fnd].
   rewrite (utransition_label_start H_vote_nv);[|by apply in_fnd].
@@ -3798,33 +3931,80 @@ Proof using.
   destruct H_nv_precond as [H_nv_precond | H_nv_precond].
   move:H_nv_precond =>[b];clear;simpl;unfold nextvote_val_ok;tauto.
   (* stv case of nextvote_val_precondition *)
-  admit.
+  right;split;[reflexivity|];right;split;[reflexivity|].
+  case: H_nv_precond.
+  clear.
+  unfold nextvote_stv_ok.
+  tauto.
   }
 
-  destruct H_nv_precond as [H_nv_precond | H_nv_precond].
-  have {H_nv_precond}H_certval : v' \in certvals ustate_nv r p
-    by move: H_nv_precond => [] b;unfold nextvote_val_ok;tauto.
+  have H_reach : greachable g2_cv g1_nv
+    := steps_greachable H_path H H_step_cv H_step_nv.
+
+  destruct H_cv_cond as [H_certval_cv [b' [H_blocks H_valid]]].
+
+  assert (v \in certvals ustate_nv r p) as H_certval_v.
+  {
+    move: H_certval_cv.
+    have H_weight_le := soft_weight_monotone H_reach H_lookup_cv H_lookup_nv v r p.
+    have H_softvotes_le := softvotes_monotone H_reach H_lookup_cv H_lookup_nv r p.
+    clear -H_weight_le H_softvotes_le.
+    rewrite /certvals !mem_filter => /andP [H_weight H_votes].
+    apply/andP. split. by apply (leq_trans H_weight).
+    move:H_votes. rewrite /vote_values !mem_undup. move/mapP => [] x H_x ->.
+    apply map_f. move: H_x.
+    by apply/subsetP.
+  }
+
+  assert (tau_s <= soft_weight v ustate_nv r p) as H_v
+      by (move:H_certval_v;rewrite mem_filter => /andP [] //).
+
+  destruct H_nv_precond as [H_nv_precond_val | H_nv_precond_stv].
+
+  * (* from nextvote val *)
+  {
+  have {H_nv_precond_val}H_certval_v' : v' \in certvals ustate_nv r p
+    by move: H_nv_precond_val => [] b;unfold nextvote_val_ok;tauto.
 
   assert (tau_s <= soft_weight v' ustate_nv r p) as H_v'
-      by (move: H_certval;rewrite mem_filter => /andP [] //).
-  assert (tau_s <= soft_weight v ustate_cv r p) as H_v
-      by (move:H_softvotes;rewrite mem_filter => [] [] /andP [] //).
+      by (move: H_certval_v';rewrite mem_filter => /andP [] //).
 
-  (* Now need to argue quorum intersection *)
-  admit.
 
-  (* stv case of nextvote_val_precondition *)
+  have H_votes_checked :=
+    softvote_credentials_checked H_path H_start H_g1_nv H_lookup_nv H_r.
+
+  have Hq := quorums_s_honest_overlap trace.
+  specialize (Hq r p 1 _ _ (H_votes_checked _ _) H_v (H_votes_checked _ _) H_v').
+
+  move: Hq => [softvoter [H_voted_v [H_voted_v' H_softvoter_honest]]].
+  assert (softvoted_in_path trace softvoter r p v) as H_sent_v. {
+  apply (softvotes_sent H_path H_start H_g1_nv H_lookup_nv H_r).
+  move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+  assumption.
+  }
+  assert (softvoted_in_path trace softvoter r p v') as H_sent_v'. {
+  apply (softvotes_sent H_path H_start H_g1_nv H_lookup_nv H_r).
+  move:H_voted_v' => /imfsetP /= [] x /andP [H_x_in].
+  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+  assumption.
+  }
+  move: H_sent_v => [ix_v H_sent_v].
+  move: H_sent_v' => [ix_v' H_sent_v'].
+
+  by case:(no_two_softvotes_in_p H_path H_softvoter_honest H_sent_v H_sent_v').
+  }
+
+  * {
   exfalso.
-  destruct H_nv_precond as [b [v0 H_stv]].
-  destruct H_stv as [H_time [H_rps [H_ccs [H_nv_step [H_not_valid [H_p H_no_quorum]]]]]].
-  destruct H_softvotes as [H_certvals [b' [H_blocks H_valid]]].
-  (* discharge this using soft_weight_monotone *)
-  assert (v \in certvals ustate_nv r p) by admit.
-  (* discharge this using blocks_monotone *)
-  assert (b' \in local_state.blocks UserId Value PropRecord Vote ustate_nv r) by admit.
-  edestruct H_not_valid; eassumption.
+  (* stv case of nextvote_val_precondition *)
+  destruct H_nv_precond_stv as [H_nv_stv _].
+  destruct H_nv_stv as [H_time [H_rps [H_ccs [H_nv_step [H_not_valid [H_p H_no_quorum]]]]]].
 
-Admitted.
+  apply (H_not_valid _ H_certval_v b');[|assumption].
+  by move: (blocks_monotone H_reach H_lookup_cv H_lookup_nv r) (b') H_blocks => /subsetP.
+  }
+Qed.
 
 (* L5.0 A node enters period p > 0 only if it received t_H next-votes for
    the same value from some step s of period p-1 *)
@@ -3847,7 +4027,7 @@ Lemma period_advance_only_by_next_votes : forall g0 trace uid r p
     let path_prefix := take n.+2 trace in
     exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
       next_voters `<=` committee r p.-1 s
-      /\ tau_b <= #| next_voters |
+      /\ tau_b <= #|` next_voters |
       /\ forall voter, voter \in next_voters ->
          received_next_vote uid voter r p.-1 s v path_prefix.
 Proof.
@@ -4504,7 +4684,8 @@ Lemma honest_softvote_respects_stv uid g1 g2 v v' r p u:
   user_honest uid g1 ->
   user_sent uid (Softvote, val v', r, p, uid) g1 g2 ->
   v' = v.
-Proof.
+Proof using.
+  clear.
   intros H_ustate H_posp H_stv H_honest H_sent.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
   destruct H_step as [H_ukey H];
@@ -4533,7 +4714,7 @@ Proof.
       - decompose record H3;clear H3.
       (* p > 1 and ~ cert_may_exist, so stv p = None (by lemma) and hence contradiction *)
       pose proof (@cert_stv_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
-      intuition. rewrite H12 in H_stv. discriminate.
+      intuition. rewrite H3 in H_stv. discriminate.
       - decompose record H3;clear H3.
       (* cert_may_exist holds, stv p = Some v as required *)
       rewrite H7 in H_stv. injection H_stv. auto.
@@ -4851,68 +5032,9 @@ Definition reached_round uid r p: pred GState :=
 
 Lemma honest_in_period_entered g0 trace (H_path : path gtransition g0 trace):
   forall r p uid, honest_in_period r p uid trace ->
-  forall u0, g0.(users).[? uid] = Some u0 ->
-  step_lt (step_of_ustate u0) (r,p,0) ->
+  state_before_round r g0 ->
   exists n g1 g2, period_advance_at n trace uid r p g1 g2.
 Proof using.
-  clear -H_path.
-  move => r p uid [] ix_h.
-  destruct (onth trace ix_h) as [g_h|] eqn:H_ix_h;[|done].
-  destruct (g_h.(users).[? uid]) as [u_h|] eqn:H_u_h;[|done].
-  move => [H_honest [H_r H_p]].
-  move => u0 H_u0 H_lt_u0.
-
-  apply (path_prefix ix_h.+1) in H_path.
-  pose proof (path_steps H_path).
-  specialize (H (reached_round uid r p)).
-  rewrite (onth_last_take H_ix_h) in H.
-  lapply H;[move => {H}H|];[lapply H;[move => {H}H|]|];first last.
-  {
-    unfold reached_round.
-    rewrite H_u0. revert H_lt_u0. clear;destruct u0;simpl;clear.
-    move => H_step_lt.
-    rewrite ltn0 falseE in H_step_lt.
-
-    destruct H_step_lt as [H|[-> H]];
-      [by rewrite (gtn_eqF H) negb_or ltnNge (ltnW H)
-      |rewrite ltnn eq_refl].
-    destruct H as [H|[_ []]].
-    by rewrite -ltnNge.
-  }
-  {
-    unfold reached_round.
-    rewrite H_u_h.
-    rewrite H_r H_p.
-    apply/orP. right.
-    rewrite eq_refl leqnn.
-    done.
-  }
-
-  (* Needs some stuff about lists and lengths now *)
-(*
-  destruct H as [n H].
-  destruct n. admit. (* zero index into (g0::trace) not yet supported *)
-  simpl in H.
-  exists n.
-
-  destruct (drop n (take ix_h.+1 trace)) as [|g1 l] eqn:H_l;[by destruct (notF H)|exists g1].
-  destruct l as [|g2 l];[by destruct (notF H)|exists g2].
-  unfold period_advance_at.
-    split. unfold step_in_path_at.
-  rewrite -[trace](cat_take_drop ix_h.+1) drop_cat.
-
-  replace (n < size (take ix_h.+1 trace)) with true.
-  rewrite H_l. split;reflexivity.
-
-  apply (f_equal size) in H_l;change (size [:: g1, g2 & l]) with (size l).+2 in H_l.
-  rewrite size_drop in H_l.
-  symmetry. rewrite -subn_gt0 H_l. reflexivity.
-
-  move/andP: H => [H_g1 H_g2].
-  unfold reached_round in H_g2.
-  destruct (uid \in g2.(users)) eqn:key2 at 0.
-  rewrite in_fnd in H_g2.
-  *)
 Admitted.
 
 Theorem safety: forall g0 trace (r:nat),
@@ -4955,67 +5077,28 @@ Proof.
   specialize (H_entry honest_voter).
 
   pose proof (@excl_enter_limits_cert_vote _ _ H_path r p2 v1 Hpos) as H_recert.
-  pose proof (honest_in_period_entered H_path H).
-
-  assert (honest_voter \in g0.(users)) by admit.
-  (*
-  {
-    assert (exists ix, user_honest_at ix trace honest_voter). {
-    destruct H_honest_in as [x H_honest_in]. exists x.
-    unfold user_honest_at.
-    destruct (onth trace x) eqn:H_x;[|done].
-    apply (onth_at_step H_x).
-    unfold predC, is_user_corrupt_gstate, is_user_corrupt. simpl.
-    revert H_honest_in.
-    destruct (g.(users).[?honest_voter]) eqn:H_in;[|done].
-    rewrite H_in.
-    by move => [] /negP.
-    }
-    assert (~~ is_user_corrupt_gstate honest_voter g0).
-    admit.
-    unfold is_user_corrupt_gstate, is_user_corrupt in H2.
-    destruct (g0.(users).[? honest_voter]) eqn:H_lookup.
-  *)
-
-  specialize (H0 _ (in_fnd H1)).
-
-  lapply H0.
-  move => [n [g1 [g2 H_advance]]].
-  specialize (H_entry g1 g2 n H_advance).
+  pose proof (honest_in_period_entered H_path H H_start) as H_advance.
 
   symmetry.
   eapply H_recert;try eassumption.
 
+  move:H_advance => [n [g1 [g2 H_advance]]].
+  specialize (H_entry g1 g2 n H_advance).
+
   apply H_entry.
-  revert H H_advance. admit.
+  clear -H_path H_honest_in H_advance.
+  move: H_advance => [H_step [key1 [key2 [H_step_lt H_step_eq]]]].
+  have H_g1 := step_in_path_onth_pre H_step.
+  pose proof (honest_at_from_after H_honest_in H_path H_g1 (in_fnd key1)).
 
-  revert H_start.
-  unfold state_before_round, honest_users_before_round.
-  case => [H_users_g0 _].
-  specialize (H_users_g0 _ H1).
-  lapply H_users_g0.
+  lapply H;clear H.
+  intro H. exact (at_step_onth H H_g1).
 
-  move:(g0.(users)[` H1]) => u.
-  unfold user_before_round;destruct u;simpl;clear -Hlt.
-  move => [] H_fields _. clear -H_fields Hlt.
-  destruct H_fields;[left;assumption|right].
-  destruct H as [Hr H];split;[assumption|clear Hr].
-  left. destruct H as [_ [-> _]].
-  apply (@leq_ltn_trans p1). (* Need to exclude period p1 being 0 *) admit.
-  assumption.
-
-  suff: user_honest honest_voter g0 by rewrite /user_honest in_fnd.
-  clear -H_honest_in H_path.
-
-  move: H_honest_in => [ix H_honest].
-  destruct (onth trace ix) eqn:H_onth;[|done].
-  suff: user_honest honest_voter g
-    by apply honest_monotone;exists (take ix.+1 trace);[by apply path_prefix|by symmetry;apply onth_last_take].
-
-  unfold user_honest.
-  destruct g.(users).[?honest_voter];[|done].
-  by move: H_honest => [] /negP.
-Admitted.
+  apply step_ltW.
+  refine (step_lt_trans H_step_lt _).
+  simpl. clear. change (1 < 3) with true.
+  intuition.
+Qed.
 
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
 (*
