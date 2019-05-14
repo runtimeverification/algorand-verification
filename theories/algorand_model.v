@@ -3255,6 +3255,14 @@ Proof using.
   }
 Qed.
 
+Lemma transition_from_path
+      g0 states ix (H_path: path gtransition g0 states)
+      g1 g2
+      (H_step : step_in_path_at g1 g2 ix states):
+  GTransition g1 g2.
+Proof using.
+Admitted.
+
 Lemma order_ix_from_steps g0 trace (H_path: path gtransition g0 trace):
   forall ix1 g1, onth trace ix1 = Some g1 ->
   forall ix2 g2, onth trace ix2 = Some g2 ->
@@ -3832,15 +3840,228 @@ Definition period_advance_at n path uid r p g1 g2 : Prop :=
 (* Priority:MED
    Structural lemma about advancement
  *)
-Lemma period_advance_only_by_next_votes : forall path uid r p,
+Lemma period_advance_only_by_next_votes : forall g0 trace uid r p
+                                                 (H_path: path gtransition g0 trace),
     forall n,
-    (exists g1 g2, period_advance_at n path uid r p g1 g2) ->
-    let path_prefix := take n.+2 path in
+    (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
+    let path_prefix := take n.+2 trace in
     exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
       next_voters `<=` committee r p.-1 s
       /\ tau_b <= #| next_voters |
       /\ forall voter, voter \in next_voters ->
          received_next_vote uid voter r p.-1 s v path_prefix.
+Proof.
+  intros g0 trace uid r p H_path n H_adv pref.
+  destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_lt H_rps]]]]]].
+  assert (H_gtrans : g1 ~~> g2) by (eapply transition_from_path; eassumption).
+
+  destruct H_gtrans.
+
+  (* tick *)
+  exfalso.
+  pose proof (tick_users_upd increment H_g1) as H_tick.
+  rewrite in_fnd in H_tick.
+
+  assert (H_tick_adv :
+            (tick_users increment pre) [` H_g2] =
+            user_advance_timer
+              increment
+              ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1])).
+    by inversion H_tick; simpl; assumption.
+
+  clear H_tick.
+  unfold tick_update in H_rps.
+  cbn -[in_mem mem] in H_rps.
+
+  rewrite H_tick_adv in H_rps.
+  unfold user_advance_timer in H_rps.
+  destruct (local_state.corrupt UserId Value PropRecord Vote
+                                ((global_state.users UserId UState [choiceType of Msg] pre)
+                                   [` H_g1]));
+    rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  { (* message delivery cases *)
+    unfold delivery_result in H_rps.
+    rewrite setfNK in H_rps.
+    destruct (uid == uid0) eqn:Huid.
+    move/eqP in Huid. subst.
+    simpl in H_rps.
+    assert (H_g1_key_ustate_opt :
+              Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+              Some ((global_state.users UserId UState [choiceType of Msg] pre) [` key_ustate])).
+      by repeat rewrite -in_fnd.
+
+    inversion H_g1_key_ustate_opt as [H_g1_key_ustate]. clear H_g1_key_ustate_opt.
+    rewrite H_g1_key_ustate in H_lt; rewrite <- H_rps in H_lt.
+    unfold step_of_ustate in H_lt.
+
+    remember (ustate_post,sent) as ustep_out in H1.
+    remember ((global_state.users UserId UState [choiceType of Msg] pre) [` key_ustate]) as u in H1.
+
+    destruct H1; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps.
+
+    exfalso. unfold set_softvotes in pre'. simpl in pre'. subst. subst pre'.
+    apply step_lt_irrefl in H_lt; contradiction.
+
+    exfalso. unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'.
+    apply step_lt_irrefl in H_lt; contradiction.
+
+    (* good case *)
+    (* unfold certvote_result in H_lt. *)
+    (* unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'. *)
+    (* simpl in * |- *. *)
+    (* clear H1 H0 H_g1 H_g2 H_g1_key_ustate H H_step. *)
+    (* inversion H_rps. *)
+    (* destruct H_lt. *)
+    admit.
+
+    exfalso. unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'.
+    apply step_lt_irrefl in H_lt; contradiction.
+
+    (* other good case *)
+    admit.
+
+    exfalso. unfold set_certvotes in pre'. simpl in pre'. subst. subst pre'.
+    apply step_lt_irrefl in H_lt; contradiction.
+
+    (* how to arise from a contradiction with round advancing? *)
+    exfalso. unfold certify_result in H_lt.
+    unfold set_certvotes in pre'. subst. subst pre'. simpl in H_lt.
+    admit.
+
+    exfalso. subst.
+    unfold deliver_nonvote_msg_result in *.
+    destruct pre.
+    clear -H_rps H_lt.
+    destruct msg.1.1.1.2; destruct msg.1.1.1.1; simpl in H_rps;
+      rewrite H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
+
+    exfalso. rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
+  }
+
+  { (* internal step case *)
+    exfalso.
+    unfold step_result in H_rps.
+    rewrite setfNK in H_rps.
+    destruct (uid == uid0) eqn:Huid.
+    move/eqP in Huid. subst.
+    simpl in H_rps.
+    assert (H_g1_key_ustate_opt :
+              Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+              Some ((global_state.users UserId UState [choiceType of Msg] pre) [` ustate_key])).
+      by repeat rewrite -in_fnd.
+
+    inversion H_g1_key_ustate_opt as [H_g1_key_ustate]. clear H_g1_key_ustate_opt.
+    rewrite H_g1_key_ustate in H_lt; rewrite <- H_rps in H_lt.
+    unfold step_of_ustate in H_lt.
+
+    remember (ustate_post,sent) as ustep_out in H0.
+    remember ((global_state.users UserId UState [choiceType of Msg] pre) [` ustate_key]) as u in H0.
+
+    destruct H0; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps;
+      try (destruct H0 as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]];
+           clear -H4 H_s; destruct s; inversion H_s;
+           inversion H4; rewrite addn1 in H4; inversion H4).
+
+    subst; try apply step_lt_irrefl in H_lt; try contradiction.
+
+    destruct H0 as [H_nv_stv H_stv].
+    destruct H_nv_stv as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]].
+    clear -H4 H_s. destruct s. inversion H_s.
+    inversion H4. rewrite addn1 in H4. inversion H4.
+
+    (* no nextvote ok - need s > 3 assumption? *)
+    admit.
+
+    subst. simpl in H_lt.
+    simpl in H_rps.
+    unfold timeout_ok in H0.
+    inversion H0; subst.
+    clear -H4 H1. rewrite H1 in H4. inversion H4.
+
+    rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
+  }
+
+  (* recover from partition *)
+  exfalso.
+  simpl in H_g2.
+  assert (H_g1_g2_opt :
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g2])).
+    by repeat rewrite -in_fnd.
+
+  inversion H_g1_g2_opt as [H_g1_g2]; clear H_g1_g2_opt.
+  rewrite H_g1_g2 in H_lt.
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  (* enter partition *)
+  exfalso.
+  simpl in H_g2.
+  assert (H_g1_g2_opt :
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g2])).
+    by repeat rewrite -in_fnd.
+
+  inversion H_g1_g2_opt as [H_g1_g2]; clear H_g1_g2_opt.
+  rewrite H_g1_g2 in H_lt.
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  (* corrupt user *)
+  exfalso.
+
+  rewrite setfNK in H_rps.
+  destruct (uid == uid0) eqn:Huid.
+  move/eqP in Huid. subst.
+  simpl in H_rps.
+  assert (H_g1_ustate_key_opt :
+            Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+            Some ((global_state.users UserId UState [choiceType of Msg] pre) [` ustate_key])).
+    by repeat rewrite -in_fnd.
+
+  inversion H_g1_ustate_key_opt as [H_g1_ustate_key]; clear H_g1_ustate_key_opt.
+  rewrite H_g1_ustate_key in H_lt.
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  (* replay message *)
+  exfalso.
+  simpl in H_g2.
+  assert (H_g1_g2_opt :
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g2])).
+    by repeat rewrite -in_fnd.
+  inversion H_g1_g2_opt as [H_g1_g2]; clear H_g1_g2_opt.
+  rewrite H_g1_g2 in H_lt.
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  (* forge message *)
+  exfalso.
+  simpl in H_g2.
+  assert (H_g1_g2_opt :
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1]) =
+          Some ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g2])).
+    by repeat rewrite -in_fnd.
+  inversion H_g1_g2_opt as [H_g1_g2]; clear H_g1_g2_opt.
+  rewrite H_g1_g2 in H_lt.
+  rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
+
+  (* unfold received_next_vote. unfold msg_received. unfold step_at. *)
+  (* exists 0, None, (domf (honest_users g1.(users))). *)
+  (* repeat split. *)
+  (* 3: { *)
+  (*   intros. *)
+  (*   exists ((global_state.users UserId UState [choiceType of Msg] g1) [` H_g1]).(deadline). *)
+  (*   exists n, [::], g1, g2. split. *)
+  (*   subst pref. *)
+  (*   apply step_in_path_take; assumption. *)
+  (*   simpl. exists H_g1. *)
+  (*   exists ((global_state.users UserId UState [choiceType of Msg] g1) [` H_g1]). *)
+  (*   simpl. *)
+  (* } *)
+  (* unfold step_in_path_at in H_step. *)
+  (* unfold step_of_ustate in H_rps. *)
+
 Admitted.
 
 (* L5.1 Any set of tau_b committee  members must include at least one honest node,
@@ -3869,7 +4090,7 @@ Lemma adv_period_from_honest_in_prev g0 trace (H_path: path gtransition g0 trace
 Proof.
   intros n uid r p.
   intros H_p H_r H_adv.
-  apply period_advance_only_by_next_votes in H_adv.
+  eapply period_advance_only_by_next_votes in H_adv; try eassumption.
   destruct H_adv as (s & v & next_voters & H_voters_cred & H_voters_size & ?).
   pose proof (path_prefix n.+2 H_path) as H_path_prefix.
   destruct (@quorum_b_has_honest (take n.+2 trace) r p.-1 s next_voters H_voters_cred H_voters_size)
@@ -4283,7 +4504,7 @@ Lemma honest_softvote_respects_stv uid g1 g2 v v' r p u:
   user_honest uid g1 ->
   user_sent uid (Softvote, val v', r, p, uid) g1 g2 ->
   v' = v.
-Proof using.
+Proof.
   intros H_ustate H_posp H_stv H_honest H_sent.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
   destruct H_step as [H_ukey H];
