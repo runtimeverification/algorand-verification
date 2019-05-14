@@ -4161,8 +4161,90 @@ Proof using.
     apply IHtrace;congruence.
 Qed.
 
+
+(* consistency of cert_may_exist and stv *)
+Lemma cert_stv_consistent_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  (~ pre.(cert_may_exist) <-> pre.(stv) pre.(period) = None) ->
+  (~ post.(cert_may_exist) <-> post.(stv) post.(period) = None).
+Proof using.
+  move => uid pre post msgs step H_pre_cons.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+Lemma cert_stv_consistent_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  (~ pre.(cert_may_exist) <-> pre.(stv) pre.(period) = None) ->
+  (~ post.(cert_may_exist) <-> post.(stv) post.(period) = None).
+Proof using.
+  move => uid pre post m msgs step H_pre_cons.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;
+    try by (destruct pre;simpl;autounfold with utransition_unfold;done).
+    - destruct pre'. simpl. clear. rewrite -(addn1 period) eqn_add2r. intuition.
+      destruct (period == period) as [] eqn:?. reflexivity. move/eqP in Heqb. done.
+    - destruct pre'. simpl. clear. rewrite -(addn1 period) eqn_add2r. intuition.
+      move/eqP in H. done. move: H. destruct (period == period) as [] eqn:?.
+      done. move/eqP in Heqb. done.
+    - unfold deliver_nonvote_msg_result.
+      destruct msg as [[[[]]]]. simpl.
+      by destruct e;[destruct m|..].
+Qed.
+
+Lemma cert_stv_consistent_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+  /\ (
+    (~ u1.(cert_may_exist) <-> u1.(stv) u1.(period) = None) ->
+    (~ u2.(cert_may_exist) <-> u2.(stv) u2.(period) = None) ).
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_stv_consistent_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_stv_consistent_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
+Lemma cert_stv_consistent_forward
+      g1 g2 (H_reach : greachable g1 g2)
+      uid u1 u2:
+  g1.(users).[?uid] = Some u1 ->
+  g2.(users).[?uid] = Some u2 ->
+  (~ u1.(cert_may_exist) <-> u1.(stv) u1.(period) = None) ->
+  (~ u2.(cert_may_exist) <-> u2.(stv) u2.(period) = None).
+Proof using.
+  clear -H_reach.
+  move => H_u1 H_u2 H_const.
+  destruct H_reach as [trace H_path H_last].
+  move: g1 H_path H_last u1 H_u1 H_const.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 H_const.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := cert_stv_consistent_gtransition H_step H_u1.
+    specialize (IHtrace umid H_umid).
+    specialize (H_sub H_const).
+    apply IHtrace;assumption.
+Qed.
+
 (* When p > 1, the flag cert_may_exist and the stv value for p are always consistent *)
-Lemma stv_cert_flag_consistent : forall g uid (uid_key: uid \in g.(users)) ustate p,
+(* add a path hypothesis *)
+(* This is wrong -- need to add a gtransition trace to which the gstate g belongs *)
+Lemma cert_stv_consistent : forall g uid (uid_key: uid \in g.(users)) ustate p,
   g.(users).[uid_key] = ustate ->
   p > 1 ->
   ustate.(period) = p ->
