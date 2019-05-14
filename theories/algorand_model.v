@@ -4018,6 +4018,12 @@ Definition period_advance_at n path uid r p g1 g2 : Prop :=
   /\ step_lt (step_of_ustate ustate1) (r,p,0)
   /\ step_of_ustate ustate2 = (r,p,1)}}.
 
+(* some collection of votes recorded in nv_open/val field *)
+(* where certs check out and tau_b many of them *)
+(* statement uses received_next_vote pred *)
+(* only end up with vote recorded in your set if you actually receive it/it is sent *)
+(* stop at in a nextvote collection *)
+
 (* Priority:MED
    Structural lemma about advancement
  *)
@@ -4036,6 +4042,7 @@ Proof.
   destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]]]].
   assert (H_gtrans : g1 ~~> g2) by (eapply transition_from_path; eassumption).
 
+  assert (H_lt_0 := H_lt).
   eapply step_lt_le_trans with (c:=(r,p,1)) in H_lt.
   2: { simpl; intuition. }
 
@@ -4087,16 +4094,13 @@ Proof.
       try (inversion H_rps; exfalso; subst; subst pre';
            apply step_lt_irrefl in H_lt; contradiction).
 
-    (* good case *)
-    (* unfold certvote_result in H_lt. *)
-    (* unfold set_nextvotes_open in pre'. simpl in pre'. subst. subst pre'. *)
-    (* simpl in * |- *. *)
-    (* clear H1 H0 H_g1 H_g2 H_g1_key_ustate H H_step. *)
-    (* inversion H_rps. *)
-    (* destruct H_lt. *)
+    (* positive case: nextvote open *)
+    destruct H1 as [H_valid_rps H_quorum_size].
+    exists s, None, [fset x | x in (pre'.(nextvotes_open) r0 p0 s)].
     admit.
 
-    (* other good case *)
+    (* positive case: nextvote val *)
+    destruct H1 as [H_valid_rps H_quorum_size].
     admit.
 
     exfalso.
@@ -4151,7 +4155,9 @@ Proof.
     clear -H4 H_s. by ppsimpl; lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
-    admit.
+    rewrite H_g1_key_ustate in H_lt_0.
+    subst. simpl in H_lt_0. clear -H_lt_0.
+    by ppsimpl; lia.
 
     subst. simpl in H_lt.
     simpl in H_rps.
