@@ -5093,7 +5093,7 @@ Proof.
 
   apply H_entry.
   clear -H_path H_honest_in H_advance.
-  move: H_advance => [H_step [key1 [key2 [H_step_lt H_step_eq]]]].
+  move: H_advance => [H_step [key1 [key2 [H_round [H_step_lt H_step_eq]]]]].
   have H_g1 := step_in_path_onth_pre H_step.
   pose proof (honest_at_from_after H_honest_in H_path H_g1 (in_fnd key1)).
 
