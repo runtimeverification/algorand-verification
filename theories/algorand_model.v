@@ -4524,7 +4524,7 @@ Proof.
     destruct H5. decompose record H2. clear H2.
     unfold valid_rps in H3. decompose record H3. clear H3.
     (* when p > 1, ~ cert_may_exist, and stv p = None in that case, and hence contradiction *)
-    pose proof (@stv_cert_flag_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
+    pose proof (@cert_stv_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
     intuition. rewrite H4 in H_stv. discriminate.
     + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg as <- <- <-.
     destruct H5. decompose record H2;clear H2.
