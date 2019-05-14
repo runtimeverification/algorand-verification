@@ -2080,13 +2080,12 @@ Lemma honest_last_all uid g0 p (H_path : path gtransition g0 p):
     user_honest uid (last g0 p) ->
     all (user_honest uid) (g0::p).
 Proof using.
-  revert p H_path.
-  induction p using last_ind;[by simpl;move => _ ->|].
-  simpl. rewrite rcons_path last_rcons all_rcons.
-  move => /andP [Hpath Hstep] H_x.
-  specialize (IHp Hpath).
-  rewrite H_x.
-  apply IHp. by apply/honest_backwards_gstep /asboolP: H_x.
+  elim/last_ind: p H_path => [|s x IH] /=; first by move=> _ ->.
+  rewrite rcons_path last_rcons all_rcons.
+  move/andP => [Hpath Hstep] Hx.
+  specialize (IH Hpath).
+  rewrite Hx.
+  apply IH. by apply/honest_backwards_gstep /asboolP: Hx.
 Qed.
 Arguments honest_last_all uid [g0] [p].
 
