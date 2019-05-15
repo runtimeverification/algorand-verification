@@ -3887,6 +3887,62 @@ Lemma softvotes_sent
       (voter,v) \in u.(softvotes) r p ->
       softvoted_in_path trace voter r p v.
 Proof using.
+  move => ix g H_onth uid u H_u r H_r voter v p H_voter.
+  generalize dependent g. generalize dependent ix.
+  induction trace using last_ind.
+  intros. inversion H_onth.
+
+  revert H_path. rewrite rcons_path.
+  move => /andP [H_path H_step].
+
+  intros.
+  destruct (ix == (size trace)) eqn:H_add.
+  move/eqP in H_add. subst.
+  unfold onth in H_onth.
+  rewrite drop_rcons in H_onth. rewrite drop_size in H_onth.
+  inversion H_onth. clear H_onth. subst.
+
+  apply received_was_sent with (r0:=r0)
+                               (msg:=(Softvote, val v, r, p, voter))
+                               (u:=uid) (d:=lambda)
+    in H_path.
+  apply H_path in H_r.
+  destruct H_r as [ix0 [g1 [g2 [H_s_at H_sent]]]].
+  unfold softvoted_in_path, softvoted_in_path_at.
+  exists ix0, g1, g2.
+  split.
+  eapply step_in_path_prefix with (size trace).
+  rewrite take_rcons; assumption.
+  assumption.
+
+  (* honest after step *)
+  admit.
+
+  assumption.
+
+  (* (voter, v) \in u.(softvotes) -> msg_received *)
+  admit.
+
+  ppsimpl; lia.
+
+  move /eqP in H_add.
+  assert (H_onth' := H_onth).
+  apply onth_size in H_onth'.
+  rewrite size_rcons in H_onth'.
+  assert (H_ix : ix < size trace). by ppsimpl; lia. clear H_onth' H_add.
+  assert (H_onth_trace : (onth trace ix) = Some g).
+  unfold onth; unfold onth in H_onth; rewrite drop_rcons in H_onth.
+  apply drop_nth with (x0:=g0) in H_ix; rewrite H_ix in H_onth.
+  rewrite H_ix. trivial.
+  ppsimpl; lia.
+
+  eapply IHtrace in H_path; try eassumption.
+  destruct H_path as [ix0 [g1 [g2 [H_s_at H_sent]]]].
+  unfold softvoted_in_path, softvoted_in_path_at.
+  exists ix0, g1, g2.
+  split; try assumption.
+  eapply step_in_path_prefix with (size trace).
+  rewrite take_rcons; assumption.
 Admitted.
 
 (* Priority:HIGH
