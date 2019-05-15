@@ -187,7 +187,6 @@ Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
 Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
 Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
 Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
-Notation cert_may_exist := (local_state.cert_may_exist UserId Value PropRecord Vote).
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
@@ -467,18 +466,14 @@ Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
 
 (* Whether the user has seen enough nextvotes for some value in the given round/period/step *)
 Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
-  exists v, size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
+  exists v, nextvote_value_quorum u v r p s.
 
 (* Whether a quorum for bottom was not seen in the last period
    of the current round (for some step during that period) *)
-(* No longer used -- replaced by the state flag cert_may_exist *)
-(*
 Definition cert_may_exist (u:UState) : Prop :=
   let p := u.(period) in
   let r := u.(round) in
   p > 1 /\ forall s, ~ nextvote_bottom_quorum u r (p - 1) s.
-(* to be shown as an invariant (?): exists s, nextvote_quorum_for_some_value u r (p - 1) s *)
-*)
 
 (* Proposal record ordering induced by ordering on credentials *)
 Definition reclt (rec rec' : PropRecord) : bool := (rec.1.1.2 < rec'.1.1.2)%O.
@@ -546,7 +541,7 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   valid_rps pre r p 1 /\
   comm_cred_step uid r p 1 /\
   valid_block_and_hash b v /\
-  (p > 1 -> ~ pre.(cert_may_exist)).
+  ~ cert_may_exist pre.
 
 (* The reproposal step preconditions *)
 (* Note that this is the proposal step when p > 1 and the previous-
@@ -565,7 +560,7 @@ Definition no_propose_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p 1 /\
   forall b v,
   (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
-    p > 1 /\ pre.(cert_may_exist) /\ ~ v \in prev_certvals pre).
+   cert_may_exist pre /\ ~ v \in prev_certvals pre).
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
@@ -585,7 +580,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\
   comm_cred_step uid r p 2 /\
-  (p > 1 -> ~ pre.(cert_may_exist)) /\
+  ~ cert_may_exist pre /\
   leader_prop_value v (pre.(proposals) r p) .
 
 (* The Softvoting-a-reproposal step preconditions *)
@@ -595,13 +590,13 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\ p > 1 /\
   comm_cred_step uid r p 2 /\
-  ( (~ pre.(cert_may_exist) /\
+  ( (~ cert_may_exist pre /\
     (exists s, nextvote_value_quorum pre v r (p - 1) s) /\
     leader_reprop_value v (pre.(proposals) r p))
     \/
-    (pre.(cert_may_exist) /\ pre.(stv) p = Some v) ).
+    (cert_may_exist pre /\ pre.(stv) p = Some v) ).
 (* Victor: Technically, I think it would be correct to vote for your (non-bottom)
-   starting value even if `~ pre.(cert_may_exist)` *)
+   starting value even if `~ cert_may_exist pre` *)
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -616,11 +611,11 @@ Definition no_softvote_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p 2 /\
   forall v,
   (comm_cred_step uid r p 2 ->
-    (( p > 1 /\ pre.(cert_may_exist) \/ ~ leader_prop_value v (pre.(proposals) r p))
-    /\ ((pre.(cert_may_exist) \/
+    (( cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
+    /\ ((cert_may_exist pre \/
         (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
         ~ leader_reprop_value v (pre.(proposals) r p))
-       /\ (~ pre.(cert_may_exist) \/ ~ pre.(stv) p = Some v)))).
+       /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
 
 (* The softvoting step (new or reproposal) post-state *)
 (* NOTE: We keep the current deadline at 2 * lambda and let certvoting handle
@@ -644,7 +639,7 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
   comm_cred_step uid r p 3 /\
-  (p > 1 -> ~ pre.(cert_may_exist)) /\
+  ~ cert_may_exist pre /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
   v \in certvals pre r p .
@@ -661,7 +656,7 @@ Definition no_certvote_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p 3 /\
   forall b v,
   (~ comm_cred_step uid r p 3 \/
-   (p > 1 /\ pre.(cert_may_exist)) \/
+   cert_may_exist pre \/
    ~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
@@ -763,16 +758,14 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
 (* State update -- The bottom-value case *)
 Definition adv_period_open_result (pre : UState) : UState :=
   let prev_p := pre.(period) in
-    {[ {[ (advance_period pre)
-            with cert_may_exist := false ]}
-            with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
+   {[ (advance_period pre)
+      with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
 
 (* State update -- The proper value case *)
 Definition adv_period_val_result (pre : UState) v : UState :=
   let prev_p := pre.(period) in
-    {[ {[ (advance_period pre)
-            with cert_may_exist := true ]}
-            with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
+   {[ (advance_period pre)
+      with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
 
 (** Advancing round propositions and user state update **)
 (* Preconditions *)
@@ -788,10 +781,7 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
 
 (* State update *)
-Definition certify_result r (pre : UState) : UState :=
-  advance_round
-  {[ {[ pre with round := r ]}
-            with cert_may_exist := false ]}.
+Definition certify_result r (pre : UState) : UState := advance_round {[pre with round := r]}.
 
 (** Timeout transitions **)
 
@@ -4541,282 +4531,6 @@ Definition round_advance_at n path uid r g1 g2 : Prop :=
   let ustate2 := g2.(users).[ukey_2] in
   step_lt (step_of_ustate ustate1) (r,1,1)
   /\ step_of_ustate ustate2 = (r,1,1)}}.
-
-(* cert_may_exist flag properties *)
-
-Lemma cert_flag_utransition_internal:
-  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
-  pre.(round) = post.(round) ->
-  pre.(period) = post.(period) ->
-  pre.(cert_may_exist) = post.(cert_may_exist).
-Proof using.
-  move => uid pre post msgs step.
-  remember (post,msgs) as result eqn:H_result;
-  destruct step;case:H_result => [? ?];subst;done.
-Qed.
-
-Lemma cert_flag_utransition_deliver:
-  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
-  pre.(round) = post.(round) ->
-  pre.(period) = post.(period) ->
-  pre.(cert_may_exist) = post.(cert_may_exist).
-Proof using.
-  move => uid pre post m msgs step H_round H_period.
-  remember (post,msgs) as result eqn:H_result;
-  destruct step;case:H_result => [? ?];subst;
-    try by (destruct pre;simpl;autounfold with utransition_unfold;done).
-  * {
-      exfalso;move: H_period;clear;destruct pre;simpl;clear.
-      rewrite -[period in period = _]addn0. move/addnI. done.
-    }
-  * {
-      exfalso;move: H_period;clear;destruct pre;simpl;clear.
-      rewrite -[period in period = _]addn0. move/addnI. done.
-    }
-  * { exfalso;unfold certify_ok in H;decompose record H;clear H.
-      move:H0. rewrite /advancing_rp H_round;clear;simpl.
-      by case =>[|[]];[rewrite ltnNge leq_addr
-                      |rewrite -[r in _ = r]addn0;move/addnI].
-    }
-  * { clear.
-      unfold deliver_nonvote_msg_result.
-      destruct msg as [[[[]]]]. simpl.
-      by destruct e;[destruct m|..].
-    }
-Qed.
-
-Lemma cert_flag_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
-  forall u1, g1.(users).[?uid] = Some u1 ->
-  exists u2, g2.(users).[?uid] = Some u2
-  /\  (u1.(round)  = u2.(round)  ->
-       u1.(period) = u2.(period) ->
-       u1.(cert_may_exist) = u2.(cert_may_exist)).
-Proof using.
-  clear -H_step => u1 H_u1.
-  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
-  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
-  destruct H_step;simpl users;autounfold with gtransition_unfold;
-    try (rewrite fnd_set;case H_eq:(uid == uid0);
-      [move/eqP in H_eq;subst uid0|]);
-    try (eexists;split;[eassumption|done]);
-    first rewrite updf_update //;
-    (eexists;split;[reflexivity|]).
-  * (* tick *)
-    rewrite H_in1' /user_advance_timer.
-    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
-  * (* deliver *)
-    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_flag_utransition_deliver.
-  * (* internal *)
-    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_flag_utransition_internal.
-  * (* corrupt *)
-    rewrite ?(eq_getf _ H_in1) H_in1'. done.
-Qed.
-
-Lemma cert_flag_forward
-      g1 g2 (H_reach : greachable g1 g2)
-      uid u1 u2:
-  g1.(users).[?uid] = Some u1 ->
-  g2.(users).[?uid] = Some u2 ->
-  u1.(round) = u2.(round) ->
-  u1.(period) = u2.(period) ->
-  u1.(cert_may_exist) = u2.(cert_may_exist).
-Proof using.
-  clear -H_reach.
-  move => H_u1 H_u2 H_r H_p.
-  destruct H_reach as [trace H_path H_last].
-  move: g1 H_path H_last u1 H_u1 H_r H_p.
-  induction trace.
-  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
-  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 H_r H_p.
-    specialize (IHtrace a H_path H_last).
-    have [umid [H_umid H_sub]] := cert_flag_gtransition H_step H_u1.
-    specialize (IHtrace umid H_umid).
-    have H_le_u1_umid := gtr_rps_non_decreasing H_step H_u1 H_umid.
-    have H_le_umid_u2 := greachable_rps_non_decreasing
-                           (ex_intro2 _ _ trace H_path H_last) H_umid H_u2.
-    have H_r': u1.(round) = umid.(round). {
-      move: H_r H_p H_le_u1_umid H_le_umid_u2.
-      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
-      intuition. have := ltn_trans H H0. by rewrite ltnn.
-    }
-    have H_p': u1.(period) = umid.(period). {
-      move: H_r H_p H_le_u1_umid H_le_umid_u2.
-      unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
-      intuition. have := ltn_trans H H0. by rewrite ltnn.
-      subst. by rewrite ltnn in H.
-      subst. by rewrite ltnn in H0.
-      have := ltn_trans H2 H3. by rewrite ltnn.
-    }
-    specialize (H_sub H_r' H_p').
-    rewrite H_sub. clear H_sub.
-    apply IHtrace;congruence.
-Qed.
-
-
-(* consistency of cert_may_exist and stv *)
-Lemma cert_stv_consistent_utransition_internal:
-  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
-  (~ pre.(cert_may_exist) <-> pre.(stv) pre.(period) = None) ->
-  (~ post.(cert_may_exist) <-> post.(stv) post.(period) = None).
-Proof using.
-  move => uid pre post msgs step H_pre_cons.
-  remember (post,msgs) as result eqn:H_result;
-  destruct step;case:H_result => [? ?];subst;done.
-Qed.
-
-Lemma cert_stv_consistent_utransition_deliver:
-  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
-  (~ pre.(cert_may_exist) <-> pre.(stv) pre.(period) = None) ->
-  (~ post.(cert_may_exist) <-> post.(stv) post.(period) = None).
-Proof using.
-  move => uid pre post m msgs step H_pre_cons.
-  remember (post,msgs) as result eqn:H_result;
-  destruct step;case:H_result => [? ?];subst;
-    try by (destruct pre;simpl;autounfold with utransition_unfold;done).
-    - destruct pre'. simpl. clear. rewrite -(addn1 period) eqn_add2r. intuition.
-      destruct (period == period) as [] eqn:?. reflexivity. move/eqP in Heqb. done.
-    - destruct pre'. simpl. clear. rewrite -(addn1 period) eqn_add2r. intuition.
-      move/eqP in H. done. move: H. destruct (period == period) as [] eqn:?.
-      done. move/eqP in Heqb. done.
-    - unfold deliver_nonvote_msg_result.
-      destruct msg as [[[[]]]]. simpl.
-      by destruct e;[destruct m|..].
-Qed.
-
-Lemma cert_stv_consistent_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
-  forall u1, g1.(users).[?uid] = Some u1 ->
-  exists u2, g2.(users).[?uid] = Some u2
-  /\ (
-    (~ u1.(cert_may_exist) <-> u1.(stv) u1.(period) = None) ->
-    (~ u2.(cert_may_exist) <-> u2.(stv) u2.(period) = None) ).
-Proof using.
-  clear -H_step => u1 H_u1.
-  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
-  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
-  destruct H_step;simpl users;autounfold with gtransition_unfold;
-    try (rewrite fnd_set;case H_eq:(uid == uid0);
-      [move/eqP in H_eq;subst uid0|]);
-    try (eexists;split;[eassumption|done]);
-    first rewrite updf_update //;
-    (eexists;split;[reflexivity|]).
-  * (* tick *)
-    rewrite H_in1' /user_advance_timer.
-    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
-  * (* deliver *)
-    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_stv_consistent_utransition_deliver.
-  * (* internal *)
-    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply cert_stv_consistent_utransition_internal.
-  * (* corrupt *)
-    rewrite ?(eq_getf _ H_in1) H_in1'. done.
-Qed.
-
-Lemma cert_stv_consistent_forward
-      g1 g2 (H_reach : greachable g1 g2)
-      uid u1 u2:
-  g1.(users).[?uid] = Some u1 ->
-  g2.(users).[?uid] = Some u2 ->
-  (~ u1.(cert_may_exist) <-> u1.(stv) u1.(period) = None) ->
-  (~ u2.(cert_may_exist) <-> u2.(stv) u2.(period) = None).
-Proof using.
-  clear -H_reach.
-  move => H_u1 H_u2 H_const.
-  destruct H_reach as [trace H_path H_last].
-  move: g1 H_path H_last u1 H_u1 H_const.
-  induction trace.
-  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
-  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 H_const.
-    specialize (IHtrace a H_path H_last).
-    have [umid [H_umid H_sub]] := cert_stv_consistent_gtransition H_step H_u1.
-    specialize (IHtrace umid H_umid).
-    specialize (H_sub H_const).
-    apply IHtrace;assumption.
-Qed.
-
-(* When p > 1, the flag cert_may_exist and the stv value for p are always consistent *)
-(* add a path hypothesis *)
-(* This is wrong -- need to add a gtransition trace to which the gstate g belongs *)
-Lemma cert_stv_consistent : forall g uid (uid_key: uid \in g.(users)) ustate p,
-  g.(users).[uid_key] = ustate ->
-  p > 1 ->
-  ustate.(period) = p ->
-  (~ ustate.(cert_may_exist) <-> ustate.(stv) p = None).
-Proof using.
-  intros g uid ukey ustate p H_ustate H_posp H_up.
-  split.
-Admitted.
-
-(* Not clear if this will ever be needed *)
-(*
-Lemma stv_none_after_certify uid g1 (uid_key1: uid \in g1.(users)) g2 (uid_key2: uid \in g2.(users)) n trace r:
-  round_advance_at n trace uid r g1 g2 ->
-  exists u2, g2.(users).[? uid] = Some u2 /\ u2.(stv) u2.(period) = None.
-*)
-
-(* May be needed for honest_softvote_respects_stv but the formulation can hopefully be simplified *)
-(*
-Lemma stv_none_after_bottom_quorum uid g (uid_key: uid \in g.(users)) r p:
-  exists u, g.(users).[uid_key] = u ->
-  u.(round) = r -> u.(period) = p ->
-  p > 1 -> ~ u.(cert_may_exist) ->
-  forall trace g0 g1 g2,
-  path gtransition g0 trace ->
-  last g0 trace = g ->
-  exists n u2, period_advance_at n trace uid r p g1 g2 /\
-  g2.(users).[? uid] = Some u2 /\
-  u2.(period) = p /\ ~ u2.(cert_may_exist) /\ u2.(stv) p = None.
-*)
-
-
-Lemma honest_softvote_respects_stv uid g1 g2 v v' r p u:
-  g1.(users).[?uid] = Some u ->
-  p > 1 ->
-  u.(stv) p = Some v ->
-  user_honest uid g1 ->
-  user_sent uid (Softvote, val v', r, p, uid) g1 g2 ->
-  v' = v.
-Proof using.
-  clear.
-  intros H_ustate H_posp H_stv H_honest H_sent.
-  destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
-  destruct H_step as [H_ukey H];
-  rewrite (in_fnd H_ukey) in H_ustate; injection H_ustate as <-; subst;
-  decompose record H; clear H.
-    (* deliver transition cases *)
-    inversion H1; subst; exfalso; try (rewrite in_nil in H_msg;done).
-    (* one sub-case remains *)
-    rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-  (* internal transition cases *)
-  inversion H0;subst.
-    + rewrite in_cons in H_msg. rewrite mem_seq1 in H_msg.
-    move/orP in H_msg. destruct H_msg;move/eqP in H;injection H;discriminate.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-    + rewrite in_nil in H_msg. done.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg as <- <- <-.
-    destruct H5. decompose record H2. clear H2.
-    unfold valid_rps in H3. decompose record H3. clear H3.
-    (* when p > 1, ~ cert_may_exist, and stv p = None in that case, and hence contradiction *)
-    pose proof (@cert_stv_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
-    intuition. rewrite H4 in H_stv. discriminate.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg as <- <- <-.
-    destruct H5. decompose record H2;clear H2.
-    unfold valid_rps in H3. decompose record H3. clear H3.
-    destruct H7.
-      - decompose record H3;clear H3.
-      (* p > 1 and ~ cert_may_exist, so stv p = None (by lemma) and hence contradiction *)
-      pose proof (@cert_stv_consistent g1 uid H_ukey (((global_state.users UserId UState [choiceType of Msg] g1) [` H_ukey])) p) as H_const.
-      intuition. rewrite H3 in H_stv. discriminate.
-      - decompose record H3;clear H3.
-      (* cert_may_exist holds, stv p = Some v as required *)
-      rewrite H7 in H_stv. injection H_stv. auto.
-    + rewrite in_nil in H_msg. done.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-    + rewrite in_nil in H_msg. done.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-    + rewrite mem_seq1 in H_msg. move/eqP in H_msg. injection H_msg. discriminate.
-    + rewrite in_nil in H_msg. done.
-    + rewrite in_nil in H_msg. done.
-Qed.
 
 (* main subargument for excl_enter_limits_cert_vote *)
 Lemma honest_certvote_respects_stv uid g1 g2 v v' r p u:

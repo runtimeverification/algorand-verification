@@ -44,9 +44,7 @@ Record UState :=
     (* A sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_open: nat -> nat -> nat -> seq UserId;
     (* A sequence of value-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote;
-    (* A flag indicating whether advancing to the current period was because of seeing a quorum of nextvotes for a non-bottom value *)
-    cert_may_exist : bool
-  }.
+    nextvotes_val : nat -> nat -> nat -> seq Vote
+   }.
 
 End LocalState.
