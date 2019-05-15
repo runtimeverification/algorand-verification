@@ -2423,14 +2423,19 @@ Definition is_pending (target:UserId) (msg_body:Msg) : pred GState :=
   fun g => opred (fun (ms:{mset R * Msg}) => has (fun p => p.2 == msg_body) ms)
                  (g.(msg_in_transit).[?target]).
 
-Lemma new_msg_from_send_or_replay g1 g2:
-    forall target (key_msg : target \in g2.(msg_in_transit)) d pending_msg,
-      (d,pending_msg) \in g2.(msg_in_transit).[key_msg] ->
+(*
+(* possible lemmas for pending_honest_sent *)
+Lemma new_msg_from_send_or_replay g1 g2 (H_step: g1 ~~> g2):
+    forall target (key_msg2 : target \in g2.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g2.(msg_in_transit).[key_msg2] ->
+    (forall (key_msg1 : target \in g1.(msg_in_transit)),
+      (d,pending_msg) \notin g1.(msg_in_transit).[key_msg1]) ->
     let sender := msg_sender pending_msg in
+    user_honest sender g1 ->
     user_sent sender pending_msg g1 g2
     \/ pending_msg \in g1.(msg_history).
 Proof using.
-Admitted.
+Abort.
 
 Definition pending_in_history_after (r:nat)
            (msg_in_transit:{fmap UserId -> {mset R * Msg}}) (msg_history:{mset Msg}) : Prop :=
@@ -2443,7 +2448,20 @@ Lemma pending_in_history_after_invariant g1 g2 (H_step: g1 ~~> g2):
   forall r, pending_in_history_after r (g1.(msg_in_transit)) (g1.(msg_history))
          -> pending_in_history_after r (g2.(msg_in_transit)) (g2.(msg_history)).
 Proof using.
-Admitted.
+  clear -H_step.
+  destruct H_step;try exact (fun r H => H);autounfold with gtransition_unfold;destruct pre;simpl in * |- *.
+  * move => r H_pending.
+    unfold pending_in_history_after.
+    move => uid0 key d pending_msg H_msg H_r.
+
+    assert (uid0 \in domf msg_in_transit).
+    move:(key). rewrite -!fsub1set => key'. refine (fsubset_trans key' _).
+    apply send_broadcasts_domf. admit.
+    rewrite dom_setf mem_fset1U //.
+  (*  SearchAbout domf setf.
+    apply send_i
+    specialize (H_pending uid0). *)
+Abort.
 
 Lemma pending_in_history g0 trace (H_path: path gtransition g0 trace)
     r (H_start:state_before_round r g0):
@@ -2454,7 +2472,11 @@ Lemma pending_in_history g0 trace (H_path: path gtransition g0 trace)
     r <= msg_round pending_msg ->
     pending_msg \in g.(msg_history).
 Proof.
-Admitted.
+  move => g ix H_g uid key d pending_msg H_pending H_r.
+  have H_path' := path_prefix ix.+1 H_path.
+  have H_last := onth_take_last H_g g0.
+Abort.
+*)
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
@@ -3369,7 +3391,14 @@ Lemma transition_from_path
       (H_step : step_in_path_at g1 g2 ix states):
   GTransition g1 g2.
 Proof using.
-Admitted.
+  unfold step_in_path_at in H_step.
+  have {H_path} := path_drop H_path ix.
+  destruct (drop ix states);[done|].
+  destruct l;[done|].
+  destruct H_step as [-> ->].
+  simpl.
+  by move/andP => [] /asboolP.
+Qed.
 
 Lemma order_ix_from_steps g0 trace (H_path: path gtransition g0 trace):
   forall ix1 g1, onth trace ix1 = Some g1 ->
@@ -5049,24 +5078,22 @@ Lemma honest_in_from_after_and_send: forall r p s uid trace,
     honest_in_period r p uid trace.
 Proof using.
   move => r p s uid trace H_honest g0 H_path ix g1 g2 H_step mt v H_sent H_msg_step.
-  move/honest_at_from_after in H_honest.
-  specialize (H_honest _ H_path).
-
-  have H_g2 := step_in_path_onth_post H_step.
-  exists ix.+1. rewrite H_g2.
-  specialize (H_honest _ _ H_g2).
-
-  have key := user_sent_in_post H_sent.
-  have H_ustate := in_fnd key.
-  set ustate := g2.(users)[` key] in H_ustate.
-  clearbody ustate.
-  rewrite H_ustate.
-  specialize (H_honest _ H_ustate).
-
-  lapply H_honest.
-
-  (* is this true as stated? *)
-Admitted.
+  have H_g1 := step_in_path_onth_pre H_step.
+  exists ix. rewrite H_g1.
+  have key1 := user_sent_in_pre H_sent.
+  rewrite (in_fnd key1).
+  have H_step1 := utransition_label_start H_sent (in_fnd key1).
+  lapply (user_honest_from_after H_path H_g1 (H_in:=key1)).
+  *
+    rewrite /user_honest (in_fnd key1) => /negP H_honest_g1.
+    split;[assumption|].
+    by injection H_step1.
+  *
+    revert H_honest.
+    apply honest_after_le.
+    rewrite H_step1.
+    assumption.
+Qed.
 
 Lemma onth_last_take: forall T (s:seq T) n x,
     onth s n = Some x ->
