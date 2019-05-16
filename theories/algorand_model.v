@@ -639,7 +639,6 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
   comm_cred_step uid r p 3 /\
-  ~ cert_may_exist pre /\
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
   v \in certvals pre r p .
@@ -656,7 +655,6 @@ Definition no_certvote_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p 3 /\
   forall b v,
   (~ comm_cred_step uid r p 3 \/
-   cert_may_exist pre \/
    ~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
