@@ -544,23 +544,24 @@ Definition propose_ok (pre : UState) uid v b r p : Prop :=
   ~ cert_may_exist pre.
 
 (* The reproposal step preconditions *)
-(* Note that this is the proposal step when p > 1 and the previous-
-   period's winning vote was for a value v *)
-Definition repropose_ok (pre : UState) uid v b r p : Prop :=
+(* Note that this is the proposal step when p > 1 and a next-vote
+   quorum for a value v was seen in p-1
+   Note also that this may overlap with the case above, when cert_may_exist
+   does not hold *)
+Definition repropose_ok (pre : UState) uid v r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p 1 /\ p > 1 /\
   comm_cred_step uid r p 1 /\
-  valid_block_and_hash b v /\
-  v \in prev_certvals pre.
+  exists s, nextvote_value_quorum pre v r (p - 1) s.
 
 (* The no-propose step preconditions *)
 (* Note that this applies regardless of whether p = 1 *)
 Definition no_propose_ok (pre : UState) uid r p : Prop :=
   pre.(timer) = 0%R /\
   valid_rps pre r p 1 /\
-  forall b v,
-  (comm_cred_step uid r p 1 /\ valid_block_and_hash b v ->
-   cert_may_exist pre /\ ~ v \in prev_certvals pre).
+  (comm_cred_step uid r p 1 ->
+    cert_may_exist pre /\
+    forall s v, ~ nextvote_value_quorum pre v r (p - 1) s).
 
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
@@ -835,8 +836,8 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       uid # pre ~> (propose_result pre, [:: (Proposal, val v, r, p, uid) ; (Block, val b, r, p, uid)])
 
   (* Step 1: Block Proposal [Reproposal] *)
-  | repropose : forall uid (pre : UState) v b r p,
-      repropose_ok pre uid v b r p ->
+  | repropose : forall uid (pre : UState) v r p,
+      repropose_ok pre uid v r p ->
       uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid)])
 
   (* Step 1: Block Proposal [failure] *)
@@ -2812,7 +2813,7 @@ Proof using delays_order delays_positive.
   try (
     match goal with
     | [H: propose_ok _ _ _ _ _ _ |- _] => unfold propose_ok in H; use_hyp H
-    | [H: repropose_ok _ _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
+    | [H: repropose_ok _ _ _ _ _ |- _] => unfold repropose_ok in H; use_hyp H
     | [H: no_propose_ok _ _ _ _ |- _] => unfold no_propose_ok in H; use_hyp H
     | [H: softvote_new_ok _ _ _ _ _ |- _] => unfold softvote_new_ok in H; use_hyp H
     | [H: softvote_repr_ok _ _ _ _ _ |- _] => unfold softvote_repr_ok in H; use_hyp H
