@@ -3310,6 +3310,28 @@ Proof using.
      move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
 
+Lemma softvote_value_unique uid r p g1 g2 v:
+  user_sent uid (Softvote,val v,r,p,uid) g1 g2 ->
+  user_honest uid g1 ->
+  forall v2, user_sent uid (Softvote,val v2,r,p,uid) g1 g2 ->
+  v2 = v.
+Proof using.
+  move => H_sent H_honest v2 H_sent2.
+  unfold user_sent in H_sent, H_sent2.
+  destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
+  destruct H_sent2 as [ms2 [H_msg2 [[d2 [in2 H_step2]]|H_step2]]];
+  pose proof (transition_label_unique H_step H_step2) as H;
+  try (discriminate H);[injection H as -> -> ->|injection H as ->];clear H_step2;
+    revert H_msg H_msg2;simpl in H_step;decompose record H_step;
+    let H:=  match goal with
+    | [H : _ # _ ; _ ~> _ |- _] => H
+    | [H : _ # _ ~> _ |- _] => H
+    end
+    in clear -H;set result := (x0,ms) in H;change ms with result.2;clearbody result;revert H;
+  destruct 1;simpl;clear;move/Iter.In_mem => H_msg;try (exfalso;exact H_msg);
+     move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
+Qed.
+
 Lemma step_at_nth_pre pre post ix path:
   step_in_path_at pre post ix path ->
   forall x0, nth x0 path ix = pre.
@@ -3547,17 +3569,77 @@ Definition softvoted_once_in_path path r p uid : Prop :=
 Lemma take_rcons T : forall (s : seq T) (x : T), take (size s) (rcons s x) = s.
 Proof using. elim => //=; last by move => a l IH x; rewrite IH. Qed.
 
+(* 'user_sent uid (Softvote, val v1, r, p, uid) pre post' implies the
+   round-period-step of user state at pre is exactly r, p, 2 *)
+(* not really needed *)
+Lemma step_of_softvote_sent uid r p: forall v pre post,
+  user_sent uid (Softvote, val v, r, p, uid) pre post ->
+  forall ustate, pre.(users).[? uid] = Some ustate ->
+  (step_of_ustate ustate) = (r, p, 2).
+Proof using delays_order.
+  intros v pre post H_sent ustate H_ustate.
+  destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
+  destruct H_step as (key_ustate & ustate_post & H_step & H_honest & key_mailbox & H_msg_in_mailbox & ->).
+  remember (ustate_post,ms) as ustep_out in H_step.
+  destruct H_step; injection Hequstep_out; clear Hequstep_out;intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+  simpl in H_msg; destruct H_msg; try contradiction.
+  inversion H0;subst;clear H0.
+  destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+  remember (ustate_post,ms) as ustep_out in H_step.
+  assert ((global_state.users UserId UState [choiceType of Msg] pre) [` key_user] = ustate).
+  rewrite in_fnd in H_ustate; inversion H_ustate; trivial.
+
+  inversion H_step; simpl in * |- *; rewrite Hequstep_out in H3;injection H3; clear H3; intros <- <-; move/Iter.In_mem in H_msg; simpl in H_msg; try (destruct H_msg as [H_msg | H_msg]; contradiction);
+  try (destruct H_msg as [H_msg | H_msg]; inversion H_msg;subst;clear H_msg; try contradiction); try (inversion H3;contradiction); try contradiction.
+  unfold softvote_new_ok in H0;decompose record H0;clear H0.
+  destruct H2 as [HR [HP HS]]. subst. intuition.
+  unfold softvote_repr_ok in H0;decompose record H0;clear H0.
+  destruct H2 as [HR [HP HS]]. subst;intuition.
+Qed.
+
 
 (* Priority:HIGH
    Proof should be very similar to no_two_certvotes_in_p *)
 (* L2: An honest user soft-votes for at most one value in a period *)
+(* Note: the assumption 'honest_after_step (r,p,1) uid trace' is not needed.
+   Honesty follows from the fact that the user sent a softvote ('user_sent'
+   is defined in terms of normal transitions) *)
 Lemma no_two_softvotes_in_p : forall g0 trace (H_path : path gtransition g0 trace) uid r p,
     honest_after_step (r,p,1) uid trace ->
     forall ix1 v1, softvoted_in_path_at ix1 trace uid r p v1 ->
     forall ix2 v2, softvoted_in_path_at ix2 trace uid r p v2 ->
                    ix1 = ix2 /\ v1 = v2.
 Proof using.
-Admitted.
+  clear.
+  move => g0 trace H_path uid r p.
+  move => H_honest ix1 v1 H_send1 ix2 v2 H_send2.
+
+  have: ix1 <= ix2 by
+  eapply (order_sends H_path H_send1 H_send2 (step_le_refl _)).
+  have: ix2 <= ix1 by
+  eapply (order_sends H_path H_send2 H_send1 (step_le_refl _)).
+
+  move => H_le1 H_le2.
+  have: ix1 = ix2.
+  apply/eqP. rewrite eqn_leq. apply/andP. split;assumption.
+  intro;subst ix2;clear H_le1 H_le2.
+  split;[reflexivity|].
+
+  unfold softvoted_in_path_at in H_send1, H_send2.
+  destruct H_send1 as [pre1 [post1 [H_step1 H_send1]]].
+  destruct H_send2 as [pre2 [post2 [H_step2 H_send2]]].
+
+  destruct (step_ix_same H_step1 H_step2) as [-> ->].
+  symmetry.
+  refine (softvote_value_unique H_send1 _ H_send2).
+  (* honesty follows from user_sent *)
+  destruct H_send1 as [ms' [H_msg' [[d1' [in1' H_step']]|H_step']]].
+    destruct H_step' as (key_ustate' & ustate_post' & H_step' & H_honest' & key_mailbox' & H_msg_in_mailbox' & ->).
+    unfold user_honest. rewrite in_fnd. intuition.
+  destruct H_step' as (key_user' & ustate_post' & H_honest' & H_step' & ->).
+  unfold user_honest. rewrite in_fnd. intuition.
+Qed.
+
 
 (* A user has nextvoted bottom for a given period along a given path *)
 Definition nextvoted_open_in_path_at ix path uid r p s : Prop :=
