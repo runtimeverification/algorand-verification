@@ -3896,6 +3896,15 @@ Lemma softvote_credentials_checked
 Proof using.
 Admitted.
 
+Lemma received_softvote g0 g trace
+      (H_path: path gtransition g0 trace) (H_last: gtransition (last g0 trace) g) :
+  forall voter v uid u r p,
+    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+    (voter, v) \in u.(softvotes) r p ->
+    exists d, msg_received uid d (Softvote, val v, r, p, voter) trace.
+Proof.
+Admitted.
+
 Lemma softvotes_sent
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -3916,33 +3925,48 @@ Proof using.
   intros.
   destruct (ix == (size trace)) eqn:H_add.
   move/eqP in H_add. subst.
-  unfold onth in H_onth.
-  rewrite drop_rcons in H_onth. rewrite drop_size in H_onth.
-  inversion H_onth. clear H_onth. subst.
+  assert (H_onth_copy := H_onth).
+  unfold onth in H_onth_copy.
+  rewrite drop_rcons in H_onth_copy. rewrite drop_size in H_onth_copy.
+  inversion H_onth_copy. clear H_onth_copy. subst.
+
+  assert (H_path_copy := H_path).
+  eapply received_softvote in H_path_copy; try eassumption.
+  destruct H_path_copy as [d H_msg_rec].
 
   apply received_was_sent with (r0:=r0)
+                               (u:=uid) (d:=d)
                                (msg:=(Softvote, val v, r, p, voter))
-                               (u:=uid) (d:=lambda)
     in H_path.
   apply H_path in H_r.
   destruct H_r as [ix0 [g1 [g2 [H_s_at H_sent]]]].
   unfold softvoted_in_path, softvoted_in_path_at.
   exists ix0, g1, g2.
   split.
+
   eapply step_in_path_prefix with (size trace).
   rewrite take_rcons; assumption.
+
   assumption.
 
   (* honest after step *)
+  (* destruct H_msg_rec as [n [ms [g1 [g2 [H_step_at H_deliver]]]]]. *)
+  (* unfold step_in_path_at in H_step_at. *)
+  (* unfold honest_after_step. exists n. *)
+  (* unfold onth. *)
+  (* destruct (drop n trace); try contradiction. *)
+  (* destruct l; try contradiction. *)
+  (* unfold ohead. *)
+  (* destruct H_step_at as [H_g3 H_g4]. *)
+  (* subst. *)
   admit.
 
   assumption.
 
   (* (voter, v) \in u.(softvotes) -> msg_received *)
-  admit.
+  assumption.
 
-  ppsimpl; lia.
-
+  intuition.
   move /eqP in H_add.
   assert (H_onth' := H_onth).
   apply onth_size in H_onth'.
