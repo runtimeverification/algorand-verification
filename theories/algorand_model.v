@@ -3968,16 +3968,6 @@ Proof using.
   by apply (blocks_monotone H_reach H_lookup_cv H_lookup_nv).
 Qed.
 
-Lemma softvote_credentials_checked
-      g0 trace (H_path: path gtransition g0 trace)
-      r0 (H_start: state_before_round r0 g0):
-  forall ix g, onth trace ix = Some g ->
-  forall uid u, g.(users).[? uid] = Some u ->
-  forall r, r0 <= r -> forall v p,
-      softvoters_for v u r p `<=` committee r p 1.
-Proof using.
-Admitted.
-
 Lemma received_softvote g0 g trace
       (H_path: path gtransition g0 trace) (H_last: gtransition (last g0 trace) g) :
   forall voter v uid u r p,
@@ -3986,6 +3976,22 @@ Lemma received_softvote g0 g trace
     exists d, msg_received uid d (Softvote, val v, r, p, voter) trace.
 Proof.
 Admitted.
+
+  (*
+    Suppose (voter,v) \in u.(softvotes) r p
+    => message (Softvote, val v, r, p, i) was received
+    => message (Softvote, val v, r, p, i) was sent:
+      either
+      - user i sent (Softvote, val v, r, p, i)
+        (through an internal transition only)
+        => softvoting preconditions imply i was a committee member
+      - or adversary (using i) forged and sent the message
+        => forging does the credentials check
+      - or adversary replayed the message
+        => the message is in msg_history
+        => user i sent it (through an internal transition only)
+        => softvoting preconditions imply i was a committee member
+   *)
 
 Lemma softvotes_sent
       g0 trace (H_path: path gtransition g0 trace)
@@ -4068,6 +4074,69 @@ Proof using.
   eapply step_in_path_prefix with (size trace).
   rewrite take_rcons; assumption.
 Admitted.
+
+Lemma softvote_credentials_checked
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r -> forall v p,
+      softvoters_for v u r p `<=` committee r p 2.
+Proof using.
+  (* cleanup needed *)
+  clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
+  intros ix g H_onth uid u H_lookup r H_r v p.
+  apply/fsubsetP => voter H_softvoters.
+
+  assert (softvoted_in_path trace voter r p v) as H_sent_v. {
+  apply (softvotes_sent H_path H_start H_onth H_lookup H_r).
+  move:H_softvoters => /imfsetP /= [] x /andP [H_x_in].
+  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+  assumption.
+  }
+
+  destruct H_sent_v as [ix' H_sent_v].
+  destruct H_sent_v as [pre [post [H_step H_sent]]].
+  destruct H_sent as [ms [H_inms [H|H]]].
+
+  destruct H as [d [inc H]].
+  destruct H as [H_v_in [ustate [H_tr_step [H_v_honest [? ?]]]]].
+  inversion H_tr_step;subst;simpl in * |- *;
+    try rewrite in_nil in H_inms;intuition.
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+
+  destruct H as [H_v_in [ustate [H_v_honest [H_tr_step H]]]].
+  inversion H_tr_step;subst;simpl in * |- *;
+    try rewrite in_nil in H_inms;intuition.
+  rewrite mem_seq2 in H_inms. move: H_inms => /orP => H_inms;
+  destruct H_inms as [H_inms|H_inms];move: H_inms => /eqP => H_inms;injection H_inms;discriminate.
+
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+
+  (* softvote_new case *)
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms. intros <- <- <-.
+  destruct H3 as [? [? [H_comm ?]]].
+  unfold comm_cred_step in H_comm. clear -H_comm.
+  unfold committee.
+rewrite inE /= inE.
+apply/asboolP. assumption.
+  (* softvote_repr case *)
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms. intros <- <- <-.
+  destruct H3 as [? [? [? [H_comm ?]]]].
+  unfold comm_cred_step in H_comm. clear -H_comm.
+  unfold committee.
+rewrite inE /= inE.
+apply/asboolP. assumption.
+
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+
+  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
+Qed.
+
 
 (* Priority:HIGH
    Top-level result,
