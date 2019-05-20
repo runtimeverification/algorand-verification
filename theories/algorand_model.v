@@ -2413,9 +2413,8 @@ Definition user_before_round r (u : UState) : Prop :=
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
 
-Definition honest_users_before_round (r:nat) (g : GState) : Prop :=
-  forall i (Hi : i \in g.(users)),
-    ~~ (g.(users).[Hi].(corrupt)) -> user_before_round r (g.(users).[Hi]).
+Definition users_before_round (r:nat) (g : GState) : Prop :=
+  forall i (Hi : i \in g.(users)), user_before_round r (g.(users).[Hi]).
 
 Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
   forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
@@ -2424,7 +2423,7 @@ Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
      r' > r -> is_user_corrupt_gstate u g.
 
 Definition state_before_round r (g:GState) : Prop :=
-  honest_users_before_round r g
+  users_before_round r g
   /\ honest_messages_before_round r g.
 
 Definition opred (T : Type) (P : pred T) : pred (option T) :=
@@ -3979,13 +3978,34 @@ Proof using.
   by apply (blocks_monotone H_reach H_lookup_cv H_lookup_nv).
 Qed.
 
-Lemma received_softvote g0 g trace
-      (H_path: path gtransition g0 trace) (H_last: g = last g0 trace) :
-  forall voter v uid u r p,
+Lemma received_softvote
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0)
+      g (H_last: g = last g0 trace) :
+  forall uid u,
     (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+  forall voter v r p,
     (voter, v) \in u.(softvotes) r p ->
+    r0 <= r ->
     exists d, msg_received uid d (Softvote, val v, r, p, voter) trace.
 Proof using.
+  clear -H_path H_start H_last.
+  move => uid u H_u voter v r p H_softvotes H_r.
+
+  assert (~~match g0.(users).[? uid] with
+            | Some u0 => (voter,v) \in u0.(softvotes) r p
+            | None => false
+            end). {
+    destruct (g0.(users).[?uid]) as [u0|] eqn:H_u0;[|done].
+    destruct H_start as [H_users _].
+    have H_key0: uid \in g0.(users) by rewrite -fndSome H_u0.
+    specialize (H_users _ H_key0).
+    rewrite (in_fnd H_key0) in H_u0.
+    case: H_u0 H_r H_users => ->.
+    clear.
+    move => H_r [_] [_] [_] [H_softvotes _].
+    by move: {H_softvotes}(H_softvotes _ p H_r) => /nilP ->.
+  }
 Admitted.
 
   (*
@@ -4034,7 +4054,8 @@ Proof using.
   case:H_onth_copy => H_x. subst x.
 
   have H_path_add_copy := H_path_add.
-  eapply received_softvote in H_path_add_copy;[|by rewrite last_rcons|eassumption..].
+  eapply received_softvote in H_path_add_copy;try eassumption;[|by rewrite last_rcons].
+
   destruct H_path_add_copy as [d H_msg_rec].
 
   apply received_was_sent with (r0:=r0)
@@ -4072,18 +4093,18 @@ Lemma softvote_credentials_checked
       r0 (H_start: state_before_round r0 g0):
   forall ix g, onth trace ix = Some g ->
   forall uid u, g.(users).[? uid] = Some u ->
-  forall r, r0 <= r -> forall v p voter,
-      voter \in softvoters_for v u r p ->
-      honest_during_step (r,p,2) voter trace ->
-      voter \in committee r p 2.
+  forall r, r0 <= r -> forall v p,
+    softvoters_for v u r p `<=` committee r p 2.
 Proof using.
   (* cleanup needed *)
   clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
-  intros ix g H_onth uid u H_lookup r H_r v p voter H_softvoters H_honest.
+  intros ix g H_onth uid u H_lookup r H_r v p.
+  apply/fsubsetP => voter H_softvoters.
 
   assert (softvoted_in_path trace voter r p v) as H_sent_v . {
-  refine (softvotes_sent H_path H_start H_onth H_lookup H_r _ H_honest).
-  by move:H_softvoters => /imfsetP /= [] [x_u x_v] /andP [] H_x_in /eqP -> ->.
+    refine (softvotes_sent H_path H_start H_onth H_lookup H_r _ _).
+    by move:H_softvoters => /imfsetP /= [] [x_u x_v] /andP [] H_x_in /eqP -> ->.
+    admit.
   }
 
   destruct H_sent_v as [ix' H_sent_v].
@@ -4126,7 +4147,7 @@ apply/asboolP. assumption.
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
 
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-Qed.
+Admitted.
 
 
 (* Priority:HIGH
