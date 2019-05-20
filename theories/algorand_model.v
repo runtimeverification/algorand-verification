@@ -1055,6 +1055,14 @@ move => increment pre uid h.
 by rewrite updf_update.
 Qed.
 
+Lemma tick_users_notin : forall increment pre uid (h : uid \notin domf pre.(users)),
+  (tick_users increment pre).[? uid] = None.
+Proof using.
+  move => increment pre uid h.
+  apply not_fnd.
+  change (uid \notin domf (tick_users increment pre)); by rewrite -updf_domf.
+Qed.
+
 (* Computes the global state after advancing time with the given increment *)
 Definition tick_update increment pre : GState :=
   {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
@@ -1203,6 +1211,19 @@ Lemma onth_at_step n (path : seq GState) g:
 Proof using.
   unfold at_step, onth.
   destruct (drop n path);simpl;congruence.
+Qed.
+
+Lemma onth_take_some : forall (trace: seq GState) ix g,
+  onth trace ix = Some g ->
+  onth (take ix.+1 trace) (size (take ix.+1 trace)).-1 = Some g.
+Proof.
+  move => trace ix g H_onth.
+  clear -H_onth.
+  unfold onth.
+  erewrite drop_nth with (x0:=g). simpl.
+  rewrite nth_last. erewrite onth_take_last with (x:=g); try assumption.
+  trivial.
+  destruct trace. inversion H_onth. intuition.
 Qed.
 
 (* Returns true if the given user id is found in the map and the user state
@@ -3972,10 +3993,26 @@ Proof using.
   by apply (blocks_monotone H_reach H_lookup_cv H_lookup_nv).
 Qed.
 
+Lemma users_not_added g1 g2 (H_step:g1 ~~> g2) uid:
+  g1.(users).[?uid] = None ->
+  g2.(users).[?uid] = None.
+Proof using.
+  clear -H_step => H_u1.
+  have H_notin1: (uid \notin g1.(users)) by rewrite -fndSome H_u1.
+  destruct H_step;simpl users;
+    try assumption;
+    try (by rewrite fnd_set; case H_eq:(uid == uid0);
+         [move/eqP in H_eq; subst; rewrite key_ustate in H_notin1; inversion H_notin1|]);
+    try (by rewrite fnd_set; case H_eq:(uid == uid0);
+         [move/eqP in H_eq; subst; rewrite ustate_key in H_notin1; inversion H_notin1|]).
+  (* tick *)
+  apply tick_users_notin; assumption.
+Qed.
+
 Lemma received_softvote
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0)
-      g (H_last: g = last g0 trace) :
+      g (H_last: onth trace (size trace).-1 = Some g) :
   forall uid u,
     (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
   forall voter v r p,
@@ -4000,7 +4037,167 @@ Proof using.
     move => H_r [_] [_] [_] [H_softvotes _].
     by move: {H_softvotes}(H_softvotes _ p H_r) => /nilP ->.
   }
-Admitted.
+
+  assert (H_path_copy := H_path).
+  apply path_gsteps_onth with
+      (P := upred uid (fun u => (voter, v) \in u.(softvotes) r p))
+      (ix_p:=(size trace).-1) (g_p:=g)
+    in H_path_copy;
+    try eassumption; try (unfold upred; rewrite H_u; assumption).
+
+  destruct H_path_copy as [n [g1 [g2 [H_step [H_pg1 H_pg2]]]]].
+  unfold upred in *.
+  assert (H_step_copy := H_step).
+  apply transition_from_path with (g0:=g0) in H_step_copy; try assumption.
+  destruct ((global_state.users UserId UState [choiceType of Msg] g2).[? uid]) eqn:H_u2;
+    try (by inversion H_u2).
+  destruct ((global_state.users UserId UState [choiceType of Msg] g1).[? uid]) eqn:H_u1.
+  2: {
+    eapply users_not_added in H_u1; try eassumption.
+    rewrite H_u1 in H_u2; inversion H_u2.
+  }
+  assert (exists d ms, related_by (lbl_deliver uid d (Softvote, val v, r, p, voter) ms) g1 g2).
+
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in2: (uid \in g2.(users)) by rewrite -fndSome H_u2.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+
+  destruct H_step_copy; simpl users; autounfold with gtransition_unfold in * |-;
+    try (exfalso; rewrite H_u1 in H_u2; inversion H_u2; subst;
+         rewrite H_pg2 in H_pg1; inversion H_pg1).
+
+  (* tick *)
+  + exfalso.
+    rewrite updf_update in H_u2. inversion H_u2 as [H_adv].
+    rewrite H_in1' /user_advance_timer in H_adv.
+    revert H_adv.
+    match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end;
+      intros; subst; rewrite H_pg2 in H_pg1; inversion H_pg1.
+    assumption.
+
+  (* deliver *)
+  + clear H_step.
+    rewrite fnd_set in H_u2. case H_eq:(uid == uid0). move/eqP in H_eq; subst uid0.
+    2: {
+      rewrite H_eq in H_u2.
+      rewrite H_u1 in H_u2. inversion H_u2; subst.
+      rewrite H_pg2 in H_pg1; inversion H_pg1.
+    }
+    rewrite eq_refl in H_u2. inversion H_u2.
+    move:H2. rewrite ?(eq_getf _ H_in1) H_in1'.
+    intro H_deliv.
+    remember (pending.1,pending.2) as pending_res.
+    assert (H_pending : pending = pending_res).
+    destruct pending. subst pending_res. intuition.
+    rewrite Heqpending_res in H_pending; clear Heqpending_res.
+    remember (ustate_post,sent) as result eqn:H_result.
+    destruct H_deliv eqn:H_dtrans;
+    try (by case: H_result => [? ?]; destruct pre;
+         subst; simpl in * |-; exfalso; rewrite H_pg2 in H_pg1; inversion H_pg1).
+
+    (* deliver softvote *)
+    * case: H_result => [? ?]; destruct pre.
+      exists pending.1, [::], H_in1, ustate_post.
+      simpl in * |- *.
+      subst pre0.
+      subst ustate_post. subst u0.
+      unfold set_softvotes in H_pg2.
+      simpl in H_pg2.
+      revert H_pg2.
+      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
+        try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
+      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb2 end;
+        try (by rewrite mem_undup; intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
+
+      intro.
+      rewrite in_cons mem_undup in H_pg2.
+      move/orP in H_pg2.
+      destruct H_pg2 as [H_eqv | H_neqv];
+        try (by rewrite H_neqv in H_pg1; inversion H_pg1).
+
+      move/eqP in H_eqv. move/eqP in Hb1.
+      case: H_eqv. case: Hb1.
+      move => H_r_r1 H_p_p0 H_voter_i H_v_v0.
+      subst r p voter v.
+
+      split. assumption.
+      rewrite in_fnd in H_u1; inversion H_u1. subst.
+      split. assumption.
+
+      exists msg_key. rewrite <- H_pending. split. assumption.
+      trivial.
+
+    (* set softvote *)
+    * case: H_result => [? ?]; destruct pre.
+      exists pending.1, [:: (Certvote, val v0, r1, p0, uid)], H_in1, ustate_post.
+      simpl in * |- *.
+      subst pre0.
+      subst ustate_post. subst u0.
+      unfold set_softvotes in H_pg2.
+      simpl in H_pg2.
+      revert H_pg2.
+      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
+        try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
+      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb2 end;
+        try (by rewrite mem_undup; intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
+
+      intro.
+      rewrite in_cons mem_undup in H_pg2.
+      move/orP in H_pg2.
+      destruct H_pg2 as [H_eqv | H_neqv];
+        try (by rewrite H_neqv in H_pg1; inversion H_pg1).
+
+      move/eqP in H_eqv. move/eqP in Hb1.
+      case: H_eqv. case: Hb1.
+      move => H_r_r1 H_p_p0 H_voter_i H_v_v0.
+      subst r p voter v.
+
+      split. assumption.
+      rewrite in_fnd in H_u1; inversion H_u1; subst.
+      split. assumption.
+
+      exists msg_key. rewrite <- H_pending. split. assumption.
+      trivial.
+
+    (* deliver nonvote msg result *)
+    * case: H_result => [? ?]; destruct pre; subst.
+      unfold deliver_nonvote_msg_result in H_pg2.
+      destruct msg.1.1.1.2 in H_pg2;
+        try (rewrite H_pg2 in H_pg1; inversion H_pg1);
+      destruct msg.1.1.1.1 in H_pg2;
+        rewrite H_pg2 in H_pg1; inversion H_pg1.
+
+  (* internal *)
+  + clear H_step.
+    rewrite fnd_set in H_u2. case H_eq:(uid == uid0). move/eqP in H_eq; subst uid0.
+    2: {
+      rewrite H_eq in H_u2.
+      rewrite H_u1 in H_u2. inversion H_u2; subst.
+      rewrite H_pg2 in H_pg1; inversion H_pg1.
+    }
+    rewrite eq_refl in H_u2. inversion H_u2.
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'.
+    intro H_trans. remember (ustate_post,sent) as result eqn:H_result.
+    destruct H_trans; case:H_result => [? ?]; subst; destruct pre;
+    simpl in * |-; exfalso; rewrite H_pg2 in H_pg1; inversion H_pg1.
+
+  (* corrupt *)
+  + exfalso.
+    rewrite fnd_set in H_u2; case H_eq:(uid == uid0).
+    move/eqP in H_eq. subst uid0. rewrite eq_refl in H_u2.
+    rewrite ?(eq_getf _ H_in1) H_in1' in H_u2.
+    inversion H_u2; subst.
+    rewrite H_pg2 in H_pg1; inversion H_pg1.
+
+    rewrite H_eq in H_u2.
+    rewrite H_u1 in H_u2. inversion H_u2; subst.
+    rewrite H_pg2 in H_pg1; inversion H_pg1.
+
+  destruct H0 as [d [ms H_rel]].
+  exists d. unfold msg_received.
+  exists n, ms. unfold step_at. exists g1, g2.
+  split; assumption.
+Qed.
 
   (*
     Suppose (voter,v) \in u.(softvotes) r p
@@ -4048,7 +4245,7 @@ Proof using.
   case:H_onth_copy => H_x. subst x.
 
   have H_path_add_copy := H_path_add.
-  eapply received_softvote in H_path_add_copy;try eassumption;[|by rewrite last_rcons].
+  eapply received_softvote in H_path_add_copy;try eassumption;[|by rewrite size_rcons].
 
   destruct H_path_add_copy as [d H_msg_rec].
 
@@ -4125,7 +4322,7 @@ Lemma softvote_credentials_checked
   forall uid u, g.(users).[? uid] = Some u ->
   forall r, r0 <= r -> forall v p,
     softvoters_for v u r p `<=` committee r p 2.
-Proof using.
+Proof.
   (* cleanup needed *)
   clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
   intros ix g H_onth uid u H_lookup r H_r v p.
@@ -4134,10 +4331,11 @@ Proof using.
   have H_softvote : (voter,v) \in u.(softvotes) r p
     by move: H_softvoters;clear;move => /imfsetP [] [xu xv] /= /andP [H_in /eqP] -> ->.
 
+  apply onth_take_some in H_onth.
   have [d [n [ms H_deliver]]] :=
     received_softvote
       (path_prefix ix.+1 H_path) H_start
-      (esym (onth_take_last H_onth g0)) H_lookup
+      H_onth H_lookup
       H_softvote H_r.
 
   set msg := (Softvote,val v,r,p,voter).
