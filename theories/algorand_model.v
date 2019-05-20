@@ -3605,14 +3605,14 @@ Qed.
    Honesty follows from the fact that the user sent a softvote ('user_sent'
    is defined in terms of normal transitions) *)
 Lemma no_two_softvotes_in_p : forall g0 trace (H_path : path gtransition g0 trace) uid r p,
-    honest_after_step (r,p,1) uid trace ->
+    (* honest_after_step (r,p,1) uid trace -> *)
     forall ix1 v1, softvoted_in_path_at ix1 trace uid r p v1 ->
     forall ix2 v2, softvoted_in_path_at ix2 trace uid r p v2 ->
                    ix1 = ix2 /\ v1 = v2.
 Proof using.
   clear.
   move => g0 trace H_path uid r p.
-  move => H_honest ix1 v1 H_send1 ix2 v2 H_send2.
+  move => ix1 v1 H_send1 ix2 v2 H_send2.
 
   have: ix1 <= ix2 by
   eapply (order_sends H_path H_send1 H_send2 (step_le_refl _)).
@@ -3969,7 +3969,7 @@ Proof using.
 Qed.
 
 Lemma received_softvote g0 g trace
-      (H_path: path gtransition g0 trace) (H_last: gtransition (last g0 trace) g) :
+      (H_path: path gtransition g0 trace) (H_last: g = last g0 trace) :
   forall voter v uid u r p,
     (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
     (voter, v) \in u.(softvotes) r p ->
@@ -4000,13 +4000,16 @@ Lemma softvotes_sent
   forall uid u, g.(users).[? uid] = Some u ->
   forall r, r0 <= r -> forall voter v p,
       (voter,v) \in u.(softvotes) r p ->
+      honest_after_step (r,p,2) voter trace ->
       softvoted_in_path trace voter r p v.
 Proof using.
-  move => ix g H_onth uid u H_u r H_r voter v p H_voter.
-  generalize dependent g. generalize dependent ix.
+  move => ix g H_onth uid u H_u r H_r voter v p H_voter H_honest.
+  generalize dependent g. generalize dependent ix. generalize dependent voter.
+
   induction trace using last_ind.
   intros. inversion H_onth.
 
+  assert (H_path_add := H_path).
   revert H_path. rewrite rcons_path.
   move => /andP [H_path H_step].
 
@@ -4018,41 +4021,32 @@ Proof using.
   rewrite drop_rcons in H_onth_copy. rewrite drop_size in H_onth_copy.
   inversion H_onth_copy. clear H_onth_copy. subst.
 
-  assert (H_path_copy := H_path).
-  eapply received_softvote in H_path_copy; try eassumption.
-  destruct H_path_copy as [d H_msg_rec].
+  assert (H_path_add_copy := H_path_add).
+  eapply received_softvote in H_path_add_copy; try eassumption.
+  destruct H_path_add_copy as [d H_msg_rec].
 
   apply received_was_sent with (r0:=r0)
                                (u:=uid) (d:=d)
                                (msg:=(Softvote, val v, r, p, voter))
-    in H_path.
-  apply H_path in H_r.
+    in H_path_add.
+  apply H_path_add in H_r.
   destruct H_r as [ix0 [g1 [g2 [H_s_at H_sent]]]].
   unfold softvoted_in_path, softvoted_in_path_at.
   exists ix0, g1, g2.
   split.
 
-  eapply step_in_path_prefix with (size trace).
-  rewrite take_rcons; assumption.
-
+  assumption.
   assumption.
 
-  (* honest after step *)
-  (* destruct H_msg_rec as [n [ms [g1 [g2 [H_step_at H_deliver]]]]]. *)
-  (* unfold step_in_path_at in H_step_at. *)
-  (* unfold honest_after_step. exists n. *)
-  (* unfold onth. *)
-  (* destruct (drop n trace); try contradiction. *)
-  (* destruct l; try contradiction. *)
-  (* unfold ohead. *)
-  (* destruct H_step_at as [H_g3 H_g4]. *)
-  (* subst. *)
-  admit.
+  (* honest after step; msg_received -> honest_after_step? *)
+  assumption.
 
   assumption.
 
   (* (voter, v) \in u.(softvotes) -> msg_received *)
   assumption.
+
+  by rewrite last_rcons.
 
   intuition.
   move /eqP in H_add.
@@ -4073,6 +4067,8 @@ Proof using.
   split; try assumption.
   eapply step_in_path_prefix with (size trace).
   rewrite take_rcons; assumption.
+  admit.
+
 Admitted.
 
 Lemma softvote_credentials_checked
@@ -4222,7 +4218,7 @@ Proof using quorums_s_honest_overlap.
     softvote_credentials_checked H_path H_start H_g1_nv H_lookup_nv H_r.
 
   have Hq := quorums_s_honest_overlap trace.
-  specialize (Hq r p 1 _ _ (H_votes_checked _ _) H_v (H_votes_checked _ _) H_v').
+  specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v (H_votes_checked _ _) H_v').
 
   move: Hq => [softvoter [H_voted_v [H_voted_v' H_softvoter_honest]]].
   assert (softvoted_in_path trace softvoter r p v) as H_sent_v. {
@@ -4230,17 +4226,19 @@ Proof using quorums_s_honest_overlap.
   move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
   unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
   assumption.
+  assumption.
   }
   assert (softvoted_in_path trace softvoter r p v') as H_sent_v'. {
   apply (softvotes_sent H_path H_start H_g1_nv H_lookup_nv H_r).
   move:H_voted_v' => /imfsetP /= [] x /andP [H_x_in].
   unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
   assumption.
+  assumption.
   }
   move: H_sent_v => [ix_v H_sent_v].
   move: H_sent_v' => [ix_v' H_sent_v'].
 
-  by case:(no_two_softvotes_in_p H_path H_softvoter_honest H_sent_v H_sent_v').
+  by case:(no_two_softvotes_in_p H_path H_sent_v H_sent_v').
   }
 
   * {
