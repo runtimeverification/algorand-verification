@@ -4072,21 +4072,18 @@ Lemma softvote_credentials_checked
       r0 (H_start: state_before_round r0 g0):
   forall ix g, onth trace ix = Some g ->
   forall uid u, g.(users).[? uid] = Some u ->
-  forall r, r0 <= r -> forall v p,
-      softvoters_for v u r p `<=` committee r p 2.
+  forall r, r0 <= r -> forall v p voter,
+      voter \in softvoters_for v u r p ->
+      honest_during_step (r,p,2) voter trace ->
+      voter \in committee r p 2.
 Proof using.
   (* cleanup needed *)
   clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
-  intros ix g H_onth uid u H_lookup r H_r v p.
-  apply/fsubsetP => voter H_softvoters.
+  intros ix g H_onth uid u H_lookup r H_r v p voter H_softvoters H_honest.
 
   assert (softvoted_in_path trace voter r p v) as H_sent_v . {
-  apply (softvotes_sent H_path H_start H_onth H_lookup H_r).
-  move:H_softvoters => /imfsetP /= [] x /andP [H_x_in].
-  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
-  assumption.
-  (* right now honesty of voter is required *)
-  admit.
+  refine (softvotes_sent H_path H_start H_onth H_lookup H_r _ H_honest).
+  by move:H_softvoters => /imfsetP /= [] [x_u x_v] /andP [] H_x_in /eqP -> ->.
   }
 
   destruct H_sent_v as [ix' H_sent_v].
@@ -4129,7 +4126,7 @@ apply/asboolP. assumption.
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
 
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-Admitted.
+Qed.
 
 
 (* Priority:HIGH
