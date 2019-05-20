@@ -4084,11 +4084,13 @@ Proof using.
   intros ix g H_onth uid u H_lookup r H_r v p.
   apply/fsubsetP => voter H_softvoters.
 
-  assert (softvoted_in_path trace voter r p v) as H_sent_v. {
+  assert (softvoted_in_path trace voter r p v) as H_sent_v . {
   apply (softvotes_sent H_path H_start H_onth H_lookup H_r).
   move:H_softvoters => /imfsetP /= [] x /andP [H_x_in].
   unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
   assumption.
+  (* right now honesty of voter is required *)
+  admit.
   }
 
   destruct H_sent_v as [ix' H_sent_v].
@@ -4131,7 +4133,7 @@ apply/asboolP. assumption.
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
 
   rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-Qed.
+Admitted.
 
 
 (* Priority:HIGH
