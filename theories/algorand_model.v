@@ -1201,6 +1201,12 @@ Proof using.
     by apply onth_nth.
 Qed.
 
+Lemma all_onth T P s: @all T P s -> forall ix x, onth s ix = Some x -> P x.
+Proof.
+  move/all_nthP => H ix x H_g. rewrite -(onth_nth H_g x).
+  apply H, (onth_size H_g).
+Qed.
+
 Definition at_step n (path : seq GState) (P : pred GState) : bool :=
   match drop n path with
   | (g::_) => P g
@@ -2593,6 +2599,35 @@ Proof using.
     rewrite in_seq2mset.
     move => H_l. split;[|assumption].
     apply (utransition_internal_sender_good H0 H_l).
+Qed.
+
+Lemma pending_honest_sent_from_sent_or_forged: forall g0 trace (H_path: path gtransition g0 trace),
+    forall r, state_before_round r g0 ->
+    forall g_pending pending_ix,
+      onth trace pending_ix = Some g_pending ->
+    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g_pending.(msg_in_transit).[key_msg] ->
+    let sender := msg_sender pending_msg in
+    honest_during_step (msg_step pending_msg) sender trace ->
+    r <= msg_round pending_msg ->
+    exists send_ix, user_sent_at send_ix trace sender pending_msg.
+Proof using.
+  clear.
+  move => g0 trace H_path r H_start g ix H_g
+             uid key_msg d msg H_msg sender H_honest H_round.
+  have [send_ix [g1 [g2 [H_step H_send]]]]
+    := pending_sent_or_forged H_path H_start H_g H_msg H_round.
+  exists send_ix, g1, g2.
+  split;[assumption|].
+  case:H_send => [//|H_forged];exfalso.
+  destruct msg as [[[[mty v] r1] p] forger].
+  rewrite /user_forged /= in H_forged;decompose record H_forged;clear H_forged.
+  move:H => [H_corrupt H_le].
+  have {H_honest} := all_onth H_honest (step_in_path_onth_pre H_step).
+  rewrite /upred (in_fnd x) H_corrupt implybF => /negP;apply;apply /step_leP.
+  refine (step_le_trans H_le _).
+  clear -H2. apply/step_leP;rewrite /msg_step /step_leb !eq_refl !ltnn /=.
+  by destruct mty,v,H2.
 Qed.
 
 (* A message from an honest user was actually sent in the trace *)
