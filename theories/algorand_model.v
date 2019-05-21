@@ -1770,6 +1770,41 @@ Proof using.
        last case instead of eapply step_forge_msg runs forever or for a very long time *)
 Qed.
 
+Lemma internal_not_noop :
+  forall s pre post l,
+    s # pre ~> (post, l) ->
+    pre <> post.
+Proof.
+move => s pre post l Hst.
+inversion Hst; subst; inversion H2; subst; intuition.
+- by inversion H5; subst; intuition; rewrite H1 /= in H10.
+- by inversion H5; subst; intuition; rewrite H1 /= in H10.
+- by inversion H5; intuition; rewrite H1 /= in H9.
+- by inversion H5; subst; intuition; rewrite H1 /= in H10.
+- by inversion H5; intuition; rewrite H1 /= in H13.
+- by inversion H5; intuition; rewrite H1 /= in H12.
+- by inversion H5; subst; intuition; rewrite H1 in H8.
+- by inversion H; subst; intuition; rewrite H1 in H12.
+- by inversion H; subst; intuition; rewrite H1 in H9.
+- by inversion H5; subst; intuition;rewrite H1 /= in H12; ppsimpl; lia.
+- by inversion H5; subst; intuition; rewrite H1 /= in H11; ppsimpl; lia.
+- by inversion H5; subst; intuition; inversion H8; subst; intuition; rewrite H1 /= in H15; ppsimpl; lia.
+- by inversion H5; subst; intuition; rewrite H1 /= in H8; ppsimpl; lia.
+- by inversion H5; intuition; rewrite H1 /= in H10.
+Qed.
+
+Lemma internal_uniq :
+  forall s pre post l,
+    s # pre ~> (post, l) ->
+    uniq l.
+Proof.
+move => s pre post l Hs.
+inversion Hs; subst => //=.
+apply/andP; split => //.
+rewrite inE.
+by apply/eqP.
+Qed.
+
 (* Priority:MED This lemma is necessary for technical reasons to rule out
    the possibility that a step that counts as one user sending a message
    can't also count as a send from a different user or different message *)
@@ -1802,18 +1837,200 @@ Proof using.
         ..
       ].
   + (* deliver *)
-    simpl. (* one user changed, with a message removed from their mailbox *)
-    admit.
+    (* one user changed, with a message removed from their mailbox *)
+    rewrite /=.
+    move => [key_ustate [ustate_post [H_step H]]].
+    move: H => [Hcorrupt [key_mailbox [Hmsg Hg2]]].
+    rewrite Hg2 {Hg2} /related_by.
+    destruct lbl2.
+    * (* deliver/tick *)
+      move => [Htick Hres].
+      move: Hres.
+      case => Hpos.
+      contradict Hpos.
+      move: (global_state.now UserId UState [choiceType of Msg] g1) => now.
+      by destruct p => /=; lra.
+    * (* deliver/deliver *)
+      by admit.
+    * (* deliver/internal *)
+      by admit.
+    * (* deliver/exit *)
+      move => [H_partitioned H_g2].
+      case: H_g2 => Hpart.
+      contradict Hpart.
+      set gbn := global_state.network_partition _ _ _ _.
+      by move: (gbn); case.
+    * (* deliver/enter *)
+      move => [H_partitioned H_g2].
+      case: H_g2 => Hpart.
+      contradict Hpart.
+      set gbn := global_state.network_partition _ _ _ _.
+      by move: (gbn); case.
+    * (* deliver/corrupt *)
+      case Hs: (s == s0).
+        move/eqP: Hs =><-.
+        move => [ustate_key [Hcorrupt' Hstep']].
+        rewrite /corrupt_user_result /= /delivery_result /= in Hstep'.
+        move: Hstep'.
+        set us1 := _.[s <- _].
+        set ms := _.[s <- _].
+        set us2 := _.[s <- _].
+        move => Hstep'.
+        have Hus: us1 = us2 by move: Hstep'; move: (us1) (us2) => us3 us4; case.
+        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.
+        move: Hss.
+        rewrite 2!fnd_set.
+        case: ifP; last by move/eqP.
+        move => _; case.
+        set post := make_corrupt _.
+        move => Hpost.
+        have Hcorr: ustate_post.(corrupt) = post.(corrupt) by rewrite Hpost.
+        apply utransition_msg_preserves_corrupt in H_step.
+        rewrite -H_step in Hcorr.
+        case: Hcorrupt.
+        by rewrite Hcorr.
+      move/eqP: Hs => Hs.
+      move => [ustate_key [Hcorr Heq]].
+      move: Heq.
+      rewrite /delivery_result /corrupt_user_result.
+      set us1 := _.[_ <- _].
+      set ms := _.[_ <- _].
+      set us2 := _.[_ <- _].
+      move => Heq.
+      have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
+      clear Heq.
+      have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
+      move: Hus1c.
+      rewrite 2!fnd_set.
+      case: ifP => [|_]; first by move/eqP => Hs'; case: Hs.
+      case: ifP => [_|]; last by move/eqP.
+      rewrite in_fnd; case => Hg.
+      case: Hcorr.
+      by rewrite Hg.
+    * (* deliver/replay *)
+      by admit.
+    * (* deliver/forge *)
+      move => [sender_key [target_key [s2 [Hcorrupt' H]]]].
+      by admit.
   + (* step internal *)
-    simpl. (* one user changed, no message removed *)
-    admit.
+    rewrite /=. (* one user changed, no message removed *)
+    move => [key_ustate [ustate_post [H_corrupt [Hstep Hres]]]].
+    rewrite Hres {Hres} /related_by.
+    destruct lbl2.
+    * (* internal/tick *)
+      move => [Htick Hres].
+      move: Hres.
+      case => Hpos.
+      contradict Hpos.
+      move: (global_state.now UserId UState [choiceType of Msg] g1) => now.
+      by destruct p => /=; lra.
+    * (* internal/deliver *)
+      by admit.
+    * (* internal/internal *)
+      move => [key_user [ustate_post0 [Hcorrupt0 [Htr0 Heq]]]].
+      case Hs: (s == s0); last first.
+        move/eqP: Hs => Hs.
+        move: Heq.
+        rewrite /step_result /= /step_result /=.
+        set us1 := _.[_ <- _].
+        set us2 := _.[_ <- _].
+        move => Heq.
+        have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
+        clear Heq.
+        have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
+        move: Hus1c.
+        rewrite 2!fnd_set.
+        case: ifP => [|_]; first by move/eqP => Hs'; case: Hs.
+        case: ifP => [_|]; last by move/eqP.
+        rewrite in_fnd; case => Hg.
+        by apply internal_not_noop in Htr0.
+      move/eqP: Hs => Hs.
+      move: Heq.
+      rewrite -Hs.
+      (*have luniq: uniq l by apply internal_uniq in Hstep.
+      have l0uniq: uniq l0 by apply internal_uniq in Htr0.*)
+      rewrite /step_result /=.
+      set bs1 := send_broadcasts _ _ _ _.
+      set bs2 := send_broadcasts _ _ _ _.
+      move => Heq.
+      have Hbs: bs1 = bs2 by case: Heq.
+      clear Heq.
+      suff Hsuff: l = l0 by rewrite Hsuff.
+      move: Hbs.
+      rewrite /bs1 {bs1} /bs2 {bs2}.
+      clear Htr0 H_lbl Hstep.
+      elim: l => /=.
+        case: l0 => //=.
+        move => a l.
+        by admit.
+      by admit.
+    * (* internal/exit *)
+      move => [H_partitioned H_g2].
+      case: H_g2 => Hpart.
+      contradict Hpart.
+      set gbn := global_state.network_partition _ _ _ _.
+      by move: (gbn); case.
+    * (* internal/enter *)
+      move => [H_partitioned H_g2].
+      case: H_g2 => Hpart.
+      contradict Hpart.
+      set gbn := global_state.network_partition _ _ _ _.
+      by move: (gbn); case.
+    * (* internal/corrupt *)
+      case Hs: (s == s0).
+        move/eqP: Hs =><-.
+        move => [ustate_key [Hcorrupt' Hstep']].
+        rewrite /corrupt_user_result /= /step_result /= in Hstep'.
+        move: Hstep'.
+        set us1 := _.[s <- _].
+        set us2 := _.[s <- _].
+        move => Hstep'.
+        have Hus: us1 = us2 by move: Hstep'; move: (us1) (us2) => us3 us4; case.
+        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.        
+        move: Hss.
+        rewrite 2!fnd_set.
+        case: ifP; last by move/eqP.
+        move => _; case.
+        set post := make_corrupt _.
+        move => Hpost.
+        have Hcorr: ustate_post.(corrupt) = post.(corrupt) by rewrite Hpost.
+        apply utransition_internal_preserves_corrupt in Hstep.
+        rewrite -Hstep in Hcorr.
+        case: H_corrupt.
+        by rewrite Hcorr.
+      move/eqP: Hs => Hs.
+      move => [ustate_key [Hcorr Heq]].
+      move: Heq.
+      rewrite /step_result /corrupt_user_result.
+      set us1 := _.[_ <- _].
+      set us2 := _.[_ <- _].
+      move => Heq.
+      have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
+      clear Heq.
+      have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
+      move: Hus1c.
+      rewrite 2!fnd_set.
+      case: ifP => [|_]; first by move/eqP => Hs'; case: Hs.
+      case: ifP => [_|]; last by move/eqP.
+      rewrite in_fnd; case => Hg.
+      case: Hcorr.
+      by rewrite Hg.
+    * (* internal/replay *)
+      move => [ustate_key [msg [Hcorrupt [Hmsg Heq]]]].
+      rewrite /replay_msg_result /= /step_result /= in Heq.
+      move: Heq.
+      set now := global_state.now _ _ _ _.
+      set np := global_state.network_partition _ _ _ _.
+      set us := global_state.users _ _ _ _.
+      by admit.
+    * (* internal/forge *)
+      by admit.
   + (* exit partition *)
     move => [H_partitioned H_g2].
     assert (g1.(network_partition) <> g2.(network_partition))
       by (subst g2;destruct g1;simpl;clear;destruct network_partition;simpl;congruence).
     clear -H_partitioned H.
     unfold is_partitioned, is_true in H_partitioned.
-
     destruct lbl2;simpl;intro H_g2;try reflexivity; (* handles the exit/exit case *)
       decompose record H_g2;clear H_g2;subst g2;
         exfalso;destruct H;destruct g1;simpl in * |- *;try reflexivity. (* handles all but exit/enter *)
@@ -1824,7 +2041,6 @@ Proof using.
       by (subst g2;destruct g1;simpl;clear;destruct network_partition;simpl;congruence).
     clear -H_unpartitioned H.
     apply Bool.negb_true_iff in H_unpartitioned.
-
     destruct lbl2;simpl;intro H_g2;try reflexivity; (* handles the exit/exit case *)
       decompose record H_g2;clear H_g2;subst g2;
         exfalso;destruct H;destruct g1;simpl in * |- *;try reflexivity. (* handles all but enter/exit *)
@@ -1943,8 +2159,9 @@ Proof using.
       }
     }
   + (* replay *)
-    admit.
+    by admit.
   + (* forge *)
+    by admit.
 Admitted.
 
 Definition step_at path ix lbl :=
