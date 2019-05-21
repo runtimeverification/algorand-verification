@@ -32,10 +32,21 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* Generic lemmas *)
+Lemma path_drop T (R:rel T) x p (H:path R x p) n:
+  match drop n p with
+  | List.nil => true
+  | List.cons x' p' => path R x' p'
+  end.
+Proof using.
+  by elim: n x p H=> [|n IHn] x [|a l /andP [] H_path];last apply IHn.
+Qed.
+
 Inductive Unused : Prop := .
 Ltac unused := by apply Unused_rect.
 Ltac admit_unused := by apply Unused_rect.
 
+(* Algorand Proofs *)
 Section AlgoModel.
 
 (* We assume a finite set of users *)
@@ -1252,6 +1263,14 @@ Fixpoint seq2mset (T : choiceType) (msgs : seq T) : {mset T} :=
   | x :: xs => (x |` (seq2mset xs))%mset
   end.
 
+Lemma in_seq2mset (T : choiceType) (x : T) (s : seq T):
+  (x \in seq2mset s) = (x \in s).
+Proof.
+  induction s.
+    by apply in_mset0.
+    by rewrite in_mset1U IHs in_cons.
+Qed.
+
 (* Computes the global state after a message delivery, given the result of the
    user transition and the messages sent out
    Notes: - the delivered message is removed from the user's mailbox
@@ -1444,8 +1463,7 @@ Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval target 
   let msg := (mtype, mval, r, p, uid) in
   let msgs' := send_broadcasts pre.(now) [fset target] (* (domf (honest_users pre.(users))) *)
                  pre.(msg_in_transit) [:: msg] in
-  {[ {[ pre with msg_in_transit := msgs' ]}
-            with msg_history := (msg |` pre.(msg_history))%mset ]}.
+  {[ pre with msg_in_transit := msgs' ]}.
 
 (* The global transition relation *)
 
@@ -1547,6 +1565,21 @@ Qed.
 Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
 
 Definition greachable (g0 g : GState) : Prop := exists2 p, path gtransition g0 p & g = last g0 p.
+
+Lemma transition_from_path
+      g0 states ix (H_path: path gtransition g0 states)
+      g1 g2
+      (H_step : step_in_path_at g1 g2 ix states):
+  GTransition g1 g2.
+Proof using.
+  unfold step_in_path_at in H_step.
+  have {H_path} := path_drop H_path ix.
+  destruct (drop ix states);[done|].
+  destruct l;[done|].
+  destruct H_step as [-> ->].
+  simpl.
+  by move/andP => [] /asboolP.
+Qed.
 
 (* classic definition of reachable global state *)
 
@@ -2111,16 +2144,6 @@ Proof.
   by move: H => /andP [].
 Qed.
 
-Lemma path_drop T (R:rel T) x p (H:path R x p) n:
-  match drop n p with
-  | List.nil => true
-  | List.cons x' p' => path R x' p'
-  end.
-Proof using.
-  by elim: n x p H=> [|n IHn] x [|a l /andP [] H_path];last apply IHn.
-Qed.
-
-
 Lemma path_steps : forall {T} (R : rel T) x0 p,
     path R x0 p ->
     forall (P : pred T),
@@ -2420,7 +2443,8 @@ Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
 
 Definition state_before_round r (g:GState) : Prop :=
   users_before_round r g
-  /\ honest_messages_before_round r g.
+  /\ honest_messages_before_round r g
+  /\ (forall msg, msg \in g.(msg_history) -> msg_round msg < r).
 
 Definition opred (T : Type) (P : pred T) : pred (option T) :=
   fun o => match o with
@@ -2505,6 +2529,71 @@ Lemma pending_sent_or_forged
           \/ user_forged pending_msg uid g1 g2).
 Proof using.
 Admitted.
+
+Lemma utransition_msg_sender_good uid u msg result:
+  uid # u ; msg ~> result ->
+  forall m, m \in result.2 -> uid = msg_sender m.
+Proof using.
+  clear.
+  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+Qed.
+
+Lemma utransition_internal_sender_good uid u result:
+  uid # u ~> result ->
+  forall m, m \in result.2 -> uid = msg_sender m.
+Proof using.
+  clear.
+  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+Qed.
+
+Lemma replay_had_original
+      g0 trace (H_path: path gtransition g0 trace)
+      r (H_start: state_before_round r g0):
+  forall g ix, onth trace ix = Some g ->
+  forall (msg:Msg), msg \in g.(msg_history) ->
+    r <= msg_round msg ->
+    exists send_ix, user_sent_at send_ix trace (msg_sender msg) msg.
+Proof using.
+  clear -H_path H_start.
+  move => g ix H_g msg H_msg H_r.
+  pose proof (path_gsteps_onth H_path H_g (P:=fun g => msg \in g.(msg_history))).
+  cbv beta in H.
+  have H_msg0: msg \notin g0.(msg_history)
+    by clear -H_start H_r;apply/negP => H_msg;
+       move: H_start => [] _ [] _ {H_msg}/(_ _ H_msg);rewrite ltnNge H_r.
+
+  move:(H H_msg0 H_msg). clear -H_path.
+  move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
+  exists n, g1, g2;split;[assumption|].
+  apply (transition_from_path H_path), transitions_labeled in H_step.
+  move: H_step => [lbl H_rel];clear -H_pre H_post H_rel.
+  destruct lbl;
+    try (exfalso;apply /negP: H_post;
+         simpl in H_rel;decompose record H_rel;clear H_rel;subst g2;
+         simpl;assumption).
+  * (* deliver *)
+    unfold user_sent.
+    suff: s = msg_sender msg /\ msg \in l.
+    move => [<- H_l].
+    exists l;split;[|left;exists r, m];assumption.
+    simpl in H_rel;decompose record H_rel;clear H_rel.
+    move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
+      [by move => Hp Hn;exfalso;apply/negP: Hp|].
+    rewrite in_seq2mset.
+    move => H_l. split;[|assumption].
+    apply (utransition_msg_sender_good H H_l).
+  * (* internal *)
+    unfold user_sent.
+    suff: s = msg_sender msg /\ msg \in l.
+    move => [<- H_l].
+    exists l;split;[|right];assumption.
+    simpl in H_rel;decompose record H_rel;clear H_rel.
+    move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
+      [by move => Hp Hn;exfalso;apply/negP: Hp|].
+    rewrite in_seq2mset.
+    move => H_l. split;[|assumption].
+    apply (utransition_internal_sender_good H0 H_l).
+Qed.
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
@@ -3433,21 +3522,6 @@ Proof using.
      by move/eqP in H_eq;subst;rewrite subnn;simpl;congruence.
      by rewrite subSn //= nth_drop subnKC // nth_take ?ltnS // (onth_nth H_g2).
   }
-Qed.
-
-Lemma transition_from_path
-      g0 states ix (H_path: path gtransition g0 states)
-      g1 g2
-      (H_step : step_in_path_at g1 g2 ix states):
-  GTransition g1 g2.
-Proof using.
-  unfold step_in_path_at in H_step.
-  have {H_path} := path_drop H_path ix.
-  destruct (drop ix states);[done|].
-  destruct l;[done|].
-  destruct H_step as [-> ->].
-  simpl.
-  by move/andP => [] /asboolP.
 Qed.
 
 Lemma order_ix_from_steps g0 trace (H_path: path gtransition g0 trace):
