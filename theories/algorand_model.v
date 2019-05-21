@@ -1429,17 +1429,16 @@ Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState 
 (* The adversary will have the keys if the user is corrupt and the given
    r-p-s comes after (or is equal to) the r-p-s of the user *)
 Definition have_keys ustate r p s : Prop :=
-  ustate.(corrupt) /\
-  (r > ustate.(round) \/
-   r = ustate.(round) /\ p > ustate.(period) \/
-   r = ustate.(round) /\ p = ustate.(period) /\ s >= ustate.(step)).
+  ustate.(corrupt) /\ step_le (step_of_ustate ustate) (r,p,s).
 
-Definition mtype_matches_step mtype s : Prop :=
-  match mtype with
-  | Block | Proposal | Reproposal => s = 1
-  | Softvote => s = 2
-  | Certvote => s = 3
-  | _ => s > 3
+Definition mtype_matches_step mtype mval s : Prop :=
+  match mtype, mval with
+  | Block, val _ | Proposal, val _ | Reproposal, repr_val _ _ _ => s = 1
+  | Softvote, val _ => s = 2
+  | Certvote, val _ => s = 3
+  | Nextvote_Open, step_val s' => s = s'
+  | Nextvote_Val, next_val _ s' => s = s'
+  | _, _ => False
   end.
 
 (* Computes the state resulting from forging a message to a user *)
@@ -1510,7 +1509,7 @@ Inductive GTransition : g_transition_type :=
     ~ pre.(users).[target_key].(corrupt) ->
     have_keys pre.(users).[sender_key] r p s ->
     comm_cred_step sender r p s ->
-    mtype_matches_step mtype s ->
+    mtype_matches_step mtype mval s ->
     pre ~~> forge_msg_result pre sender r p mtype mval target
 
 where "x ~~> y" := (GTransition x y) : type_scope.
@@ -1660,7 +1659,7 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       ~ pre.(users).[target_key].(corrupt)
       /\ have_keys pre.(users).[sender_key] r p s
       /\ comm_cred_step sender r p s
-      /\ mtype_matches_step mtype s
+      /\ mtype_matches_step mtype mval s
       /\ post = forge_msg_result pre sender r p mtype mval target
   end.
 
@@ -1725,7 +1724,8 @@ Proof using.
     exists (lbl_replay_msg uid);finish_case.
     exists (lbl_forge_msg sender r p mtype mval target);finish_case.
   + (* reverse - find transition from label *)
-    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst;econstructor;solve[eauto].
+    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst g2;
+      (econstructor;eassumption).
 Qed.
 
 (* Priority:MED This lemma is necessary for technical reasons to rule out
@@ -2371,11 +2371,10 @@ Proof using.
     exfalso.
     unfold user_honest in H_honest.
     (* see above *)
-    assert (msg.2 = sender). by admit_unused.
-    rewrite H3 in H_honest.
-    rewrite in_fnd in H_honest.
-    inversion H0. rewrite H4 in H_honest.
-    inversion H_honest.
+    assert (msg.2 = sender) as H_msg_sender. by admit_unused.
+    move: H_honest. rewrite H_msg_sender in_fnd.
+    move: H0 => [-> _].
+    exact notF.
 Qed.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
@@ -2490,6 +2489,25 @@ Proof.
   have H_last := onth_take_last H_g g0.
 Abort.
 *)
+
+Definition user_forged (msg:Msg) (target:UserId) (g1 g2: GState) :=
+  let: (mty,v,r,p,sender) := msg in
+  related_by (lbl_forge_msg sender r p mty v target) g1 g2.
+
+Lemma pending_sent_or_forged
+      g0 trace (H_path: path gtransition g0 trace)
+      r (H_start: state_before_round r g0):
+    forall g_pending pending_ix,
+      onth trace pending_ix = Some g_pending ->
+    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) d pending_msg,
+      (d,pending_msg) \in g_pending.(msg_in_transit).[key_msg] ->
+    let sender := msg_sender pending_msg in
+    r <= msg_round pending_msg ->
+    exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
+      /\ (user_sent sender pending_msg g1 g2
+          \/ user_forged pending_msg uid g1 g2).
+Proof using.
+Admitted.
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
@@ -4088,6 +4106,42 @@ Proof using.
   by move: H_honest;rewrite /honest_during_step all_rcons => /andP [] _.
 Qed.
 
+Lemma user_sent_credential uid msg g1 g2:
+  user_sent uid msg g1 g2 ->
+  let:(r,p,s) := msg_step msg in uid \in committee r p s.
+Proof using.
+  move => [ms [H_in [[d [pending H_rel]]|H_rel]]];move: H_in;
+            simpl in H_rel;decompose record H_rel.
+  * { (* utransition deliver *)
+    move: H. clear. move: {g1 x}(g1.(users)[`x]) => u.
+    remember (x0,ms) as result.
+    destruct 1;case:Heqresult => ? ?;subst x0 ms;move/Iter.In_mem => /= H_in;intuition;
+    subst msg;simpl;
+    apply/imfsetP;exists uid;[|reflexivity];apply/asboolP.
+    unfold certvote_ok in H;decompose record H;assumption.
+    }
+  * { (* utransition internal *)
+    move: H0. clear. move: {g1 x}(g1.(users)[`x]) => u.
+    remember (x0,ms) as result.
+    destruct 1;case:Heqresult => ? ?;subst x0 ms;move/Iter.In_mem => /= H_in;intuition;
+    (subst msg;simpl;
+     apply/imfsetP;exists uid;[|reflexivity];apply/asboolP);
+    autounfold with utransition_unfold in * |-;
+    match goal with [H:context C [comm_cred_step] |- _] => decompose record  H;assumption end.
+    }
+Qed.
+
+Lemma user_forged_credential msg target g1 g2:
+  user_forged msg target g1 g2 ->
+  let:(r,p,s) := msg_step msg in msg_sender msg \in committee r p s.
+Proof using.
+  move: msg => [[[[mty v] r] p] sender] H_forged.
+  simpl in H_forged;decompose record H_forged;clear H_forged;subst g2.
+  move: (g1.(users)[`x]) H2 H1 => u. clear.
+  destruct mty, v;simpl;(try solve[destruct 1]) => {x1}-> H_cred;
+  (apply/imfsetP;exists sender;[|reflexivity];apply/asboolP;assumption).
+Qed.
+
 Lemma softvote_credentials_checked
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -4101,54 +4155,30 @@ Proof using.
   intros ix g H_onth uid u H_lookup r H_r v p.
   apply/fsubsetP => voter H_softvoters.
 
-  assert (softvoted_in_path trace voter r p v) as H_sent_v . {
-    refine (softvotes_sent H_path H_start H_onth H_lookup H_r _ _).
-    by move:H_softvoters => /imfsetP /= [] [x_u x_v] /andP [] H_x_in /eqP -> ->.
-    admit.
+  have H_softvote : (voter,v) \in u.(softvotes) r p
+    by move: H_softvoters;clear;move => /imfsetP [] [xu xv] /= /andP [H_in /eqP] -> ->.
+
+  have [d [n [ms H_deliver]]] :=
+    received_softvote
+      (path_prefix ix.+1 H_path) H_start
+      (esym (onth_take_last H_onth g0)) H_lookup
+      H_softvote H_r.
+
+  set msg := (Softvote,val v,r,p,voter).
+  assert
+    (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+    as H_source. {
+    rewrite /step_at /= in H_deliver;decompose record H_deliver.
+    assert (onth trace n = Some x)
+      by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
+    eapply pending_sent_or_forged;try eassumption.
   }
 
-  destruct H_sent_v as [ix' H_sent_v].
-  destruct H_sent_v as [pre [post [H_step H_sent]]].
-  destruct H_sent as [ms [H_inms [H|H]]].
-
-  destruct H as [d [inc H]].
-  destruct H as [H_v_in [ustate [H_tr_step [H_v_honest [? ?]]]]].
-  inversion H_tr_step;subst;simpl in * |- *;
-    try rewrite in_nil in H_inms;intuition.
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-
-  destruct H as [H_v_in [ustate [H_v_honest [H_tr_step H]]]].
-  inversion H_tr_step;subst;simpl in * |- *;
-    try rewrite in_nil in H_inms;intuition.
-  rewrite mem_seq2 in H_inms. move: H_inms => /orP => H_inms;
-  destruct H_inms as [H_inms|H_inms];move: H_inms => /eqP => H_inms;injection H_inms;discriminate.
-
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-
-  (* softvote_new case *)
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms. intros <- <- <-.
-  destruct H3 as [? [? [H_comm ?]]].
-  unfold comm_cred_step in H_comm. clear -H_comm.
-  unfold committee.
-rewrite inE /= inE.
-apply/asboolP. assumption.
-  (* softvote_repr case *)
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms. intros <- <- <-.
-  destruct H3 as [? [? [? [H_comm ?]]]].
-  unfold comm_cred_step in H_comm. clear -H_comm.
-  unfold committee.
-rewrite inE /= inE.
-apply/asboolP. assumption.
-
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-
-  rewrite mem_seq1 in H_inms. move: H_inms => /eqP => H_inms. injection H_inms;discriminate.
-Admitted.
-
+  destruct H_source as (send_ix & g1 & g2 & H_step & [H_send | H_forge]).
+  apply user_sent_credential in H_send. assumption.
+  apply user_forged_credential in H_forge. assumption.
+Qed.
 
 (* Priority:HIGH
    Top-level result,
