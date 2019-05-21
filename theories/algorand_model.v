@@ -650,20 +650,16 @@ Definition no_softvote_ok (pre : UState) uid r p : Prop :=
          enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
 Definition softvote_result (pre : UState) : UState :=
-  {[ pre with step := 3 ]}.
+  {[ {[ pre with step := 3 ]}
+            with deadline := (lambda + big_lambda)%R ]}.
+
 
 (** Step 3: Certvoting propositions and user state update **)
 
 (* Certvoting step preconditions *)
 (* The successful case *)
-(* Notes: - Note that this applies for all period values *)
-(*        - Corresponds (roughly) to transitions cert_softvotes and certvote in
-            the automaton model
- *)
-(* Note the time period is left-closed unlike the algorand paper to easily allow
-    checking whether the action should fire at the beginning of the time period *)
 Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
-  ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
+  ((2 * lambda)%R < pre.(timer) <= lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
   comm_cred_step uid r p 3 /\
   valid_block_and_hash b v /\
@@ -671,35 +667,29 @@ Definition certvote_ok (pre : UState) uid (v b: Value) r p : Prop :=
   v \in certvals pre r p .
 
 (* Certvoting step preconditions *)
-(* The unsuccessful case *)
-(* Notes: - The Algorand2 description does not explicitly specify what happens in this case
-          - The timeout case is handled by a generic timeout transition given later
-*)
-(* Note the time period is left-closed unlike the algorand paper to easily allow
-    checking whether the action should fire at the beginning of the time period *)
+(* The unsuccessful case -- not a committee member *)
 Definition no_certvote_ok (pre : UState) uid r p : Prop :=
-  ((2 * lambda)%R <= pre.(timer) < lambda + big_lambda)%R /\
+  ((2 * lambda)%R < pre.(timer) <= lambda + big_lambda)%R /\
   valid_rps pre r p 3 /\
+  ~ comm_cred_step uid r p 3.
+
+(* Certvote timeout preconditions *)
+(* A user timeouts if the deadline is reached while waiting for some external messages
+   (i.e. while observing softvotes in step 3) *)
+Definition certvote_timeout_ok (pre : UState) uid r p : Prop :=
+  (pre.(timer) >= pre.(deadline))%R /\
+  valid_rps pre r p 3 /\
+  comm_cred_step uid r p 3 /\
   forall b v,
-  (~ comm_cred_step uid r p 3 \/
-   ~ valid_block_and_hash b v \/
+  (~ valid_block_and_hash b v \/
    ~ b \in pre.(blocks) r \/
    ~ v \in certvals pre r p).
 
-(* Certvoting step's resulting user state (successful case) *)
-(* The user has certvoted successfully, so move on to the next step and
-   update the deadline *)
+(* Certvoting step's resulting user state *)
+(* The state update for all certvoting cases: move on to the next step
+   (the deadline does not need updating) *)
 Definition certvote_result (pre : UState) : UState :=
-  {[ {[ pre with step := 4 ]}
-            with deadline := (lambda + big_lambda)%R ]}.
-
-(* Certvoting step's resulting user state (unsuccessful case) *)
-(* The user failed to certvote (at the beginning of the certvoting period)
-   so update the deadline only (the step remains at 3 since the user may
-   actually receive a message that would allow him to certvote then -- before
-   the deadline *)
-Definition no_certvote_result (pre : UState) : UState :=
-  {[ pre with deadline := (lambda + big_lambda)%R ]}.
+  {[ pre with step := 4 ]}.
 
 (** Steps >= 4: Nextvoting propositions and user state update **)
 
@@ -808,19 +798,6 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
 (* State update *)
 Definition certify_result r (pre : UState) : UState := advance_round {[pre with round := r]}.
 
-(** Timeout transitions **)
-
-(* A user timeouts if a deadline is reached while waiting for some external messages
-   (i.e. while observing softvotes in step 3) *)
-(* Note: This captures the timeout transitions in the automaton model *)
-(* Note: Updated to accommodate the 27March change *)
-Definition timeout_ok (pre : UState) : Prop :=
-  pre.(step) = 3 /\ (pre.(timer) >= pre.(deadline))%R.
-
-(* On a timeout, move on to the next step *)
-Definition timeout_result (pre : UState) : UState :=
-  {[ pre with step := pre.(step) + 1 ]}.
-
 (* The post state of delivering a non-vote message *)
 Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState :=
   let type := msg.1.1.1.1 in
@@ -894,7 +871,7 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall uid (pre : UState) r p,
       no_certvote_ok pre uid r p ->
-      uid # pre ~> (no_certvote_result pre, [::])
+      uid # pre ~> (certvote_result pre, [::])
 
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall uid (pre : UState) v b r p s,
@@ -916,10 +893,10 @@ Inductive UTransitionInternal : u_transition_internal_type :=
       no_nextvote_ok pre uid r p s ->
       uid # pre ~> (nextvote_result pre s, [::])
 
-  (* Timeout transitions -- Applicable only to step = 3 (after the 27March change) *)
-  | timeout : forall uid (pre : UState),
-      timeout_ok pre ->
-      uid # pre ~> (timeout_result pre, [::])
+  (* Certvote timeout transition -- Applicable only to step = 3 (after the 27March change) *)
+  | certvote_timeout : forall uid (pre : UState) r p,
+      certvote_timeout_ok pre uid p r ->
+      uid # pre ~> (certvote_result pre, [::])
 
 where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
 
@@ -1001,10 +978,9 @@ Hint Unfold
      (* UTransitionInternal *)
      propose_result      propose_ok repropose_ok no_propose_ok
      softvote_result     softvote_new_ok softvote_repr_ok no_softvote_ok
-     certvote_result     certvote_ok
-     no_certvote_result  no_certvote_ok
+     certvote_result     certvote_ok no_certvote_ok
      nextvote_result     nextvote_val_ok nextvote_open_ok nextvote_stv_ok no_nextvote_ok
-     timeout_result      timeout_ok
+     certvote_timeout_ok
      (* UTransitionMsg *)
      set_softvotes       certvote_ok         certvote_result
      set_nextvotes_open  adv_period_open_ok  adv_period_open_result
@@ -2849,7 +2825,7 @@ Proof using delays_order delays_positive.
     | [H: nextvote_stv_ok _ _ _ _ _ _ _ /\ _ |- _] => destruct H as [H Hs]; unfold nextvote_stv_ok in H; use_hyp H
     | [H: no_nextvote_ok _ _ _ _ _ |- _] => unfold no_nextvote_ok in H; use_hyp H
     | [H: set_softvotes _ _ _ _ |- _] => unfold set_softvotes in H; use_hyp H
-    | [H: timeout_ok _ |- _] => unfold timout_ok in H; use_hyp H
+    | [H: certvote_timeout_ok _ _ _ _ |- _] => unfold timout_ok in H; use_hyp H
     | _ => idtac
     end;
     repeat (tidy ());intuition lra).
@@ -3065,7 +3041,7 @@ inversion_clear utrH.
 - case: H => tH [vH oH].
   case: vH => rH [pH sH].
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
 - elim: H => tH [vH [vbH [svH oH]]].
   elim: vH => rH [pH sH].
   unfold ustate_after => /=.
@@ -3087,10 +3063,10 @@ inversion_clear utrH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   rewrite addn1. by subst.
-- case: H => vH oH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
   unfold ustate_after => /=.
-  do 2! [right]. do 2! [split; auto].
-  rewrite addn1. by subst.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
 Qed.
 
 (* A one-step global transition never decreases round-period-step of any user *)
@@ -4423,11 +4399,14 @@ Proof.
 
     subst. simpl in H_lt.
     simpl in H_rps.
-    unfold timeout_ok in H0.
+    inversion H_rps. rewrite -> H2 in H_lt. rewrite -> H3 in H_lt. rewrite -> H4 in H_lt. intuition;rewrite ltnn in H6;intuition.
+    (*
+    unfold certvote_timeout_ok in H0.
     inversion H0; subst.
     clear -H4 H1. rewrite H1 in H4. inversion H4.
 
     rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
+    *)
   }
 
   (* recover from partition *)
