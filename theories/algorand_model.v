@@ -18,7 +18,7 @@ Open Scope fset_scope.
 
 Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
-Require Import Interval.Interval_tactic.
+Require Interval.Interval_tactic.
 
 Require Import Relation_Operators.
 
