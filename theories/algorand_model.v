@@ -1448,6 +1448,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
 
 (* Computes the state resulting from replaying a message to a user *)
 (* The message is replayed to the given target user and added to his mailbox *)
+(* It is not broadcast because other users have already seen the original *)
 Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) [fset uid] (* (domf (honest_users pre.(users))) *)
                  pre.(msg_in_transit) [:: msg] in
@@ -1471,9 +1472,9 @@ Definition mtype_matches_step mtype mval s : Prop :=
 
 (* Computes the state resulting from forging a message to a user *)
 (* The message is first created and then queued at the target user's mailbox *)
-Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval target : GState :=
+Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval : GState :=
   let msg := (mtype, mval, r, p, uid) in
-  let msgs' := send_broadcasts pre.(now) [fset target] (* (domf (honest_users pre.(users))) *)
+  let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)))
                  pre.(msg_in_transit) [:: msg] in
   {[ pre with msg_in_transit := msgs' ]}.
 
@@ -1531,13 +1532,11 @@ Inductive GTransition : g_transition_type :=
 
 (* [Adversary action] - forge and send out a message *)
 | step_forge_msg : forall pre sender (sender_key : sender \in pre.(users))
-                          r p s mtype mval
-                          target (target_key : target \in pre.(users)),
-    ~ pre.(users).[target_key].(corrupt) ->
+                          r p s mtype mval,
     have_keys pre.(users).[sender_key] r p s ->
     comm_cred_step sender r p s ->
     mtype_matches_step mtype mval s ->
-    pre ~~> forge_msg_result pre sender r p mtype mval target
+    pre ~~> forge_msg_result pre sender r p mtype mval
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
@@ -1665,7 +1664,7 @@ Inductive GLabel : Type :=
 | lbl_enter_partition : GLabel
 | lbl_corrupt_user : UserId -> GLabel
 | lbl_replay_msg : UserId -> GLabel
-| lbl_forge_msg : UserId -> nat -> nat -> MType -> ExValue -> UserId -> GLabel.
+| lbl_forge_msg : UserId -> nat -> nat -> MType -> ExValue -> GLabel.
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
@@ -1696,13 +1695,12 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       ~ pre.(users).[ustate_key].(corrupt)
       /\ msg \in pre.(msg_history)
       /\ post = replay_msg_result pre uid msg
-  | lbl_forge_msg sender r p mtype mval target =>
-      exists (sender_key : sender \in pre.(users)) (target_key : target \in pre.(users)) s,
-      ~ pre.(users).[target_key].(corrupt)
-      /\ have_keys pre.(users).[sender_key] r p s
+  | lbl_forge_msg sender r p mtype mval =>
+      exists (sender_key : sender \in pre.(users)) s,
+         have_keys pre.(users).[sender_key] r p s
       /\ comm_cred_step sender r p s
       /\ mtype_matches_step mtype mval s
-      /\ post = forge_msg_result pre sender r p mtype mval target
+      /\ post = forge_msg_result pre sender r p mtype mval
   end.
 
 Lemma utransition_internal_preserves_corrupt uid pre post sent:
@@ -1764,10 +1762,12 @@ Proof using.
     exists (lbl_enter_partition);finish_case.
     exists (lbl_corrupt_user uid);finish_case.
     exists (lbl_replay_msg uid);finish_case.
-    exists (lbl_forge_msg sender r p mtype mval target);finish_case.
+    exists (lbl_forge_msg sender r p mtype mval);finish_case.
   + (* reverse - find transition from label *)
-    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;subst g2;
-      (econstructor;eassumption).
+    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;clear Hrel;subst g2;
+      [econstructor..|eapply step_forge_msg];eassumption.
+    (* trying econstructor or eapply step_replay_msg on the
+       last case instead of eapply step_forge_msg runs forever or for a very long time *)
 Qed.
 
 (* Priority:MED This lemma is necessary for technical reasons to rule out
@@ -2397,16 +2397,10 @@ Proof using.
     assumption.
 
   * (* forge message result *)
-    rewrite (surjective_pairing msg).
-    rewrite <- surjective_pairing.
-    intro H_honest.
-    exfalso.
-    unfold user_honest in H_honest.
-    (* see above *)
+    rewrite {1}(surjective_pairing msg).
     assert (msg.2 = sender) as H_msg_sender. by admit_unused.
-    move: H_honest. rewrite H_msg_sender in_fnd.
-    move: H0 => [-> _].
-    exact notF.
+    (* see above about send_broadcasts reasoning *)
+    by rewrite /user_honest H_msg_sender in_fnd (proj1 H).
 Qed.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
@@ -2523,9 +2517,9 @@ Proof.
 Abort.
 *)
 
-Definition user_forged (msg:Msg) (target:UserId) (g1 g2: GState) :=
+Definition user_forged (msg:Msg) (g1 g2: GState) :=
   let: (mty,v,r,p,sender) := msg in
-  related_by (lbl_forge_msg sender r p mty v target) g1 g2.
+  related_by (lbl_forge_msg sender r p mty v) g1 g2.
 
 Lemma pending_sent_or_forged
       g0 trace (H_path: path gtransition g0 trace)
@@ -2538,7 +2532,7 @@ Lemma pending_sent_or_forged
     r <= msg_round pending_msg ->
     exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
       /\ (user_sent sender pending_msg g1 g2
-          \/ user_forged pending_msg uid g1 g2).
+          \/ user_forged pending_msg g1 g2).
 Proof using.
 Admitted.
 
@@ -2632,8 +2626,9 @@ Proof using.
   have {H_honest} := all_onth H_honest (step_in_path_onth_pre H_step).
   rewrite /upred (in_fnd x) H_corrupt implybF => /negP;apply;apply /step_leP.
   refine (step_le_trans H_le _).
-  clear -H2. apply/step_leP;rewrite /msg_step /step_leb !eq_refl !ltnn /=.
-  by destruct mty,v,H2.
+  apply/step_leP;rewrite /msg_step /step_leb !eq_refl !ltnn /=.
+  have: mtype_matches_step mty v x0 by assumption.
+  by clear;destruct mty,v,1.
 Qed.
 
 (* A message from an honest user was actually sent in the trace *)
@@ -3315,7 +3310,7 @@ elim => //.
 - set GS := global_state.GState UserId UState [choiceType of Msg].
   move => pre sender.
   set users : GS -> _ := global_state.users _ _ _.
-  move => sender_key r p s mtype mval target target_key Hc Hhave Hcomm Hmatch.
+  move => sender_key r p s mtype mval Hhave Hcomm Hmatch.
   rewrite /= =>->; case =>->.
   by right; right.
 Qed.
@@ -4434,14 +4429,14 @@ Proof using.
     }
 Qed.
 
-Lemma user_forged_credential msg target g1 g2:
-  user_forged msg target g1 g2 ->
+Lemma user_forged_credential msg g1 g2:
+  user_forged msg g1 g2 ->
   let:(r,p,s) := msg_step msg in msg_sender msg \in committee r p s.
 Proof using.
   move: msg => [[[[mty v] r] p] sender] H_forged.
   simpl in H_forged;decompose record H_forged;clear H_forged;subst g2.
-  move: (g1.(users)[`x]) H2 H1 => u. clear.
-  destruct mty, v;simpl;(try solve[destruct 1]) => {x1}-> H_cred;
+  move: (g1.(users)[`x]) H1 H0 => u. clear.
+  destruct mty, v;simpl;(try solve[destruct 1]) => {x0}-> H_cred;
   (apply/imfsetP;exists sender;[|reflexivity];apply/asboolP;assumption).
 Qed.
 
@@ -4471,7 +4466,7 @@ Proof.
   set msg := (Softvote,val v,r,p,voter).
   assert
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
-                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
     rewrite /step_at /= in H_deliver;decompose record H_deliver.
     assert (onth trace n = Some x)
