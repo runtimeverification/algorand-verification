@@ -478,6 +478,9 @@ Definition vote_values (vs: seq Vote) : seq Value :=
 Definition softvoters_for (v:Value) (u:UState) r p : {fset UserId} :=
   [fset x.1 | x in u.(softvotes) r p & matchValue x v].
 
+Definition nextvoters_open_for (u:UState) r p s : {fset UserId} :=
+  [fset x in u.(nextvotes_open) r p s].
+
 (* The number of softvotes of a given value in a given user state for the round
    and period given (does not use the invariant that u.(softvotes) r p is duplicate-free) *)
 Definition soft_weight (v:Value) (u:UState) r p : nat :=
@@ -4481,6 +4484,15 @@ Proof.
   apply user_forged_credential in H_forge. assumption.
 Qed.
 
+Lemma nextvote_open_credentials_checked
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r -> forall p s,
+      nextvoters_open_for u r p s `<=` committee r p s.
+Admitted.
+
 Lemma received_nextvote_open
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -4823,9 +4835,34 @@ Proof.
       rewrite -Hequ in H0 H_lt_0 H_lt H_round.
       cbn -[step_le step_lt] in * |-.
 
-      exists s, None, [fset x in pre'.(nextvotes_open) r1 p0 s].
-      split. admit.
-      split. move: H_quorum_size.
+      destruct H_valid_rps as [H_r1 [H_p0 H_s]].
+      case:H_rps => H_r' H_p.
+      rewrite -H_p H_p0 -H_r' H_r1.
+
+      have H_pref := path_prefix n.+2 H_path.
+      apply step_in_path_onth_post in H_step.
+      match goal with [_ : onth trace n.+1 = Some ?x |- _] => remember x as dr end.
+      assert (H_onth : onth (take n.+2 trace) n.+1 = Some dr).
+        subst pref.
+        destruct (n.+2 < size trace) eqn:H_n2.
+        apply onth_take_some in H_step. rewrite size_take in H_step.
+        rewrite H_n2 in H_step. by intuition; eassumption.
+        assert (size trace <= n.+2). by clear -H_n2; ppsimpl; lia.
+        rewrite take_oversize; assumption.
+
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      rewrite H_addsub.
+      assert (H_r0r1 : r0 <= r1).
+        by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
+
+      exists s, None, (nextvoters_open_for pre' r1 p0 s); repeat split.
+      eapply nextvote_open_credentials_checked with
+          (uid:=uid) (u:=(adv_period_open_result pre'));
+        try (subst pref; eassumption);
+        try (subst dr; rewrite fnd_set; by rewrite eq_refl).
+
+      unfold nextvoters_open_for.
+      move: H_quorum_size.
       clear. unfold nextvote_bottom_quorum.
       rewrite card_fseq.
       admit.
@@ -4833,36 +4870,11 @@ Proof.
       intro voter.
       rewrite in_fset.
       change (in_mem voter _) with (voter \in pre'.(nextvotes_open) r1 p0 s).
-      destruct H_valid_rps as [H_r1 [H_p0 H_s]].
-      case:H_rps => H_r' H_p.
-      rewrite -H_p H_p0 -H_r' H_r1.
-      intro.
 
-      have H_pref := path_prefix n.+2 H_path.
-
-      apply step_in_path_onth_post in H_step.
-      eapply received_nextvote_open with
-          (g0:=g0) (r0:=r0) (ix:=n.+1) (u:=(adv_period_open_result pre'));
-        try (subst pref; eassumption).
-
-      (* onth assumption *)
-      subst pref.
-      destruct (n.+2 < size trace) eqn:H_n2.
-      apply onth_take_some in H_step. rewrite size_take in H_step.
-      rewrite H_n2 in H_step. by intuition; eassumption.
-
-      assert (size trace <= n.+2). by clear -H_n2; ppsimpl; lia.
-      rewrite take_oversize; assumption.
-
-      rewrite fnd_set.
-      by rewrite eq_refl.
-
-      assert ((p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
-      rewrite H2; assumption.
-
-      (* r0 <= r1 *)
-      subst pre'. simpl in H_r1.
-      rewrite H_r1 in H_r'. subst r; eassumption.
+      intro H_voter.
+      eapply received_nextvote_open with (u:=(adv_period_open_result pre'));
+        try (subst pref; eassumption);
+        try (subst dr; rewrite fnd_set; by rewrite eq_refl).
     }
 
     (* positive case: nextvote val *)
