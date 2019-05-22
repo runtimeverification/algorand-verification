@@ -4729,15 +4729,16 @@ Lemma period_advance_only_by_next_votes
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0):
     forall n uid r p,
-    (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
-    let path_prefix := take n.+2 trace in
-    exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
-      next_voters `<=` committee r p.-1 s
-      /\ tau_b <= #|` next_voters |
-      /\ forall voter, voter \in next_voters ->
-         received_next_vote uid voter r p.-1 s v path_prefix.
+      r0 <= r ->
+      (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
+      let path_prefix := take n.+2 trace in
+      exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
+        next_voters `<=` committee r p.-1 s
+        /\ tau_b <= #|` next_voters |
+        /\ forall voter, voter \in next_voters ->
+           received_next_vote uid voter r p.-1 s v path_prefix.
 Proof.
-  intros n uid r p H_adv pref.
+  intros n uid r p H_r H_adv pref.
   destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]]]].
   assert (H_gtrans : g1 ~~> g2) by (eapply transition_from_path; eassumption).
 
@@ -4802,26 +4803,86 @@ Proof.
       rewrite -Hequ in H0 H_lt_0 H_lt H_round.
       cbn -[step_le step_lt] in * |-.
 
-    exists s, None, [fset x in pre'.(nextvotes_open) r1 p0 s].
+      exists s, None, [fset x in pre'.(nextvotes_open) r1 p0 s].
+      split. admit.
+      split. move: H_quorum_size.
+      clear. unfold nextvote_bottom_quorum.
+      rewrite card_fseq.
+      admit.
 
-    split. admit.
-    split. move: H_quorum_size.
-    clear. unfold nextvote_bottom_quorum.
-    rewrite card_fseq.
-    admit.
+      intro voter.
+      rewrite in_fset.
+      change (in_mem voter _) with (voter \in pre'.(nextvotes_open) r1 p0 s).
+      destruct H_valid_rps as [H_r1 [H_p0 H_s]].
+      case:H_rps => H_r' H_p.
+      rewrite -H_p H_p0 -H_r' H_r1.
+      intro.
 
-    intro voter.
-    rewrite in_fset.
-    change (in_mem voter _) with (voter \in pre'.(nextvotes_open) r1 p0 s).
-    destruct H_valid_rps as [H_r1 [H_p0 H_s]].
-    case:H_rps => H_r H_p.
-    rewrite -H_p H_p0 -H_r H_r1.
-    admit.
+      have H_pref := path_prefix n.+2 H_path.
+
+      apply step_in_path_onth_post in H_step.
+      eapply received_nextvote_open with
+          (g0:=g0) (r0:=r0) (ix:=n.+1) (u:=(adv_period_open_result pre'));
+        try (subst pref; eassumption).
+
+      (* onth assumption *)
+      subst pref.
+      destruct (n.+2 < size trace) eqn:H_n2.
+      apply onth_take_some in H_step. rewrite size_take in H_step.
+      rewrite H_n2 in H_step. by intuition; eassumption.
+
+      assert (size trace <= n.+2). by clear -H_n2; ppsimpl; lia.
+      rewrite take_oversize; assumption.
+
+      rewrite fnd_set.
+      by rewrite eq_refl.
+
+      assert ((p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      rewrite H2; assumption.
+
+      (* r0 <= r1 *)
+      subst pre'. simpl in H_r1.
+      rewrite H_r1 in H_r'. subst r; eassumption.
     }
 
     (* positive case: nextvote val *)
-    destruct H1 as [H_valid_rps H_quorum_size].
-    admit.
+    {
+      destruct H1 as [H_valid_rps H_quorum_size].
+      rewrite H_g1_key_ustate in H_lt_0.
+      clear H_g1_key_ustate H_g1.
+      rename pre0 into u.
+      rewrite -Hequ in H0 H_lt_0 H_lt H_round.
+      (* cbn -[step_le step_lt] in * |-. *)
+
+      exists s. exists (Some v).
+      exists
+        [fset x in
+                 map fst (filter (fun x => matchValue x v)
+                                 (pre'.(nextvotes_val) r1 p0 s))].
+      (* alternatively this may be simpler: *)
+      (* exists [fset x.1 | x in [seq x <- pre'.(nextvotes_val) r1 p0 s | matchValue x v]]. *)
+      split. admit.
+      split. move: H_quorum_size.
+      clear.
+      rewrite card_fseq.
+      admit.
+
+      intro voter.
+      rewrite in_fset.
+      change (in_mem voter _) with
+          (voter \in [seq i.1
+             | i <- local_state.nextvotes_val UserId Value PropRecord Vote pre' r1 p0 s
+             & matchValue i v]).
+      destruct H_valid_rps as [H_r1 [H_p0 H_s]].
+      case:H_rps => H_r' H_p.
+      rewrite -H_p H_p0 -H_r' H_r1.
+      intro.
+
+      have H_pref := path_prefix n.+2 H_path.
+      unfold received_next_vote.
+      (* apply received_nextvote_val *)
+      admit.
+    }
 
     exfalso.
     rewrite setfNK in H_round.
