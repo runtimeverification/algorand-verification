@@ -1986,7 +1986,7 @@ Proof using.
         set us2 := _.[s <- _].
         move => Hstep'.
         have Hus: us1 = us2 by move: Hstep'; move: (us1) (us2) => us3 us4; case.
-        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.        
+        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.
         move: Hss.
         rewrite 2!fnd_set.
         case: ifP; last by move/eqP.
@@ -2658,15 +2658,14 @@ Definition user_before_round r (u : UState) : Prop :=
 Definition users_before_round (r:nat) (g : GState) : Prop :=
   forall i (Hi : i \in g.(users)), user_before_round r (g.(users).[Hi]).
 
-Definition honest_messages_before_round (r:nat) (g : GState) : Prop :=
+Definition messages_before_round (r:nat) (g : GState) : Prop :=
   forall (mailbox: {mset R * Msg}), mailbox \in codomf (g.(msg_in_transit)) ->
   forall deadline msg, (deadline,msg) \in mailbox ->
-     let: (_,_,r',_,u) := msg in
-     r' > r -> is_user_corrupt_gstate u g.
+     msg_round msg < r.
 
 Definition state_before_round r (g:GState) : Prop :=
   users_before_round r g
-  /\ honest_messages_before_round r g
+  /\ messages_before_round r g
   /\ (forall msg, msg \in g.(msg_history) -> msg_round msg < r).
 
 Definition opred (T : Type) (P : pred T) : pred (option T) :=
@@ -2751,6 +2750,72 @@ Lemma pending_sent_or_forged
       /\ (user_sent sender pending_msg g1 g2
           \/ user_forged pending_msg g1 g2).
 Proof using.
+  clear -H_path H_start.
+  intros g_pending pending_ix H_g uid key_msg d msg H_msg sender H_round.
+  subst sender.
+  pose proof (path_gsteps_onth H_path H_g
+    (P:=fun g => match g.(msg_in_transit).[? uid] with
+                  | Some msg_mset => (d,msg) \in msg_mset
+                  | None => false
+                 end)).
+  simpl in H.
+  have H_msg_g0:
+    ~~
+    match g0.(msg_in_transit).[? uid] with
+    | Some msg_mset => (d, msg) \in msg_mset
+    | None => false
+    end.
+      (* msg has round >= r, while g0 comes before r, and so msg \notin mmailbox0 *)
+      (* if the user does not have a mailbox, then it's already true*)
+    admit.
+  rewrite (in_fnd key_msg) in H.
+  move:(H H_msg_g0 H_msg). clear -H_path.
+  move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
+  exists n, g1, g2;split;[assumption|].
+  apply (transition_from_path H_path), transitions_labeled in H_step.
+  move: H_step => [lbl H_rel];clear -H_pre H_post H_rel.
+  destruct lbl.
+    (* tick *)
+    exfalso;apply /negP: H_post;simpl in H_rel;decompose record H_rel;clear H_rel;subst g2;
+      simpl;assumption.
+    (* deliver *)
+    left. unfold user_sent.
+    suff: s = msg_sender msg /\ msg \in l.
+    move => [<- H_l].
+    exists l;split;[|left;exists r, m];assumption.
+    simpl in H_rel;decompose record H_rel;clear H_rel.
+    move: H_post H_pre;subst g2. rewrite /=.
+      (* reason on send_broadcasts *)
+    admit.
+    (* internal *)
+    left. unfold user_sent.
+    suff: s = msg_sender msg /\ msg \in l.
+    move => [<- H_l].
+    exists l;split;[|right];assumption.
+    simpl in H_rel;decompose record H_rel;clear H_rel.
+    move: H_post H_pre;subst g2. rewrite /=.
+       (* reason on send_broadcasts *)
+    admit.
+    (* exit partition *)
+    exfalso. apply /negP: H_post. simpl in H_rel;decompose record H_rel;clear H_rel. subst g2.
+    unfold recover_from_partitioned, reset_msg_delays.
+       (* reset_msg_delays preserves the set of messages *)
+    admit.
+    (* enter partition *)
+    exfalso;apply /negP: H_post;simpl in H_rel;decompose record H_rel;clear H_rel;subst g2;
+      simpl;assumption.
+    (* corrupt user *)
+    exfalso;apply /negP: H_post;simpl in H_rel;decompose record H_rel;clear H_rel;subst g2.
+    unfold corrupt_user_result, drop_mailbox_of_user; simpl.
+      (* the empty msg mset cannot have a message *)
+    admit.
+    (* replay a message *)
+    left.
+      (* replayed message must have originally been sent honestly *)
+    admit.
+    (* forge a message *)
+    right.
+    unfold user_forged.
 Admitted.
 
 Lemma utransition_msg_sender_good uid u msg result:
