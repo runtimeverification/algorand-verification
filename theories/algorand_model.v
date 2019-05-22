@@ -5025,6 +5025,27 @@ Definition period_advances uid r p (users1 users2: {fmap UserId -> UState}) : Pr
 Definition period_advance_at n path uid r p g1 g2 : Prop :=
   step_in_path_at g1 g2 n path /\ period_advances uid r p (g1.(users)) (g2.(users)).
 
+Lemma set_nil : forall (T : finType), [set x in [::]] = @set0 T.
+Proof. by move => T. Qed.
+
+Lemma finset_size : forall (T : finType) (s: seq T), #|[set x in s]| = size (undup s).
+Proof.
+move=> T.
+elim => //=; first by rewrite set_nil cards0.
+move => x s IH.
+rewrite set_cons /=.
+case: ifP => //=.
+  move => xs.
+  suff Hsuff: x |: [set x0 in s] = [set x in s] by rewrite Hsuff.
+  apply/setP => y.
+  rewrite in_setU1.
+  case Hxy: (y == x) => //.
+  rewrite /= inE.
+  by move/eqP: Hxy=>->.
+move/negP/negP => Hx.
+by rewrite cardsU1 /= inE Hx /= add1n IH.
+Qed.
+
 (* some collection of votes recorded in nv_open/val field *)
 (* where certs check out and tau_b many of them *)
 (* statement uses received_next_vote pred *)
