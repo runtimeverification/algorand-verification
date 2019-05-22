@@ -481,6 +481,9 @@ Definition softvoters_for (v:Value) (u:UState) r p : {fset UserId} :=
 Definition nextvoters_open_for (u:UState) r p s : {fset UserId} :=
   [fset x in u.(nextvotes_open) r p s].
 
+Definition nextvoters_val_for (v:Value) (u:UState) r p s : {fset UserId} :=
+  [fset x.1 | x in u.(nextvotes_val) r p s & matchValue x v].
+
 (* The number of softvotes of a given value in a given user state for the round
    and period given (does not use the invariant that u.(softvotes) r p is duplicate-free) *)
 Definition soft_weight (v:Value) (u:UState) r p : nat :=
@@ -4606,6 +4609,256 @@ Proof using.
   split; assumption.
 Qed.
 
+Lemma received_nextvote_open
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u,
+    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+  forall voter r p s,
+    voter \in u.(nextvotes_open) r p s ->
+    r0 <= r ->
+    exists d, msg_received uid d (Nextvote_Open, step_val s, r, p, voter) trace.
+Proof using.
+  clear -H_path H_start.
+  move => ix g H_g uid u H_u voter r p s H_voter H_r.
+  set P := upred uid (fun u => voter \in u.(nextvotes_open) r p s).
+  assert (~~P g0). {
+  move: H_start => [H_users _]. clear -H_users H_r.
+  subst P. unfold upred.
+  destruct (uid \in g0.(users)) eqn: H_in.
+  * move/(_ _ H_in) in H_users. rewrite in_fnd.
+    move: {g0 H_in}(g0.(users)[` H_in]) H_users => u H_users.
+    unfold user_before_round in H_users.
+    decompose record H_users.
+    by move: {H4 H_r}(H4 r p s H_r) => /nilP ->.
+  * by rewrite not_fnd // H_in.
+  }
+  assert (P g). {
+    unfold P, upred.
+    rewrite H_u. assumption.
+  }
+  have := path_gsteps_onth H_path H_g H H0.
+  clear -H_path.
+  move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
+  have H_gtrans := transition_from_path H_path H_step.
+  unfold msg_received, step_at.
+  suff: exists d ms, related_by (lbl_deliver uid d (Nextvote_Open, step_val s, r, p, voter) ms) g1 g2
+    by move => [d [ms H_rel]];exists d, n, ms, g1, g2;split;assumption.
+
+  move: H_gtrans H_pre H_post;unfold P, upred;clear;destruct 1;
+      try solve [move => /negP H_n /H_n []].
+  { (* tick *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  unfold tick_update, tick_users. cbn.
+  destruct (uid \in pre.(users)) eqn:H_uid.
+  * rewrite updf_update // in_fnd.
+    move: (pre.(users)[` H_uid]) => u.
+    by unfold user_advance_timer;destruct u, corrupt;simpl.
+  * apply negbT in H_uid.
+    rewrite [(updf _ _ _).[? uid]] not_fnd //.
+    change (?k \in ?f) with (k \in domf f).
+    rewrite -updf_domf. assumption.
+  }
+  { (* deliver *)
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|by move/negP => H_n /H_n []].
+    move => /eqP in H_uids. subst uid0.
+    rewrite in_fnd.
+    destruct pending as [d pmsg]. unfold snd in H1.
+
+    remember (pre.(users)[`key_ustate]) as ustate;
+    remember (ustate_post, sent) as result;
+    destruct H1 eqn:H_step;case: Heqresult => {ustate_post}<- {sent}<-;subst pre0;
+                                                try by move => /negP H_n H_p;exfalso.
+    *
+    unfold pre'.
+    move => H_n H_p.
+    assert ((r,p,s) = (r0,p0,s0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
+    } case: H2 => ? ? ?;subst r0 p0 s0.
+    assert (i = voter). {
+      symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    rewrite /set_nextvotes_open /= eq_refl in H_p.
+
+    match type of H_p with context C [if ?b then _ else _] => destruct b end.
+      by rewrite mem_undup in H_p.
+      by rewrite in_cons H_neq mem_undup in H_p.
+    } subst i.
+    by finish_case.
+    *
+    unfold pre'.
+    move => H_n H_p.
+    assert ((r,p,s) = (r0,p0,s0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
+    } case: H2 => ? ? ?;subst r0 p0 s0.
+    assert (i = voter). {
+      symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    rewrite /set_nextvotes_open /= eq_refl in H_p.
+
+    match type of H_p with context C [if ?b then _ else _] => destruct b end.
+      by rewrite mem_undup in H_p.
+      by rewrite in_cons H_neq mem_undup in H_p.
+    } subst i.
+    by finish_case.
+    *
+    move => /negP H_n H_p; exfalso;contradict H_n.
+    move: (pre.(users)[`key_ustate]) H_p => u.
+    clear.
+    unfold deliver_nonvote_msg_result.
+    destruct msg as [[[[m v] mr] mp] mu].
+    simpl.
+    by destruct v;first destruct m.
+  }
+  { (* internal *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  rewrite fnd_set.
+  destruct (uid == uid0) eqn:H_uids;[|done].
+  move => /eqP in H_uids. subst uid0.
+  rewrite in_fnd.
+  move: (pre.(users)[` ustate_key]) H0 => u H_step.
+  clear -H_step.
+  remember (ustate_post,sent) as result;destruct H_step;
+    case: Heqresult => <- _;by destruct pre.
+  }
+  { (* corrupt *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  rewrite fnd_set.
+  destruct (uid == uid0) eqn:H_uids;[|done].
+  move => /eqP in H_uids. subst uid0.
+  by rewrite in_fnd.
+  }
+Qed.
+
+Lemma received_nextvote_val
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u,
+    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+  forall voter v r p s,
+    (voter, v) \in u.(nextvotes_val) r p s ->
+    r0 <= r ->
+    exists d, msg_received uid d (Nextvote_Val, next_val v s, r, p, voter) trace.
+Proof using.
+  clear -H_path H_start.
+  move => ix g H_g uid u H_u voter v r p s H_voter H_r.
+  set P := upred uid (fun u => (voter,v) \in u.(nextvotes_val) r p s).
+  assert (~~P g0). {
+  move: H_start => [H_users _]. clear -H_users H_r.
+  subst P. unfold upred.
+  destruct (uid \in g0.(users)) eqn: H_in.
+  * move/(_ _ H_in) in H_users. rewrite in_fnd.
+    move: {g0 H_in}(g0.(users)[` H_in]) H_users => u H_users.
+    unfold user_before_round in H_users.
+    decompose record H_users.
+    by move: {H6 H_r}(H6 r p s H_r) => /nilP ->.
+  * by rewrite not_fnd // H_in.
+  }
+  assert (P g). {
+    unfold P, upred.
+    rewrite H_u. assumption.
+  }
+  have := path_gsteps_onth H_path H_g H H0.
+  clear -H_path.
+  move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
+  have H_gtrans := transition_from_path H_path H_step.
+  unfold msg_received, step_at.
+  suff: exists d ms, related_by (lbl_deliver uid d (Nextvote_Val, next_val v s, r, p, voter) ms) g1 g2
+    by move => [d [ms H_rel]];exists d, n, ms, g1, g2;split;assumption.
+
+  move: H_gtrans H_pre H_post;unfold P, upred;clear;destruct 1;
+      try solve [move => /negP H_n /H_n []].
+  { (* tick *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  unfold tick_update, tick_users. cbn.
+  destruct (uid \in pre.(users)) eqn:H_uid.
+  * rewrite updf_update // in_fnd.
+    move: (pre.(users)[` H_uid]) => u.
+    by unfold user_advance_timer;destruct u, corrupt;simpl.
+  * apply negbT in H_uid.
+    rewrite [(updf _ _ _).[? uid]] not_fnd //.
+    change (?k \in ?f) with (k \in domf f).
+    rewrite -updf_domf. assumption.
+  }
+  { (* deliver *)
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|by move/negP => H_n /H_n []].
+    move => /eqP in H_uids. subst uid0.
+    rewrite in_fnd.
+    destruct pending as [d pmsg]. unfold snd in H1.
+
+    remember (pre.(users)[`key_ustate]) as ustate;
+    remember (ustate_post, sent) as result;
+    destruct H1 eqn:H_step;case: Heqresult => {ustate_post}<- {sent}<-;subst pre0;
+                                                try by move => /negP H_n H_p;exfalso.
+    *
+    unfold pre'.
+    move => H_n H_p.
+    assert ((r,p,s) = (r0,p0,s0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_val;simpl. rewrite H_neq. done.
+    } case: H2 => ? ? ?;subst r0 p0 s0.
+    assert ((voter,v) = (i,v0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_val;simpl. rewrite eq_refl.
+    match goal with
+      [|- context C[(i, v0) \in ?nvs]] => destruct ((i,v0) \in nvs) eqn:H_in
+    end.
+      by rewrite H_in mem_undup.
+      by rewrite H_in in_cons mem_undup; move/orP; destruct 1 as [H_eq|H_in'];
+        [rewrite H_neq in H_eq; discriminate|].
+    } case: H2 => ? ?;subst i v0.
+    by finish_case.
+    *
+    unfold pre'.
+    move => H_n H_p.
+    assert ((r,p,s) = (r0,p0,s0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_val;simpl. rewrite H_neq. done.
+    } case: H2 => ? ? ?;subst r0 p0 s0.
+    assert ((voter,v) = (i,v0)). {
+    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
+    move: H_p. unfold set_nextvotes_val;simpl. rewrite eq_refl.
+    match goal with
+      [|- context C[(i, v0) \in ?nvs]] => destruct ((i,v0) \in nvs) eqn:H_in
+    end.
+      by rewrite H_in mem_undup.
+      by rewrite H_in in_cons mem_undup; move/orP; destruct 1 as [H_eq|H_in'];
+        [rewrite H_neq in H_eq; discriminate|].
+    } case: H2 => ? ?;subst i v0.
+    by finish_case.
+    *
+    move => /negP H_n H_p; exfalso;contradict H_n.
+    move: (pre.(users)[`key_ustate]) H_p => u.
+    clear.
+    unfold deliver_nonvote_msg_result.
+    destruct msg as [[[[m v0] mr] mp] mu].
+    simpl.
+    by destruct v0;first destruct m.
+  }
+  { (* internal *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  rewrite fnd_set.
+  destruct (uid == uid0) eqn:H_uids;[|done].
+  move => /eqP in H_uids. subst uid0.
+  rewrite in_fnd.
+  move: (pre.(users)[` ustate_key]) H0 => u H_step.
+  clear -H_step.
+  remember (ustate_post,sent) as result;destruct H_step;
+    case: Heqresult => <- _;by destruct pre.
+  }
+  { (* corrupt *)
+  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
+  rewrite fnd_set.
+  destruct (uid == uid0) eqn:H_uids;[|done].
+  move => /eqP in H_uids. subst uid0.
+  by rewrite in_fnd.
+  }
+Qed.
+
   (*
     Suppose (voter,v) \in u.(softvotes) r p
     => message (Softvote, val v, r, p, i) was received
@@ -4768,129 +5021,74 @@ Lemma nextvote_open_credentials_checked
   forall uid u, g.(users).[? uid] = Some u ->
   forall r, r0 <= r -> forall p s,
       nextvoters_open_for u r p s `<=` committee r p s.
-Admitted.
+Proof.
+  clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
+  intros ix g H_onth uid u H_lookup r H_r p s.
+  apply/fsubsetP => voter H_nextvoters.
 
-Lemma received_nextvote_open
+  have H_nextvote : voter \in u.(nextvotes_open) r p s
+    by revert H_nextvoters; rewrite in_fset;
+    change (in_mem voter _) with (voter \in u.(nextvotes_open) r p s).
+
+  apply onth_take_some in H_onth.
+  have [d [n [ms H_deliver]]] :=
+    received_nextvote_open
+      (path_prefix ix.+1 H_path) H_start
+      H_onth H_lookup
+      H_nextvote H_r.
+
+  set msg := (Nextvote_Open,step_val s,r,p,voter).
+  assert
+    (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+    as H_source. {
+    rewrite /step_at /= in H_deliver;decompose record H_deliver.
+    assert (onth trace n = Some x)
+      by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
+    eapply pending_sent_or_forged;try eassumption.
+  }
+
+  destruct H_source as (send_ix & g1 & g2 & H_step & [H_send | H_forge]).
+  apply user_sent_credential in H_send. assumption.
+  apply user_forged_credential in H_forge. assumption.
+Qed.
+
+Lemma nextvote_val_credentials_checked
       g0 trace (H_path: path gtransition g0 trace)
       r0 (H_start: state_before_round r0 g0):
   forall ix g, onth trace ix = Some g ->
-  forall uid u,
-    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
-  forall voter r p s,
-    voter \in u.(nextvotes_open) r p s ->
-    r0 <= r ->
-    exists d, msg_received uid d (Nextvote_Open, step_val s, r, p, voter) trace.
-Proof using.
-  clear -H_path H_start.
-  move => ix g H_g uid u H_u voter r p s H_voter H_r.
-  set P := upred uid (fun u => voter \in u.(nextvotes_open) r p s).
-  assert (~~P g0). {
-  move: H_start => [H_users _]. clear -H_users H_r.
-  subst P. unfold upred.
-  destruct (uid \in g0.(users)) eqn: H_in.
-  * move/(_ _ H_in) in H_users. rewrite in_fnd.
-    move: {g0 H_in}(g0.(users)[` H_in]) H_users => u H_users.
-    unfold user_before_round in H_users.
-    decompose record H_users.
-    by move: {H4 H_r}(H4 r p s H_r) => /nilP ->.
-  * by rewrite not_fnd // H_in.
-  }
-  assert (P g). {
-    unfold P, upred.
-    rewrite H_u. assumption.
-  }
-  have := path_gsteps_onth H_path H_g H H0.
-  clear -H_path.
-  move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
-  have H_gtrans := transition_from_path H_path H_step.
-  unfold msg_received, step_at.
-  suff: exists d ms, related_by (lbl_deliver uid d (Nextvote_Open, step_val s, r, p, voter) ms) g1 g2
-    by move => [d [ms H_rel]];exists d, n, ms, g1, g2;split;assumption.
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r -> forall v p s,
+      nextvoters_val_for v u r p s `<=` committee r p s.
+Proof.
+  clear -lambda big_lambda L tau_s tau_c tau_b tau_v valid correct_hash H_path H_start.
+  intros ix g H_onth uid u H_lookup r H_r v p s.
+  apply/fsubsetP => voter H_nextvoters.
 
-  move: H_gtrans H_pre H_post;unfold P, upred;clear;destruct 1;
-      try solve [move => /negP H_n /H_n []].
-  { (* tick *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  unfold tick_update, tick_users. cbn.
-  destruct (uid \in pre.(users)) eqn:H_uid.
-  * rewrite updf_update // in_fnd.
-    move: (pre.(users)[` H_uid]) => u.
-    by unfold user_advance_timer;destruct u, corrupt;simpl.
-  * apply negbT in H_uid.
-    rewrite [(updf _ _ _).[? uid]] not_fnd //.
-    change (?k \in ?f) with (k \in domf f).
-    rewrite -updf_domf. assumption.
-  }
-  { (* deliver *)
-    rewrite fnd_set.
-    destruct (uid == uid0) eqn:H_uids;[|by move/negP => H_n /H_n []].
-    move => /eqP in H_uids. subst uid0.
-    rewrite in_fnd.
-    destruct pending as [d pmsg]. unfold snd in H1.
+  have H_nextvote : (voter,v) \in u.(nextvotes_val) r p s
+    by move: H_nextvoters;clear;move => /imfsetP [] [xu xv] /= /andP [H_in /eqP] -> ->.
 
-    remember (pre.(users)[`key_ustate]) as ustate;
-    remember (ustate_post, sent) as result;
-    destruct H1 eqn:H_step;case: Heqresult => {ustate_post}<- {sent}<-;subst pre0;
-                                                try by move => /negP H_n H_p;exfalso.
-    *
-    unfold pre'.
-    move => H_n H_p.
-    assert ((r,p,s) = (r0,p0,s0)). {
-    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
-    } case: H2 => ? ? ?;subst r0 p0 s0.
-    assert (i = voter). {
-      symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= eq_refl in H_p.
+  apply onth_take_some in H_onth.
+  have [d [n [ms H_deliver]]] :=
+    received_nextvote_val
+      (path_prefix ix.+1 H_path) H_start
+      H_onth H_lookup
+      H_nextvote H_r.
 
-    match type of H_p with context C [if ?b then _ else _] => destruct b end.
-      by rewrite mem_undup in H_p.
-      by rewrite in_cons H_neq mem_undup in H_p.
-    } subst i.
-    by finish_case.
-    *
-    unfold pre'.
-    move => H_n H_p.
-    assert ((r,p,s) = (r0,p0,s0)). {
-    apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
-    } case: H2 => ? ? ?;subst r0 p0 s0.
-    assert (i = voter). {
-      symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= eq_refl in H_p.
+  set msg := (Nextvote_Val,next_val v s,r,p,voter).
+  assert
+    (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+    as H_source. {
+    rewrite /step_at /= in H_deliver;decompose record H_deliver.
+    assert (onth trace n = Some x)
+      by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
+    eapply pending_sent_or_forged;try eassumption.
+  }
 
-    match type of H_p with context C [if ?b then _ else _] => destruct b end.
-      by rewrite mem_undup in H_p.
-      by rewrite in_cons H_neq mem_undup in H_p.
-    } subst i.
-    by finish_case.
-    *
-    move => /negP H_n H_p; exfalso;contradict H_n.
-    move: (pre.(users)[`key_ustate]) H_p => u.
-    clear.
-    unfold deliver_nonvote_msg_result.
-    destruct msg as [[[[m v] mr] mp] mu].
-    simpl.
-    by destruct v;first destruct m.
-  }
-  { (* internal *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  rewrite in_fnd.
-  move: (pre.(users)[` ustate_key]) H0 => u H_step.
-  clear -H_step.
-  remember (ustate_post,sent) as result;destruct H_step;
-    case: Heqresult => <- _;by destruct pre.
-  }
-  { (* corrupt *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  by rewrite in_fnd.
-  }
+  destruct H_source as (send_ix & g1 & g2 & H_step & [H_send | H_forge]).
+  apply user_sent_credential in H_send. assumption.
+  apply user_forged_credential in H_forge. assumption.
 Qed.
 
 (* Priority:HIGH
@@ -5161,36 +5359,45 @@ Proof.
       clear H_g1_key_ustate H_g1.
       rename pre0 into u.
       rewrite -Hequ in H0 H_lt_0 H_lt H_round.
-      (* cbn -[step_le step_lt] in * |-. *)
 
-      exists s. exists (Some v).
-      exists
-        [fset x in
-                 map fst (filter (fun x => matchValue x v)
-                                 (pre'.(nextvotes_val) r1 p0 s))].
-      (* alternatively this may be simpler: *)
-      (* exists [fset x.1 | x in [seq x <- pre'.(nextvotes_val) r1 p0 s | matchValue x v]]. *)
-      split. admit.
-      split. move: H_quorum_size.
-      clear.
-      rewrite card_fseq.
-      admit.
-
-      intro voter.
-      rewrite in_fset.
-      change (in_mem voter _) with
-          (voter \in [seq i.1
-             | i <- local_state.nextvotes_val UserId Value PropRecord Vote pre' r1 p0 s
-             & matchValue i v]).
       destruct H_valid_rps as [H_r1 [H_p0 H_s]].
       case:H_rps => H_r' H_p.
       rewrite -H_p H_p0 -H_r' H_r1.
-      intro.
 
       have H_pref := path_prefix n.+2 H_path.
-      unfold received_next_vote.
-      (* apply received_nextvote_val *)
+      apply step_in_path_onth_post in H_step.
+      match goal with [_ : onth trace n.+1 = Some ?x |- _] => remember x as dr end.
+      assert (H_onth : onth (take n.+2 trace) n.+1 = Some dr).
+        subst pref.
+        destruct (n.+2 < size trace) eqn:H_n2.
+        apply onth_take_some in H_step. rewrite size_take in H_step.
+        rewrite H_n2 in H_step. by intuition; eassumption.
+        assert (size trace <= n.+2). by clear -H_n2; ppsimpl; lia.
+        rewrite take_oversize; assumption.
+
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      rewrite H_addsub.
+      assert (H_r0r1 : r0 <= r1).
+        by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
+
+      exists s, (Some v), (nextvoters_val_for v pre' r1 p0 s); repeat split.
+      eapply nextvote_val_credentials_checked with
+          (uid:=uid) (u:=(adv_period_val_result pre' v));
+        try (subst pref; eassumption);
+        try (subst dr; rewrite fnd_set; by rewrite eq_refl).
+
+      unfold nextvoters_val_for.
+      move: H_quorum_size.
+      clear.
       admit.
+
+      intros voter H_voter.
+      have H_nextvote : (voter,v) \in pre'.(nextvotes_val) r1 p0 s
+        by move: H_voter;move=>/imfsetP [] [xu xv] /= /andP [H_in /eqP];intros->->.
+
+      eapply received_nextvote_val with (u:=(adv_period_val_result pre' v));
+        try (subst pref; eassumption);
+        try (subst dr; rewrite fnd_set; by rewrite eq_refl).
     }
 
     exfalso.
