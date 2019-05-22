@@ -5226,10 +5226,11 @@ Definition period_advance_at n path uid r p g1 g2 : Prop :=
 Lemma set_nil : forall (T : finType), [set x in [::]] = @set0 T.
 Proof. by move => T. Qed.
 
-Lemma finset_size : forall (T : finType) (s: seq T), #|[set x in s]| = size (undup s).
+Lemma finseq_size : forall (T : finType) (s: seq T), #|s| = size (undup s).
 Proof.
-move=> T.
-elim => //=; first by rewrite set_nil cards0.
+move=> T s.
+rewrite -cardsE.
+elim: s => //=; first by rewrite set_nil cards0.
 move => x s IH.
 rewrite set_cons /=.
 case: ifP => //=.
