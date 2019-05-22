@@ -5040,7 +5040,7 @@ Proof.
   set msg := (Nextvote_Open,step_val s,r,p,voter).
   assert
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
-                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
     rewrite /step_at /= in H_deliver;decompose record H_deliver.
     assert (onth trace n = Some x)
@@ -5078,7 +5078,7 @@ Proof.
   set msg := (Nextvote_Val,next_val v s,r,p,voter).
   assert
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
-                           /\ (user_sent voter msg g1 g2 \/ user_forged msg uid g1 g2))
+                           /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
     rewrite /step_at /= in H_deliver;decompose record H_deliver.
     assert (onth trace n = Some x)
