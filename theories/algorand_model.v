@@ -261,6 +261,9 @@ Variable committee_cred : credType -> Prop.
 Definition comm_cred_step uid r p s : Prop :=
   committee_cred (credential uid r p s) .
 
+Hypothesis credentials_valid_period:
+  forall uid r p s, comm_cred_step uid r p s -> 1 <= p.
+
 (* The global state *)
 (* Note that the global state structure and supporting functions and notations
    are all defined in global_state.v
@@ -3334,6 +3337,21 @@ rewrite -!ustate_after_iff_step_le.
 apply step_le_trans.
 Qed.
 
+Lemma gtrans_preserves_users: forall gs1 gs2,
+  gs1 ~~> gs2 -> domf gs1.(users) = domf gs2.(users).
+Proof using.
+move => gs1 gs2.
+elim => //.
+- move => increment pre Htick.
+  by rewrite -tick_users_domf.
+- move => pre uid msg_key pending Hpending key_ustate ustate_post sent Hcorrupt Huser /=.
+  by rewrite mem_fset1U //.
+- move => pre uid ustate_key Hcorrupt ustate_post sent Huser /=.
+  by rewrite mem_fset1U //.
+- move => pre uid ustate_key Hcorrupt /=.
+  by rewrite mem_fset1U //.
+Qed.
+
 Lemma gtrans_domf_users: forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
 Proof using.
@@ -4704,17 +4722,19 @@ Proof using quorums_s_honest_overlap.
   }
 Qed.
 
-(* L5.0 A node enters period p > 0 only if it received t_H next-votes for
-   the same value from some step s of period p-1 *)
-Definition period_advance_at n path uid r p g1 g2 : Prop :=
-  step_in_path_at g1 g2 n path /\
-  {ukey_1: uid \in g1.(users) &
-  {ukey_2: uid \in g2.(users) &
-  let ustate1 := g1.(users).[ukey_1] in
-  let ustate2 := g2.(users).[ukey_2] in
+Definition period_advances uid r p (users1 users2: {fmap UserId -> UState}) : Prop :=
+  {ukey_1: uid \in users1 &
+  {ukey_2: uid \in users2 &
+  let ustate1 := users1.[ukey_1] in
+  let ustate2 := users2.[ukey_2] in
   ustate1.(round) = ustate2.(round)
   /\ step_lt (step_of_ustate ustate1) (r,p,0)
   /\ step_of_ustate ustate2 = (r,p,1)}}.
+
+(* L5.0 A node enters period p > 0 only if it received t_H next-votes for
+   the same value from some step s of period p-1 *)
+Definition period_advance_at n path uid r p g1 g2 : Prop :=
+  step_in_path_at g1 g2 n path /\ period_advances uid r p (g1.(users)) (g2.(users)).
 
 (* some collection of votes recorded in nv_open/val field *)
 (* where certs check out and tau_b many of them *)
@@ -5449,12 +5469,135 @@ Definition reached_round uid r p: pred GState :=
     | Some u => (r < u.(round)) || (r == u.(round)) && (p <= u.(period))
     end.
 
-Lemma honest_in_period_entered g0 trace (H_path : path gtransition g0 trace):
-  forall r p uid, honest_in_period r p uid trace ->
-  state_before_round r g0 ->
+Lemma honest_in_period_entered
+      g0 trace (H_path : path gtransition g0 trace)
+      r (H_start: state_before_round r g0):
+  forall p uid, honest_in_period r p uid trace ->
+  1 < p ->
   exists n g1 g2, period_advance_at n trace uid r p g1 g2.
 Proof using.
-Admitted.
+  clear -H_path H_start.
+  move => p uid [ix H_in_period] H_p_gt.
+  destruct (onth trace ix) as [g|] eqn:H_g;[|exfalso;assumption].
+  destruct (g.(users).[?uid]) as [u|] eqn:H_u;[|exfalso;assumption].
+  move: H_in_period => [H_honest [H_r H_p]].
+  set P := upred uid (fun u => (u.(round) == r) && (u.(period) == p)).
+  have H_Pg : P g by rewrite /P /upred H_u H_r H_p !eq_refl.
+  have H_NPg0  : ~~ P g0.
+  {
+  rewrite /P /upred.
+  destruct (g0.(users).[?uid]) as [u0|] eqn:H_u0;[|exact].
+  apply/negP => /andP [/eqP H_r0 /eqP H_p0].
+  move: H_start => [H_users_before _].
+  unfold users_before_round in H_users_before.
+  have H_in_u0: uid \in g0.(users) by rewrite -fndSome H_u0.
+  specialize (H_users_before _ H_in_u0).
+  rewrite in_fnd in H_u0. case: H_u0 H_users_before => -> [H_u0_step _].
+  case: H_u0_step => [| [] _ [] _ [] H_p' _];[by rewrite H_r0 ltnn|].
+  by move: H_p_gt;rewrite -H_p0 H_p' ltnn.
+  }
+  have {H_Pg H_NPg0}[n [g1 [g2 [H_step H_change]]]]
+    := path_gsteps_onth H_path H_g H_NPg0 H_Pg.
+  exists n,g1,g2;split;[assumption|].
+
+  apply (transition_from_path H_path) in H_step.
+  have H_in2 : uid \in g2.(users)
+    by move: H_change => [] _;unfold P, upred;
+       destruct g2.(users).[?uid] eqn:H_u2 => H_P2;[rewrite -fndSome H_u2|].
+  have H_in1 : uid \in g1.(users)
+    by rewrite /in_mem /= /pred_of_finmap (gtrans_preserves_users H_step).
+  clear -H_step H_change H_in1 H_in2 H_p_gt.
+  destruct (H_step);try by exfalso;move: H_change => [] /negP.
+  * (* tick *)
+    exfalso. move: H_change => [] /negP.
+    autounfold with gtransition_unfold;unfold P, upred.
+    rewrite updf_update // (in_fnd H_in1).
+    move:(pre.(users)[`H_in1]) => u;destruct u,corrupt;exact.
+  * (* deliver *)
+    {
+    move: H_change => [] /negP.
+    rewrite {1}/delivery_result /P /upred fnd_set.
+    destruct (uid == uid0) eqn:H_eq;
+      [move/eqP in H_eq;subst uid0
+      |by move => A {A}/A].
+    rewrite (in_fnd key_ustate).
+    remember (pre.(users)[` key_ustate] : UState) as u.
+    move => H_pre /andP [/eqP H_r /eqP H_p].
+    exists key_ustate, H_in2.
+    rewrite <- Hequ.
+    intros ustate1 ustate2; subst ustate1 ustate2.
+    rewrite getf_set.
+
+    assert (step_lt (step_of_ustate u) (r,p,0)) as H_step_lt.
+    {
+      have {H_step}H_after : ustate_after u ustate_post by
+        apply (gtr_rps_non_decreasing H_step (uid:=uid));
+      [rewrite Hequ;apply in_fnd
+      |rewrite fnd_set eq_refl].
+      apply ustate_after_iff_step_le in H_after.
+      case:H_after =>[|[a b]];[by rewrite H_r;left|].
+      right;split;[by rewrite a|left].
+      case:b=>[|[b _]];[by rewrite H_p|exfalso].
+      apply H_pre;rewrite a b H_r H_p !eq_refl;done.
+    }
+    suff: u.(round)=ustate_post.(round) /\ step_of_ustate ustate_post = (r,p,1) by tauto.
+    remember (ustate_post,sent) as result;destruct H1;
+      case:Heqresult => ? ?;subst ustate_post sent;
+        try (destruct H_pre;by rewrite H_r H_p !eq_refl).
+    + (* adv_period_open_result *)
+      by move: H_p H_r;simpl => -> ->;clear;split;reflexivity.
+    + (* adv_period_val_result *)
+      by move: H_p H_r;simpl => -> ->;clear;split;reflexivity.
+    + (* certify result *)
+      by rewrite -H_p ltnn in H_p_gt.
+    + {
+        destruct H_pre;rewrite -H_r -H_p /deliver_nonvote_msg_result.
+        clear.
+        by repeat match goal with
+                |[|- context X [match ?x with _ => _ end]] => destruct x
+               end;rewrite !eq_refl.
+      }
+    }
+  * (* internal *)
+    {
+      move: H_change => [] /negP.
+      rewrite {1}/step_result /P /upred fnd_set.
+      destruct (uid == uid0) eqn:H_eq;
+        [move/eqP in H_eq;subst uid0
+        |by move => A {A}/A].
+      rewrite (in_fnd ustate_key).
+      remember (pre.(users)[` ustate_key] : UState) as u.
+      move => H_pre /andP [/eqP H_r /eqP H_p].
+      exists ustate_key, H_in2.
+      rewrite <- Hequ.
+      intros ustate1 ustate2; subst ustate1 ustate2.
+      rewrite getf_set.
+
+      assert (step_lt (step_of_ustate u) (r,p,0)) as H_step_lt.
+      {
+        have {H_step}H_after : ustate_after u ustate_post by
+        apply (gtr_rps_non_decreasing H_step (uid:=uid));
+          [rewrite Hequ;apply in_fnd
+          |rewrite fnd_set eq_refl].
+        apply ustate_after_iff_step_le in H_after.
+        case:H_after =>[|[a b]];[by rewrite H_r;left|].
+        right;split;[by rewrite a|left].
+        case:b=>[|[b _]];[by rewrite H_p|exfalso].
+        apply H_pre;rewrite a b H_r H_p !eq_refl;done.
+      }
+      suff: u.(round)=ustate_post.(round) /\ step_of_ustate ustate_post = (r,p,1) by tauto.
+      remember (ustate_post,sent) as result;destruct H0;
+      case:Heqresult => ? ?;subst ustate_post sent;
+           try (destruct H_pre;by rewrite H_r H_p !eq_refl).
+    }
+  * (* corrupt *)
+    exfalso. move: H_change => [] /negP.
+    unfold corrupt_user_result, P, upred.
+    rewrite fnd_set.
+    destruct (uid==uid0) eqn:H_eq;[|by apply].
+    move /eqP in H_eq;subst uid0.
+    by rewrite (in_fnd ustate_key).
+Qed.
 
 Theorem safety: forall g0 trace (r:nat),
     state_before_round r g0 ->
@@ -5481,6 +5624,15 @@ Proof.
   assert (p1 < p2) as Hlt by (rewrite ltn_neqAle;apply /andP;split;assumption).
   clear H_le i.
   assert (0 < p2) as Hpos by (apply leq_trans with p1.+1;[rewrite ltnS|];done).
+  assert (1 <= p1) as H_p2.
+  {
+    move: H_cert1 => [quorum_p1 [H_creds [H_size _]]].
+    move: (quorum_c_has_honest trace H_creds H_size) => [voter1 [H_in _]].
+    move: H_creds => /fsubsetP /(_ _ H_in) /imfsetP [x H H_x].
+    move: H_x H => {x}<- /asboolP.
+    apply credentials_valid_period.
+  }
+  move: {H_p2}(leq_ltn_trans H_p2 Hlt) => H_p2.
 
   destruct (nosimpl H_cert2) as (q2 & H_q2 & H_size2 & H_cert2_voted).
   destruct (quorum_c_has_honest trace H_q2 H_size2)
@@ -5495,7 +5647,7 @@ Proof.
   specialize (H_entry honest_voter).
 
   pose proof (@excl_enter_limits_cert_vote _ _ H_path r p2 v1 Hpos) as H_recert.
-  pose proof (honest_in_period_entered H_path H H_start) as H_advance.
+  pose proof (honest_in_period_entered H_path H_start H H_p2) as H_advance.
 
   symmetry.
   eapply H_recert;try eassumption.
