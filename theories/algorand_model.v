@@ -1778,34 +1778,11 @@ Lemma internal_not_noop :
     s # pre ~> (post, l) ->
     pre <> post.
 Proof.
-move => s pre post l Hst.
-inversion Hst; subst; inversion H2; subst; intuition.
-- by inversion H5; subst; intuition; rewrite H1 /= in H10.
-- by inversion H5; subst; intuition; rewrite H1 /= in H10.
-- by inversion H5; intuition; rewrite H1 /= in H9.
-- by inversion H5; subst; intuition; rewrite H1 /= in H10.
-- by inversion H5; intuition; rewrite H1 /= in H13.
-- by inversion H5; intuition; rewrite H1 /= in H12.
-- by inversion H5; subst; intuition; rewrite H1 in H8.
-- by inversion H; subst; intuition; rewrite H1 in H12.
-- by inversion H; subst; intuition; rewrite H1 in H9.
-- by inversion H5; subst; intuition;rewrite H1 /= in H12; ppsimpl; lia.
-- by inversion H5; subst; intuition; rewrite H1 /= in H11; ppsimpl; lia.
-- by inversion H5; subst; intuition; inversion H8; subst; intuition; rewrite H1 /= in H15; ppsimpl; lia.
-- by inversion H5; subst; intuition; rewrite H1 /= in H8; ppsimpl; lia.
-- by inversion H5; intuition; rewrite H1 /= in H10.
-Qed.
-
-Lemma internal_uniq :
-  forall s pre post l,
-    s # pre ~> (post, l) ->
-    uniq l.
-Proof.
-move => s pre post l Hs.
-inversion Hs; subst => //=.
-apply/andP; split => //.
-rewrite inE.
-by apply/eqP.
+  move => s pre post l Hst;inversion Hst;subst;
+  autounfold with utransition_unfold in H2;decompose record H2;clear H2;
+    match goal with [H : valid_rps _ _ _ _ |- _] =>
+      destruct H as [_ [_ H_s]];contradict H_s;rewrite H_s;simpl;clear
+    end;try discriminate; by rewrite addn1 => /esym /n_Sn.
 Qed.
 
 (* Priority:MED This lemma is necessary for technical reasons to rule out
@@ -4024,18 +4001,17 @@ Proof using delays_order.
   simpl in H_msg; destruct H_msg; try contradiction.
   inversion H0;subst;clear H0.
   destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
-  remember (ustate_post,ms) as ustep_out in H_step.
-  assert ((global_state.users UserId UState [choiceType of Msg] pre) [` key_user] = ustate).
-  rewrite in_fnd in H_ustate; inversion H_ustate; trivial.
+  assert (pre.(users)[` key_user] = ustate)
+    by (rewrite in_fnd in H_ustate;injection H_ustate;trivial).
+  rewrite -> H in * |- *.
+  inversion H_step;clear H_step;move: H;subst;move => H;
+  move: H_msg => /Iter.In_mem /=;intuition;try discriminate.
 
-  inversion H_step; simpl in * |- *; rewrite Hequstep_out in H3;injection H3; clear H3; intros <- <-; move/Iter.In_mem in H_msg; simpl in H_msg; try (destruct H_msg as [H_msg | H_msg]; contradiction);
-  try (destruct H_msg as [H_msg | H_msg]; inversion H_msg;subst;clear H_msg; try contradiction); try (inversion H3;contradiction); try contradiction.
-  unfold softvote_new_ok in H0;decompose record H0;clear H0.
-  destruct H2 as [HR [HP HS]]. subst. intuition.
-  unfold softvote_repr_ok in H0;decompose record H0;clear H0.
-  destruct H2 as [HR [HP HS]]. subst;intuition.
+  unfold softvote_new_ok in H3;decompose record H3;clear H3.
+  move: H6 => [-> [-> ->]]. congruence.
+  unfold softvote_repr_ok in H3;decompose record H3;clear H3.
+  move: H6 => [-> [-> ->]]. congruence.
 Qed.
-
 
 (* Priority:HIGH
    Proof should be very similar to no_two_certvotes_in_p *)
@@ -5429,7 +5405,7 @@ Proof.
 
     subst pre0.
     inversion H_rps as [H_r0].
-    simpl in H_lt. rewrite H_r0 in H_lt.
+    cbn -[step_lt addn] in H_lt. rewrite H_r0 in H_lt.
     destruct H1 as [H_adv _]. unfold advancing_rp in H_adv.
     rewrite H_round in H_adv. clear -H_adv.
     by simpl in H_adv; ppsimpl; lia.
@@ -5438,8 +5414,9 @@ Proof.
     unfold deliver_nonvote_msg_result in *.
     destruct pre.
     clear -H_rps H_lt.
-    destruct msg.1.1.1.2; destruct msg.1.1.1.1; simpl in H_rps;
-      rewrite H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
+    cbn -[step_lt] in * |- *.
+    destruct msg.1.1.1.2; destruct msg.1.1.1.1;cbn -[step_lt] in H_lt;
+    case:H_rps H_lt => -> -> ->;apply step_lt_irrefl.
 
     exfalso. rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; contradiction.
   }
@@ -5474,9 +5451,9 @@ Proof.
     clear -H4 H_s. by ppsimpl; lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
-    rewrite H_g1_key_ustate in H_lt_0.
-    subst. simpl in H_lt_0. clear -H_lt_0.
-    by ppsimpl; lia.
+    move:H_lt_0;rewrite H_g1_key_ustate -Hequ /step_of_ustate H2 H3.
+    clear;move: (pre0.(step)) => s /step_ltP /=.
+    by rewrite !eq_refl !ltnn ltn0.
 
     subst. simpl in H_lt.
     simpl in H_rps.
