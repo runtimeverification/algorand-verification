@@ -1742,6 +1742,22 @@ Proof.
     end;try discriminate; by rewrite addn1 => /esym /n_Sn.
 Qed.
 
+(* used in transition_label_unique *)
+Lemma deliver_deliver_lbl_unique :
+  forall g uid uid' upost upost' r r' m m' l l'
+    (key_state : uid \in g.(users)) (key_mbox : uid \in g.(msg_in_transit))
+    (key_state' : uid' \in g.(users)) (key_mbox' : uid' \in g.(msg_in_transit)),
+    ~ g.(users).[key_state].(corrupt) ->
+    (r, m) \in g.(msg_in_transit).[key_mbox] ->
+    uid # g.(users).[key_state] ; m ~> (upost, l) ->
+    ~ g.(users).[key_state'].(corrupt) ->
+    (r', m') \in g.(msg_in_transit).[key_mbox'] ->
+    uid' # g.(users).[key_state'] ; m' ~> (upost', l') ->
+    delivery_result g uid key_mbox (r, m) upost l = delivery_result g uid' key_mbox' (r', m') upost' l' ->
+    uid = uid' /\ r = r' /\ m = m' /\ l = l'.
+Proof.
+Admitted.
+
 (* Priority:MED This lemma is necessary for technical reasons to rule out
    the possibility that a step that counts as one user sending a message
    can't also count as a send from a different user or different message *)
@@ -1788,7 +1804,10 @@ Proof using.
       move: g1.(now) => now.
       by destruct p => /=; lra.
     * (* deliver/deliver *)
-      by admit.
+      move => [key_ustate' [ustate_post' [H_step' [Hcorrupt' [key_mailbox' [Hmsg' Heq]]]]]].
+      eapply deliver_deliver_lbl_unique in Heq; eauto.
+      move: Heq => [Hs [Hr [Hm Hl]]].
+      by rewrite Hs Hr Hm Hl.      
     * (* deliver/internal *)
       by admit.
     * (* deliver/exit *)
