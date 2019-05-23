@@ -1758,6 +1758,21 @@ Lemma deliver_deliver_lbl_unique :
 Proof.
 Admitted.
 
+(* used in transition_label_unique *)
+Lemma deliver_internal_False :
+  forall g uid uid' upost upost' r m l l'
+    (key_state : uid \in g.(users)) (key_mbox : uid \in g.(msg_in_transit))
+    (key_state' : uid' \in g.(users)),
+    ~ g.(users).[key_state].(corrupt) ->
+    (r, m) \in g.(msg_in_transit).[key_mbox] ->
+    uid # g.(users).[key_state] ; m ~> (upost, l) ->
+    ~ g.(users).[key_state'].(corrupt) ->
+    uid' # g.(users).[key_state'] ~> (upost', l') ->
+    delivery_result g uid key_mbox (r, m) upost l = step_result g uid' upost' l' ->
+    False.
+Proof.
+Admitted.
+
 (* Priority:MED This lemma is necessary for technical reasons to rule out
    the possibility that a step that counts as one user sending a message
    can't also count as a send from a different user or different message *)
@@ -1809,7 +1824,8 @@ Proof using.
       move: Heq => [Hs [Hr [Hm Hl]]].
       by rewrite Hs Hr Hm Hl.      
     * (* deliver/internal *)
-      by admit.
+      move => [key_user [ustate_post' [Hcorrupt' [H_step' Heq]]]].
+      by eapply deliver_internal_False in Heq; eauto.
     * (* deliver/exit *)
       move => [H_partitioned /(f_equal network_partition) /= Hpart].
       contradict Hpart.
@@ -1877,7 +1893,9 @@ Proof using.
       move: (global_state.now UserId UState [choiceType of Msg] g1) => now.
       by destruct p => /=; lra.
     * (* internal/deliver *)
-      by admit.
+      move => [key_ustate' [upost' [H_step' [H_corrupt' [key_mbox [Hmsg Heq]]]]]].
+      apply sym_eq in Heq.
+      by eapply deliver_internal_False in Heq; eauto.
     * (* internal/internal *)
       move => [key_user [ustate_post0 [Hcorrupt0 [Htr0 Heq]]]].
       case Hs: (s == s0); last first.
