@@ -2782,6 +2782,22 @@ Definition user_forged (msg:Msg) (g1 g2: GState) :=
   let: (mty,v,r,p,sender) := msg in
   related_by (lbl_forge_msg sender r p mty v) g1 g2.
 
+Lemma broadcasts_prop
+  uid d (msg:Msg) (l:seq Msg)
+  time (targets : {fset UserId}) (mailboxes' mailboxes : {fmap UserId -> {mset R * Msg}}):
+  (odflt mset0 mailboxes'.[? uid] `<=` odflt mset0 mailboxes.[? uid])%mset ->
+  match (send_broadcasts time targets mailboxes' l).[? uid] with
+  | Some msg_mset => (d, msg) \in msg_mset
+  | None => false
+  end ->
+  ~~
+  match mailboxes.[? uid] with
+  | Some msg_mset => (d, msg) \in msg_mset
+  | None => false
+  end -> msg \in l.
+Proof using.
+Admitted.
+
 Lemma pending_sent_or_forged
       g0 trace (H_path: path gtransition g0 trace)
       r (H_start: state_before_round r g0):
@@ -2810,9 +2826,17 @@ Proof using.
     | Some msg_mset => (d, msg) \in msg_mset
     | None => false
     end.
-      (* msg has round >= r, while g0 comes before r, and so msg \notin mmailbox0 *)
+  {
+  clear -H_start H_round.
+  move: H_start => [_ [H_msgs _]].
+  unfold messages_before_round in H_msgs.
+  move Heq: (g0.(msg_in_transit).[?uid]) => [mb| //].
+  apply/contraTN: H_round => H_in.
+  rewrite -ltnNge. apply/H_msgs/codomfP: d msg H_in.
+  by exists uid.
+  }
+  (* msg has round >= r, while g0 comes before r, and so msg \notin mmailbox0 *)
       (* if the user does not have a mailbox, then it's already true*)
-    admit.
   rewrite (in_fnd key_msg) in H.
   move:{H H_msg_g0 H_msg}(H H_msg_g0 H_msg).
   clear g_pending pending_ix H_g key_msg.
@@ -2825,23 +2849,24 @@ Proof using.
     (* deliver *)
     exists n,g1,g2;split;[assumption|].
     left. unfold user_sent.
-    suff: s = msg_sender msg /\ msg \in l.
-    move => [<- H_l].
-    exists l;split;[|left;exists r0, m];assumption.
+    suff: s = msg_sender msg /\ msg \in l
+      by move => [<- H_l];exists l;split;[|left;exists r0, m];assumption.
+
     simpl in H_rel;decompose record H_rel;clear H_rel.
-    move: H_post H_pre;subst g2. rewrite /=.
-      (* reason on send_broadcasts *)
-    admit.
+    suff: msg \in l by split;[apply (utransition_msg_sender_good H)|];assumption.
+    move: H_post H_pre;subst g2;apply broadcasts_prop;
+    by rewrite fnd_set;case:ifP => [/eqP ->|_];
+                                     [rewrite in_fnd;exact:msubD1set|exact:msubset_refl].
     (* internal *)
     exists n,g1,g2;split;[assumption|].
     left. unfold user_sent.
-    suff: s = msg_sender msg /\ msg \in l.
-    move => [<- H_l].
-    exists l;split;[|right];assumption.
+    suff: s = msg_sender msg /\ msg \in l by
+        move => [<- H_l];exists l;split;[|right];assumption.
+
     simpl in H_rel;decompose record H_rel;clear H_rel.
-    move: H_post H_pre;subst g2. rewrite /=.
-    (* reason on send_broadcasts *)
-    admit.
+    suff: msg \in l by split;[apply (utransition_internal_sender_good H0)|];assumption.
+    move: H_post H_pre;subst g2;apply broadcasts_prop;
+    by apply msubset_refl.
     (* exit partition *)
     exfalso. apply /negP: H_post. simpl in H_rel;decompose record H_rel;clear H_rel. subst g2.
     unfold recover_from_partitioned, reset_msg_delays.
@@ -2865,14 +2890,19 @@ Proof using.
     suff ->: hist_msg = msg.
     move/(_ H_round) => [send_ix [g3 [g4]]];clear => H. exists send_ix, g3, g4.
     tauto.
-    clear -H_pre H_post H_g2.
-    admit.
+    subst g2.
+    symmetry; apply /eqP. rewrite -mem_seq1.
+    apply/broadcasts_prop: H_post H_pre.
+    apply msubset_refl.
     (* forge a message *)
     exists n,g1,g2;split;[assumption|].
     right.
     unfold user_forged.
     suff ->: msg = (m,e,n0,n1,s) by assumption.
-    admit.
+    simpl in H_rel;decompose record H_rel;clear H_rel;subst g2.
+    apply/eqP;rewrite -mem_seq1.
+    apply/broadcasts_prop: H_post H_pre.
+    apply msubset_refl.
 Admitted.
 
 (* A message from an honest user was actually sent in the trace *)
