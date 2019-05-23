@@ -1090,70 +1090,46 @@ Definition msg_deadline (msg : Msg) now : R :=
   | _ => (now + lambda)%R
   end.
 
-Definition merge_msg_deadline (now : R) (msg : Msg) (_ : UserId) (v : {mset R * Msg}) : {mset R * Msg} :=
-  (msg_deadline msg now, msg) +` v.
+Definition merge_msgs_deadline (now : R) (msgs : seq Msg) (v : {mset R * Msg}) : {mset R * Msg} :=
+  foldr (fun msg v => (msg_deadline msg now, msg) +` v) v msgs.
 
-Lemma merge_msgs_notin : forall d msg1 now msg2 uid (msgs : MsgPool) (h : uid \in msgs),
-  (d, msg1) \notin msgs.[h] ->
-  (d, msg1) \in merge_msg_deadline now msg2 uid msgs.[h] ->
-  msg1 = msg2.
+Lemma in_merge_msgs : forall d (msg:Msg) now msgs mailbox,
+    (d,msg) \in merge_msgs_deadline now msgs mailbox ->
+    msg \in msgs \/ (d,msg) \in mailbox.
 Proof.
-  intros. unfold merge_msg_deadline in H0.
-  rewrite in_msetD in H0.
-  move/orP in H0.
-  destruct H0.
-  rewrite in_mset1 in H0.
-  move/eqP in H0.
-  inversion H0. trivial.
-  move/negP in H.
-  contradiction.
+  move => d msg now msgs mb.
+  induction msgs;simpl.
+  by right.
+  rewrite in_cons in_mset1D => /orP [/eqP [_ ->]| {IHmsgs}/IHmsgs].
+    by left;rewrite eq_refl.
+    by move => [->|->];[left;rewrite orbT|right].
 Qed.
-
-Definition send_broadcast (now : R) (targets:{fset UserId}) (prev_msgs:MsgPool) (msg: Msg) : MsgPool :=
-  updf prev_msgs targets (merge_msg_deadline now msg).
 
 Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
-  foldl (send_broadcast now targets) prev_msgs msgs.
+  updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
 
-(* Priority:LOW. may be a technical lemma for reasoning about broadcasts *)
-Lemma send_broadcasts_domf (unused:Unused) : forall deadline targets prev_msgs msgs uids,
-    domf prev_msgs `<=` uids ->
-    targets `<=` uids ->
-    domf (send_broadcasts deadline targets prev_msgs msgs) `<=` uids.
-Proof.
-  unused.
-Qed.
-
-Lemma send_broadcast_in : forall (msgpool : MsgPool) now uid msg targets
+Lemma send_broadcasts_in : forall (msgpool : MsgPool) now uid msgs targets
                                  (h : uid \in msgpool) (h' : uid \in targets),
-  (send_broadcast now targets msgpool msg).[? uid] = Some (merge_msg_deadline now msg uid msgpool.[h]).
+  (send_broadcasts now targets msgpool msgs).[? uid] = Some (merge_msgs_deadline now msgs msgpool.[h]).
 Proof using.
-  move => msgpool now uid msg targets h h'.
-  rewrite updf_update. trivial.
-  assumption.
+  by move => *;rewrite updf_update.
 Qed.
 
-Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msg targets
+Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msgs targets
                                     (h : uid \notin domf msgpool),
-  (send_broadcast now targets msgpool msg).[? uid] = None.
+  (send_broadcasts now targets msgpool msgs).[? uid] = None.
 Proof using.
-  move => msgpool now uid msg targets h.
-  apply not_fnd.
-  change (uid \notin domf (send_broadcast now targets msgpool msg)).
-  unfold send_broadcast.
+  move => *;apply not_fnd.
+  change (?k \notin ?f) with (k \notin domf f).
   by rewrite -updf_domf.
 Qed.
 
-Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msg targets
+Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs targets
                                             (h : uid \in msgpool) (h' : uid \notin targets),
-  (send_broadcast now targets msgpool msg).[? uid] = msgpool.[? uid].
+  (send_broadcasts now targets msgpool msgs).[? uid] = msgpool.[? uid].
 Proof using.
   move => msgpool now uid msg targets h h'.
-  unfold send_broadcast.
-  rewrite updf_update'.
-  rewrite in_fnd.
-  trivial.
-  trivial.
+  by rewrite updf_update' // in_fnd.
 Qed.
 
 Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
@@ -1742,9 +1718,16 @@ Proof using.
     exists (lbl_forge_msg sender r p mtype mval);finish_case.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;clear Hrel;subst g2;
-      [econstructor..|eapply step_forge_msg];eassumption.
-    (* trying econstructor or eapply step_replay_msg on the
-       last case instead of eapply step_forge_msg runs forever or for a very long time *)
+      [eapply step_tick
+      |eapply step_deliver_msg
+      |eapply step_internal
+      |eapply step_exit_partition
+      |eapply step_enter_partition
+      |eapply step_corrupt_user
+      |eapply step_replay_msg
+      |eapply step_forge_msg];eassumption.
+    (* econstructor takes a very long time being confused between
+       different steps that build the result with send_broadcasts *)
 Qed.
 
 Lemma internal_not_noop :
@@ -1800,26 +1783,22 @@ Proof using.
     * (* deliver/tick *)
       move => [Htick Hres].
       move: Hres.
-      case => Hpos.
+      move/(f_equal now) => /= Hpos.
       contradict Hpos.
-      move: (global_state.now UserId UState [choiceType of Msg] g1) => now.
+      move: g1.(now) => now.
       by destruct p => /=; lra.
     * (* deliver/deliver *)
       by admit.
     * (* deliver/internal *)
       by admit.
     * (* deliver/exit *)
-      move => [H_partitioned H_g2].
-      case: H_g2 => Hpart.
+      move => [H_partitioned /(f_equal network_partition) /= Hpart].
       contradict Hpart.
-      set gbn := global_state.network_partition _ _ _ _.
-      by move: (gbn); case.
+      by case: (global_state.network_partition _ _ _ _).
     * (* deliver/enter *)
-      move => [H_partitioned H_g2].
-      case: H_g2 => Hpart.
+      move => [H_partitioned /(f_equal network_partition) /= Hpart].
       contradict Hpart.
-      set gbn := global_state.network_partition _ _ _ _.
-      by move: (gbn); case.
+      by case:(global_state.network_partition _ _ _ _).
     * (* deliver/corrupt *)
       case Hs: (s == s0).
         move/eqP: Hs =><-.
@@ -1830,7 +1809,7 @@ Proof using.
         set ms := _.[s <- _].
         set us2 := _.[s <- _].
         move => Hstep'.
-        have Hus: us1 = us2 by move: Hstep'; move: (us1) (us2) => us3 us4; case.
+        have Hus: us1 = us2 := f_equal users Hstep'.
         have Hss: us1.[? s] = us2.[? s] by rewrite Hus.
         move: Hss.
         rewrite 2!fnd_set.
@@ -1907,7 +1886,7 @@ Proof using.
       set bs1 := send_broadcasts _ _ _ _.
       set bs2 := send_broadcasts _ _ _ _.
       move => Heq.
-      have Hbs: bs1 = bs2 by case: Heq.
+      have Hbs: bs1 = bs2 by move/(f_equal msg_in_transit):Heq.
       clear Heq.
       suff Hsuff: l = l0 by rewrite Hsuff.
       move: Hbs.
@@ -2406,174 +2385,6 @@ Proof using.
   symmetry. rewrite ltnNge. apply/negP. move/drop_oversize. rewrite H_eq. discriminate.
 Admitted.
 
-(* Priority:MED A structural lemma saying that if a message appears in a mailbox
-   during a step and the sender is honest at the time then
-   this step counts as "user_sent" for that message.
-
-   However, this is invalidated by replay. Probably need to
-   make the overall conclusion say that there was a send by the
-   user at an earlier point in the trace.
- *)
-(* This proof will need to be adjusted once the adversary can
-   replay messages *)
-Lemma send_step_sent (unused:Unused) : forall (g0 g1:GState) (target:UserId) msg,
-    match g0.(msg_in_transit).[? target] with
-    | Some mailbox => forall d, (d,msg) \notin mailbox
-    | None => True
-    end ->
-    match g1.(msg_in_transit).[? target] with
-    | Some mailbox => exists d, (d,msg) \in mailbox
-    | None => False
-    end ->
-    GTransition g0 g1 ->
-    let (_,sender) := msg in
-    user_honest sender g0 ->
-    user_sent sender msg g0 g1 \/ msg \in g0.(msg_history).
-Proof using.
-  intros g0 g1 target msg H_unsent_g0 H_sent_g1.
-  destruct 1;
-    try solve[
-              exfalso;
-    destruct pre;simpl in * |- *;
-    destruct (msg_in_transit.[? target]);[|assumption];
-    match goal with
-    | [H_sent : exists d, is_true ((d,?msg) \in ?m)
-       ,H_unsent : forall d, is_true ((d,?msg) \notin ?m) |- _] =>
-      destruct H_sent as [d H_sent];revert H_sent;apply /negP;by apply H_unsent
-    end].
-  * (* deliver step *)
-    assert (msg.2 = uid).
-     (* I think this fails because we have the wrong meaning
-        of the sender msg.2? *)
-     by admit_unused.
-    assert (msg \in sent).
-    (* we must have that an entry is found in H_sent_g1,
-       and by H_unsent_g0 and properties of send_broadcasts
-       we can show the message doesn't come from the g0 mailbox,
-       so it must be derived from sent.
-     *)
-      by admit_unused.
-
-    unfold is_user_corrupt_gstate.
-    rewrite (surjective_pairing msg).
-    rewrite <- surjective_pairing.
-    intro H_honest.
-
-    left.
-    unfold user_sent.
-    exists sent.
-    split;[assumption|].
-    left.
-    exists (pending.1). exists (pending.2).
-
-    rewrite H2 in H_honest |- *.
-    simpl.
-    rewrite <- surjective_pairing.
-
-    by repeat (esplit||eassumption).
-
-  * (* internal step *)
-    assert (msg \in sent). by admit_unused.
-    assert (msg.2 = uid). by admit_unused.
-    rewrite (surjective_pairing msg).
-    rewrite <- surjective_pairing.
-    intro H_honest.
-
-    left.
-    unfold user_sent.
-    exists sent.
-    split;[assumption|].
-    right.
-
-    rewrite H2 in H_honest |- *.
-    simpl.
-
-    by repeat (esplit||eassumption).
-
-  * (* recover partition *)
-    exfalso.
-    destruct pre. simpl in H_unsent_g0.
-    cbn -[in_mem mem] in H_sent_g1.
-    destruct (target \in msg_in_transit) eqn:H_target.
-  + rewrite reset_msg_delays_upd in H_sent_g1.
-    rewrite (in_fnd H_target) in H_unsent_g0.
-    destruct (H_sent_g1) as [d H_sent].
-    destruct (reset_user_msg_delays_rev H_sent) as [d0 [H_reset H_in]].
-    simpl in H_reset, H_in.
-    revert H_in.
-    apply /negP.
-    by apply H_unsent_g0.
-  + rewrite reset_msg_delays_notin in H_sent_g1.
-    assumption.
-    rewrite H_target.
-    reflexivity.
-    * (* corrupt user *)
-    exfalso.
-    destruct pre;simpl in * |- *.
-    destruct (target == uid) eqn:H_same.
-  + { assert (target = uid) by (apply /eqP;assumption).
-      subst uid;clear -H_sent_g1.
-      move: H_sent_g1; rewrite /drop_mailbox_of_user.
-      case: fndP; case: fndP => //.
-        move => Ht Hf [d Hd]; move: Hd.
-        by rewrite getf_set in_mset0.
-      move => Ht kf [d Hd].
-      by case/negP: Ht.
-    }
-  + revert H_sent_g1.
-    unfold drop_mailbox_of_user.
-    destruct (uid \in msg_in_transit) eqn:H_uid.
-    - rewrite (in_fnd H_uid).
-      rewrite fnd_set H_same.
-      match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
-        [case => x;apply /negP|];done.
-    - apply negbT in H_uid. rewrite (not_fnd H_uid).
-      match goal with | [ |- match ?A with _ => _ end -> False ] => destruct A end;
-        [case => x;apply /negP|];done.
-
-  * (* replay message *)
-    rewrite (surjective_pairing msg).
-    rewrite <- surjective_pairing.
-    intro H_honest.
-    right.
-    assert (msg = msg0).
-    (* replay msg0 must be msg *)
-    destruct pre. simpl in H_unsent_g0.
-    cbn -[in_mem mem] in H_sent_g1.
-    destruct (target \in msg_in_transit) eqn:H_target.
-    destruct (target \in [fset uid]) eqn:H_target2.
-  + rewrite send_broadcast_in in H_sent_g1.
-    rewrite (in_fnd H_target) in H_unsent_g0.
-    - destruct (H_sent_g1) as [d H_sent].
-      eapply merge_msgs_notin.
-      apply H_unsent_g0.
-      apply H_sent. apply H_target2.
-    - rewrite send_broadcast_notin_targets in H_sent_g1.
-      rewrite (in_fnd H_target) in H_sent_g1.
-      rewrite (in_fnd H_target) in H_unsent_g0.
-      destruct (H_sent_g1) as [d H_sent].
-      exfalso.
-      revert H_sent.
-      apply /negP.
-      apply H_unsent_g0.
-      apply H_target.
-      apply /negP.
-      rewrite H_target2.
-      trivial.
-  + rewrite send_broadcast_notin in H_sent_g1.
-    contradiction.
-    rewrite H_target.
-    reflexivity.
-    subst.
-    assumption.
-
-  * (* forge message result *)
-    rewrite {1}(surjective_pairing msg).
-    assert (msg.2 = sender) as H_msg_sender. by admit_unused.
-    (* see above about send_broadcasts reasoning *)
-    by rewrite /user_honest H_msg_sender in_fnd (proj1 H).
-Qed.
-
 Definition msg_step (msg:Msg) : nat * nat * nat :=
     let: (mtype,v,r_m,p_m,uid_m) := msg in
     (r_m,p_m,
@@ -2770,7 +2581,30 @@ Lemma broadcasts_prop
   | None => false
   end -> msg \in l.
 Proof using.
-Admitted.
+  clear.
+  move => H_sub H_pre H_post.
+  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
+    by case:fndP H_post;[|rewrite enum_mset0].
+
+  case:mailboxes'.[?uid]/fndP => H_mb';
+  [|by move:H_pre;rewrite not_fnd //;
+       apply (eq_ind (domf mailboxes') (fun s => uid \notin s) H_mb'), updf_domf].
+
+  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
+    by apply/contraNN:H_post => /hasP /= [x H_in H_x];
+       apply/hasP;exists x;[apply (msubset_subset H_sub);rewrite in_fnd|].
+
+  move: {mailboxes H_sub}H_pre.
+
+  case:(uid \in targets)/boolP=>H_tgt;
+    [|by apply contraTT;rewrite updf_update'].
+
+  rewrite updf_update {targets H_tgt}// => /hasP /=[[d msg'] H_in /eqP /=H_msg].
+  move:H_msg H_in=> {msg'}-> /in_merge_msgs [//|H_in].
+
+  move/negP in H_post;contradict H_post.
+  by apply /hasP;exists (d,msg).
+Qed.
 
 Lemma pending_sent_or_forged
       g0 trace (H_path: path gtransition g0 trace)
