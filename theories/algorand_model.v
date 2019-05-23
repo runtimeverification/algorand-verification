@@ -1743,6 +1743,36 @@ Proof.
 Qed.
 
 (* used in transition_label_unique *)
+Lemma deliver_analysis1:
+  forall g uid upost r m l
+         (key_mbox : uid \in g.(msg_in_transit)),
+    (r, m) \in g.(msg_in_transit).[key_mbox] ->
+    let g2 := delivery_result g uid key_mbox (r, m) upost l in
+    (forall uid2,
+      ( size (odflt mset0 (g2.(msg_in_transit).[?uid2]))
+      < size (odflt mset0 (g.(msg_in_transit).[?uid2]))) <->
+      uid = uid2)
+    /\ [mset (r,m)] =( odflt mset0 (g.(msg_in_transit).[?uid])
+       `\` odflt mset0 (g2.(msg_in_transit).[?uid]))%mset.
+Proof using.
+  clear.
+  move=> g uid upost r m l key_mbox H_pending.
+  unfold delivery_result.
+  cbn [global_state.msg_in_transit
+         set_GState_users
+         set_GState_msg_history
+         set_GState_msg_in_transit].
+  unfold send_broadcasts.
+Admitted.
+
+Lemma utransition_msg_result_analysis uid upre m upost l l'
+      (H_step: uid # upre; m ~> (upost, l))
+      (H_step': uid # upre; m ~> (upost, l')):
+  l = l'.
+Proof using.
+Admitted.
+
+(* used in transition_label_unique *)
 Lemma deliver_deliver_lbl_unique :
   forall g uid uid' upost upost' r r' m m' l l'
     (key_state : uid \in g.(users)) (key_mbox : uid \in g.(msg_in_transit))
@@ -1755,8 +1785,40 @@ Lemma deliver_deliver_lbl_unique :
     uid' # g.(users).[key_state'] ; m' ~> (upost', l') ->
     delivery_result g uid key_mbox (r, m) upost l = delivery_result g uid' key_mbox' (r', m') upost' l' ->
     uid = uid' /\ r = r' /\ m = m' /\ l = l'.
-Proof.
-Admitted.
+Proof using.
+  clear.
+  move => g uid uid' upost upost' r r' m m' l l' key_state key_mbox key_state' key_mbox'
+          H_honest H_pending H_step H_honest' H_pending' H_step' H_results.
+  have Fact1 :=
+    deliver_analysis1 H_honest H_pending H_step.
+  have Fact1' :=
+    deliver_analysis1 H_honest' H_pending' H_step'.
+  have {Fact1 Fact1'}[H_uids H_pendings] : uid = uid' /\ [mset (r,m)] = [mset (r',m')].
+  {
+  move: H_results Fact1 Fact1' => <-.
+  set g2 := delivery_result g uid key_mbox (r, m) upost l.
+  cbv zeta. clearbody g2. clear.
+  move => [H_uid H_pending] [H_uid' H_pending'].
+  have H: uid = uid by reflexivity.
+  rewrite <-H_uid, H_uid' in H;subst uid'.
+  by split;[|rewrite H_pending -H_pending'].
+  }
+  subst uid'.
+  have {H_pendings}[H_r H_m]: (r,m) = (r',m') by apply/mset1P;rewrite -H_pendings mset11.
+  subst r' m'.
+  repeat (split;[reflexivity|]).
+
+  have H: upost = upost'
+    by move: (f_equal (fun g => g.(users).[?uid]) H_results);
+       rewrite !fnd_set eq_refl;clear;congruence.
+  subst upost'.
+
+  rewrite (bool_irrelevance key_state' key_state) in H_step'.
+  move: (g.(users)[`key_state]) H_step H_step' => upre.
+  clear.
+
+  apply utransition_msg_result_analysis.
+Qed.
 
 (* used in transition_label_unique *)
 Lemma deliver_internal_False :
