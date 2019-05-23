@@ -1790,9 +1790,9 @@ Proof using.
   move => g uid uid' upost upost' r r' m m' l l' key_state key_mbox key_state' key_mbox'
           H_honest H_pending H_step H_honest' H_pending' H_step' H_results.
   have Fact1 :=
-    deliver_analysis1 H_honest H_pending H_step.
+    deliver_analysis1 upost l H_pending.
   have Fact1' :=
-    deliver_analysis1 H_honest' H_pending' H_step'.
+    deliver_analysis1 upost' l' H_pending'.
   have {Fact1 Fact1'}[H_uids H_pendings] : uid = uid' /\ [mset (r,m)] = [mset (r',m')].
   {
   move: H_results Fact1 Fact1' => <-.
