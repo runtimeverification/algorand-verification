@@ -2863,7 +2863,12 @@ Proof using.
     apply (utransition_internal_sender_good H0 H_l).
 Qed.
 
-Lemma pending_honest_sent_from_sent_or_forged: forall g0 trace (H_path: path gtransition g0 trace),
+
+(* A message from an honest user was actually sent in the trace *)
+(* Use this to relate an honest user having received a quorum of messages
+   to some honest user having sent those messages *)
+(* Hopefully the statement can be cleaned up *)
+Lemma pending_honest_sent: forall g0 trace (H_path: path gtransition g0 trace),
     forall r, state_before_round r g0 ->
     forall g_pending pending_ix,
       onth trace pending_ix = Some g_pending ->
@@ -2892,23 +2897,6 @@ Proof using.
   have: mtype_matches_step mty v x0 by assumption.
   by clear;destruct mty,v,1.
 Qed.
-
-(* A message from an honest user was actually sent in the trace *)
-(* Use this to relate an honest user having received a quorum of messages
-   to some honest user having sent those messages *)
-(* Hopefully the statement can be cleaned up *)
-Lemma pending_honest_sent: forall g0 trace (H_path: path gtransition g0 trace),
-    forall r, state_before_round r g0 ->
-    forall g_pending pending_ix,
-      onth trace pending_ix = Some g_pending ->
-    forall uid (key_msg : uid \in g_pending.(msg_in_transit)) d pending_msg,
-      (d,pending_msg) \in g_pending.(msg_in_transit).[key_msg] ->
-    let sender := msg_sender pending_msg in
-    honest_during_step (msg_step pending_msg) sender trace ->
-    r <= msg_round pending_msg ->
-    exists send_ix, user_sent_at send_ix trace sender pending_msg.
-Proof using.
-Admitted.
 
 (*
    This lemma connects message receipt to the sending of a message,
