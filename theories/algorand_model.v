@@ -1272,18 +1272,10 @@ Definition honest_users (users : {fmap UserId -> UState}) :=
     [fset x in domf users | is_user_corrupt x users] in
     users.[\ corrupt_ids] .
 
-Fixpoint seq2mset (T : choiceType) (msgs : seq T) : {mset T} :=
-  match msgs with
-  | [::]    => mset0
-  | x :: xs => (x |` (seq2mset xs))%mset
-  end.
-
-Lemma in_seq2mset (T : choiceType) (x : T) (s : seq T):
-  (x \in seq2mset s) = (x \in s).
-Proof.
-  induction s.
-    by apply in_mset0.
-    by rewrite in_mset1U IHs in_cons.
+Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
+  (x \in seq_mset s) = (x \in s).
+Proof using.
+  apply perm_eq_mem, perm_eq_seq_mset.
 Qed.
 
 (* Computes the global state after a message delivery, given the result of the
@@ -1296,7 +1288,7 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in
+  let msgh' := (pre.(msg_history)  `|` (seq_mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -1308,7 +1300,7 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
-  let msgh' := (pre.(msg_history)  `|` (seq2mset sent))%mset in
+  let msgh' := (pre.(msg_history)  `|` (seq_mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -1322,36 +1314,23 @@ Definition reset_deadline now (msg : R * Msg) : R * Msg :=
   (new_deadline now msg.1 msg.2, msg.2).
 
 Definition map_mset {A B : choiceType} (f : A -> B) (m : {mset A}) : {mset B} :=
-  foldl (fun m x => f x +` m) mset0 m.
-
-Lemma map_mset_count_inj {A B :choiceType} (f: A -> B) (m : {mset A}) :
-  injective f -> forall (a :A), m a = (map_mset f m) (f a).
-Proof using.
-  rewrite /map_mset => H_inj a.
-  move: (mset0) (mset0E (f a)) => x Hx.
-  have ->: m a = ((x (f a) + (count_mem a) m))%nat.
-  rewrite Hx.
-  symmetry; apply count_mem_mset.
-  move: (EnumMset.f m) => l {m}.
-  move: l x {Hx}.
-  elim => //= x l IHl x0.
-  apply/eqP.
-  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym x) (eqtype.inj_eq H_inj).
-Qed.
+  seq_mset (map f m).
 
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
 Proof using.
-  rewrite /map_mset => b.
-  move: (mset0) (mset0E b) => x Hx.
-  set lh := count _ _.
-  have {Hx} ->: lh = (x b + lh)%nat by rewrite Hx.
-  rewrite /lh {lh}.
-  move: (EnumMset.f m) => l {m}.
-  move: l (x).
-  elim => //= x0 l IHl x1.
-  apply/eqP.
-  by rewrite -IHl addnA mset1DE eqn_add2r addnC eqn_add2r (eq_sym b).
+  move => b.
+  unfold map_mset.
+  move: {m}(EnumMset.f m) => l.
+  by rewrite mset_seqE count_map.
+Qed.
+
+Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
+  forall (b:pred B), has b (map_mset f m) = has (preim f b) m.
+Proof using.
+  move => b.
+  rewrite -has_map.
+  apply eq_has_r, perm_eq_mem, perm_eq_seq_mset.
 Qed.
 
 (* Recursively resets message deadlines of all the messages given *)
@@ -2762,7 +2741,7 @@ Proof using.
     simpl in H_rel;decompose record H_rel;clear H_rel.
     move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
       [by move => Hp Hn;exfalso;apply/negP: Hp|].
-    rewrite in_seq2mset.
+    rewrite in_seq_mset.
     move => H_l. split;[|assumption].
     apply (utransition_msg_sender_good H H_l).
   * (* internal *)
@@ -2773,7 +2752,7 @@ Proof using.
     simpl in H_rel;decompose record H_rel;clear H_rel.
     move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
       [by move => Hp Hn;exfalso;apply/negP: Hp|].
-    rewrite in_seq2mset.
+    rewrite in_seq_mset.
     move => H_l. split;[|assumption].
     apply (utransition_internal_sender_good H0 H_l).
 Qed.
@@ -2783,16 +2762,16 @@ Definition user_forged (msg:Msg) (g1 g2: GState) :=
   related_by (lbl_forge_msg sender r p mty v) g1 g2.
 
 Lemma broadcasts_prop
-  uid d (msg:Msg) (l:seq Msg)
+  uid (msg:Msg) (l:seq Msg)
   time (targets : {fset UserId}) (mailboxes' mailboxes : {fmap UserId -> {mset R * Msg}}):
   (odflt mset0 mailboxes'.[? uid] `<=` odflt mset0 mailboxes.[? uid])%mset ->
   match (send_broadcasts time targets mailboxes' l).[? uid] with
-  | Some msg_mset => (d, msg) \in msg_mset
+  | Some msg_mset => has (fun p : R * Msg => p.2 == msg) msg_mset
   | None => false
   end ->
   ~~
   match mailboxes.[? uid] with
-  | Some msg_mset => (d, msg) \in msg_mset
+  | Some msg_mset => has (fun p : R * Msg => p.2 == msg) msg_mset
   | None => false
   end -> msg \in l.
 Proof using.
@@ -2814,33 +2793,31 @@ Proof using.
   clear -H_path H_start.
   intros g_pending pending_ix H_g uid key_msg d msg H_msg sender H_round.
   subst sender.
-  pose proof (path_gsteps_onth H_path H_g
-    (P:=fun g => match g.(msg_in_transit).[? uid] with
-                  | Some msg_mset => (d,msg) \in msg_mset
+  set P := fun g => match g.(msg_in_transit).[? uid] with
+                  | Some msg_mset => has (fun (p:R*Msg) => p.2 == msg) msg_mset
                   | None => false
-                 end)).
-  simpl in H.
-  have H_msg_g0:
-    ~~
-    match g0.(msg_in_transit).[? uid] with
-    | Some msg_mset => (d, msg) \in msg_mset
-    | None => false
-    end.
+                    end.
+  have H_P: P g_pending by rewrite /P in_fnd;apply/hasP;exists (d,msg).
+  have H_P0: ~~P g0.
   {
+  unfold P;simpl.
   clear -H_start H_round.
+  case Hmb: (_.[?uid]) => [mb|//].
   move: H_start => [_ [H_msgs _]].
-  unfold messages_before_round in H_msgs.
-  move Heq: (g0.(msg_in_transit).[?uid]) => [mb| //].
-  apply/contraTN: H_round => H_in.
-  rewrite -ltnNge. apply/H_msgs/codomfP: d msg H_in.
-  by exists uid.
+  rewrite leqNgt in H_round.
+  apply/contraNN: H_round.
+
+  move /hasP =>[[d msg'] H_in /eqP /= ?];subst msg'.
+  apply: H_msgs H_in.
+  by apply/codomfP;exists uid.
   }
   (* msg has round >= r, while g0 comes before r, and so msg \notin mmailbox0 *)
-      (* if the user does not have a mailbox, then it's already true*)
-  rewrite (in_fnd key_msg) in H.
-  move:{H H_msg_g0 H_msg}(H H_msg_g0 H_msg).
-  clear g_pending pending_ix H_g key_msg.
+  (* if the user does not have a mailbox, then it's already true*)
+  move: {H_P0 H_P}(path_gsteps_onth H_path H_g H_P0 H_P).
+  subst P;cbv beta.
+
   move => [n [g1 [g2 [H_step [H_pre H_post]]]]].
+
   move: (H_step) => /(transition_from_path H_path) /transitions_labeled [lbl H_rel].
   destruct lbl.
     (* tick *)
@@ -2870,8 +2847,15 @@ Proof using.
     (* exit partition *)
     exfalso. apply /negP: H_post. simpl in H_rel;decompose record H_rel;clear H_rel. subst g2.
     unfold recover_from_partitioned, reset_msg_delays.
-       (* reset_msg_delays preserves the set of messages, but not their deadlines *)
-    admit.
+    (* reset_msg_delays preserves the set of messages, but not their deadlines *)
+    apply/contraNN:H_pre;clear.
+    cbn -[eq_op] => H_post.
+    case:fndP => H_in;move:H_post;
+       [rewrite updf_update //
+       |by rewrite not_fnd //;
+           change (uid \notin ?f) with (uid \notin domf f);
+        rewrite -updf_domf].
+    by rewrite /reset_user_msg_delays map_mset_has (eq_has (a2:=(fun p => p.2 == msg))).
     (* enter partition *)
     exfalso;apply /negP: H_post;simpl in H_rel;decompose record H_rel;clear H_rel;subst g2;
       simpl;assumption.
@@ -2880,7 +2864,7 @@ Proof using.
     unfold corrupt_user_result, drop_mailbox_of_user; simpl.
     (* the empty msg mset cannot have a message *)
     set m1 := (msg_in_transit g1).[? s].
-    by destruct m1;[rewrite fnd_set;case:ifP;[rewrite in_mset0|]|].
+    by destruct m1;[rewrite fnd_set;case:ifP;[rewrite enum_mset0|]|].
     (* replay a message *)
     (* replayed message must have originally been sent honestly *)
     rename s into target.
@@ -2903,7 +2887,7 @@ Proof using.
     apply/eqP;rewrite -mem_seq1.
     apply/broadcasts_prop: H_post H_pre.
     apply msubset_refl.
-Admitted.
+Qed.
 
 (* A message from an honest user was actually sent in the trace *)
 (* Use this to relate an honest user having received a quorum of messages
