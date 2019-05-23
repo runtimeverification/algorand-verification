@@ -6191,6 +6191,47 @@ Definition from_cert_voter (v : Value) (r p s : nat) (m : Msg) (voters : {fset U
 
 (** LIVENESS **)
 
+Lemma at_most_one_certval_in_p
+      g0 trace (H_path: path gtransition g0 trace)
+      r0 (H_start: state_before_round r0 g0):
+  forall ix g, onth trace ix = Some g ->
+  forall uid u, g.(users).[? uid] = Some u ->
+  forall r, r0 <= r ->
+  forall p v1 v2,
+    v1 \in certvals u r p -> v2 \in certvals u r p -> v1 = v2.
+Proof using quorums_s_honest_overlap.
+  clear -H_path H_start quorums_s_honest_overlap.
+  move => ix g H_onth uid u H_lookup r H_round p v1 v2.
+  unfold certvals, vote_values, soft_weight.
+  rewrite !mem_filter.
+  move => /andP [Hv1_q Hv1in].
+  move => /andP [Hv2_q Hv2in].
+  have H_votes_checked := (softvote_credentials_checked H_path H_start H_onth H_lookup H_round).
+
+  have Hq := quorums_s_honest_overlap trace.
+  specialize (Hq r p 2 _ _ (H_votes_checked _ _) Hv1_q (H_votes_checked _ _) Hv2_q).
+
+  move: Hq => [softvoter [H_voted_v1 [H_voted_v2 H_softvoter_honest]]].
+  assert (softvoted_in_path trace softvoter r p v1) as H_sent_v1. {
+  apply (softvotes_sent H_path H_start H_onth H_lookup H_round).
+  move:H_voted_v1 => /imfsetP /= [] x /andP [H_x_in].
+  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+  assumption.
+  assumption.
+  }
+  assert (softvoted_in_path trace softvoter r p v2) as H_sent_v2. {
+  apply (softvotes_sent H_path H_start H_onth H_lookup H_round).
+  move:H_voted_v2 => /imfsetP /= [] x /andP [H_x_in].
+  unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+  assumption.
+  assumption.
+  }
+  move: H_sent_v1 => [ix_v1 H_sent_v1].
+  move: H_sent_v2 => [ix_v2 H_sent_v2].
+
+  by case:(no_two_softvotes_in_p H_path H_sent_v1 H_sent_v2).
+Qed.
+
 (*
 (* A user has (re-)proposed a value/block for a given round/period along a
    given path *)
