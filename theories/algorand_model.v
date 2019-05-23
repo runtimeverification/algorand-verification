@@ -503,7 +503,7 @@ Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
 
 (* Whether the user has seen enough nextvotes for a given value in the given round/period/step *)
 Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
-  #|[seq x <- u.(nextvotes_val) r p s | matchValue x v]| >= tau_v.
+  #|[seq x.1 | x <- u.(nextvotes_val) r p s & matchValue x v]| >= tau_v.
 
 (* Whether the user has seen enough nextvotes for some value in the given round/period/step *)
 Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
@@ -783,7 +783,7 @@ Definition adv_period_open_ok (pre : UState) r p s : Prop :=
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_rps pre r p s /\
-  #|[seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]|  >= tau_v.
+  nextvote_value_quorum pre v r p s.
 
 (* State update -- The bottom-value case *)
 Definition adv_period_open_result (pre : UState) : UState :=
@@ -2259,17 +2259,21 @@ Definition interquorum_property tau1 tau2 (P: UserId -> Prop) trace :=
      /\ P honest_P_uid
      /\ honest_during_step (r2,p2,s2) honest_P_uid trace).
 
-Hypothesis quorums_b_honest_overlap : quorum_honest_overlap_statement tau_b.
-Definition quorum_b_has_honest : quorum_has_honest_statement tau_b
-  := quorum_has_honest_from_overlap_stmt quorums_b_honest_overlap.
+Hypothesis quorums_s_honest_overlap : quorum_honest_overlap_statement tau_s.
+Definition quorum_s_has_honest : quorum_has_honest_statement tau_s
+  := quorum_has_honest_from_overlap_stmt quorums_s_honest_overlap.
 
 Hypothesis quorums_c_honest_overlap : quorum_honest_overlap_statement tau_c.
 Definition quorum_c_has_honest : quorum_has_honest_statement tau_c
   := quorum_has_honest_from_overlap_stmt quorums_c_honest_overlap.
 
-Hypothesis quorums_s_honest_overlap : quorum_honest_overlap_statement tau_s.
-Definition quorum_s_has_honest : quorum_has_honest_statement tau_s
-  := quorum_has_honest_from_overlap_stmt quorums_s_honest_overlap.
+Hypothesis quorums_b_honest_overlap : quorum_honest_overlap_statement tau_b.
+Definition quorum_b_has_honest : quorum_has_honest_statement tau_b
+  := quorum_has_honest_from_overlap_stmt quorums_b_honest_overlap.
+
+Hypothesis quorums_v_honest_overlap : quorum_honest_overlap_statement tau_v.
+Definition quorum_v_has_honest : quorum_has_honest_statement tau_v
+  := quorum_has_honest_from_overlap_stmt quorums_v_honest_overlap.
 
 Ltac unfold_step_result :=
   unfold tick_update, tick_users.
@@ -3605,7 +3609,7 @@ Definition nextvoted_val_in_path path uid r p s v : Prop :=
 Definition enough_nextvotes_val_in_step trace r p s v :=
   exists (nextvote_quorum:{fset UserId}),
      nextvote_quorum `<=` committee r p s
-  /\ #|` nextvote_quorum | >= tau_b
+  /\ #|` nextvote_quorum | >= tau_v
   /\ forall (voter:UserId), voter \in nextvote_quorum ->
        nextvoted_val_in_path trace voter r p s v.
 
@@ -5100,6 +5104,19 @@ move/negP/negP => Hx.
 by rewrite cardsU1 /= inE Hx /= add1n IH.
 Qed.
 
+
+Lemma imfset_filter_size_lem (A B : choiceType) (f : A -> B) (sq : seq A) (P : A -> bool):
+  #|` [fset x | x in [seq f x | x <- sq & P x]]| = #|` [fset f x | x in sq & P x]|.
+Proof.
+  clear -f sq P.
+  rewrite Imfset.imfsetE !size_seq_fset.
+  apply perm_eq_size, uniq_perm_eq;[apply undup_uniq..|].
+
+  intro fx. rewrite !mem_undup map_id /= filter_undup mem_undup.
+  apply Bool.eq_true_iff_eq;rewrite -!/(is_true _).
+  by split;move/mapP => [x H_x ->];apply map_f;move:H_x;rewrite mem_undup.
+Qed.
+
 (* some collection of votes recorded in nv_open/val field *)
 (* where certs check out and tau_b many of them *)
 (* statement uses received_next_vote pred *)
@@ -5118,7 +5135,7 @@ Lemma period_advance_only_by_next_votes
       let path_prefix := take n.+2 trace in
       exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
         next_voters `<=` committee r p.-1 s
-        /\ tau_b <= #|` next_voters |
+        /\ (tau_b <= #|` next_voters | \/ tau_v <= #|` next_voters |)
         /\ forall voter, voter \in next_voters ->
            received_next_vote uid voter r p.-1 s v path_prefix.
 Proof.
@@ -5213,9 +5230,9 @@ Proof.
         try (subst pref; eassumption);
         try (subst dr; rewrite fnd_set; by rewrite eq_refl).
 
+      left.
       unfold nextvoters_open_for.
       move: H_quorum_size.
-      clear. unfold nextvote_bottom_quorum.
       by rewrite card_fseq -finseq_size.
 
       intro voter.
@@ -5262,10 +5279,12 @@ Proof.
         try (subst pref; eassumption);
         try (subst dr; rewrite fnd_set; by rewrite eq_refl).
 
-      unfold nextvoters_val_for.
-      move: H_quorum_size.
-      clear.
-      admit.
+      right. move: H_quorum_size.
+      unfold nextvote_value_quorum.
+      rewrite finseq_size -card_fseq.
+      match goal with |[|- is_true (tau_v <= ?A) -> is_true (tau_v <= ?B)]
+                       => suff ->: A = B by[] end.
+      by apply/imfset_filter_size_lem.
 
       intros voter H_voter.
       have H_nextvote : (voter,v) \in pre'.(nextvotes_val) r1 p0 s
@@ -5408,8 +5427,7 @@ Proof.
   inversion H_g1_g2_opt as [H_g1_g2]; clear H_g1_g2_opt.
   rewrite H_g1_g2 in H_lt.
   rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
-
-Admitted.
+Qed.
 
 (* L5.1 Any set of tau_b committee  members must include at least one honest node,
         defined earlier as quorum_b_has_honest *)
@@ -5437,11 +5455,12 @@ Lemma adv_period_from_honest_in_prev g0 trace (H_path: path gtransition g0 trace
 Proof.
   intros n uid r p.
   intros H_p H_r H_adv.
-  eapply period_advance_only_by_next_votes in H_adv; try eassumption.
+  eapply period_advance_only_by_next_votes in H_adv;[|eassumption..].
   destruct H_adv as (s & v & next_voters & H_voters_cred & H_voters_size & ?).
   pose proof (path_prefix n.+2 H_path) as H_path_prefix.
-  destruct (@quorum_b_has_honest (take n.+2 trace) r p.-1 s next_voters H_voters_cred H_voters_size)
-    as (uid_honest & H_honest_voter & H_honest).
+  assert (exists honest_voter, honest_voter \in next_voters /\ honest_during_step (r,p.-1,s) honest_voter (take n.+2 trace)) as (uid_honest & H_honest_voter & H_honest)
+      by (destruct H_voters_size;[eapply quorum_b_has_honest|eapply quorum_v_has_honest];eassumption).
+  clear H_voters_size.
   exists uid_honest.
   specialize (H uid_honest H_honest_voter).
   unfold received_next_vote in H.
