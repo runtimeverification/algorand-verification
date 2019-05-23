@@ -5350,8 +5350,7 @@ Proof.
       unfold nextvoters_open_for.
       move: H_quorum_size.
       clear. unfold nextvote_bottom_quorum.
-      rewrite card_fseq.
-      admit.
+      by rewrite card_fseq -finseq_size.
 
       intro voter.
       rewrite in_fset.
