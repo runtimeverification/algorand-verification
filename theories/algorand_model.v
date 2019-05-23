@@ -296,11 +296,6 @@ Variable L : R.
 Hypothesis delays_positive : (lambda > 0)%R .
 Hypothesis delays_order : (3 * lambda <= big_lambda < L)%R .  (* As per the note from Victor *)
 
-(* additional (non-negative) time delay introduced by the adversary
-   when the network is partitioned *)
-Variable rho : R.
-Hypothesis arbitrary_rho : (rho >= 0)%R .
-
 (* some other thresholds *)
 (* number of soft-votes needed to cert-vote *)
 Variable tau_s : nat.
