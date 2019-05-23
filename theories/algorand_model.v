@@ -504,11 +504,11 @@ Definition prev_certvals (u:UState) : seq Value :=
 
 (* Whether the user has seen enough votes for bottom in the given round/period/step *)
 Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
-  size (u.(nextvotes_open) r p s) >= tau_b .
+  #|(u.(nextvotes_open) r p s)| >= tau_b.
 
 (* Whether the user has seen enough nextvotes for a given value in the given round/period/step *)
 Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
-  size [seq x <- u.(nextvotes_val) r p s | matchValue x v] >= tau_v.
+  #|[seq x <- u.(nextvotes_val) r p s | matchValue x v]| >= tau_v.
 
 (* Whether the user has seen enough nextvotes for some value in the given round/period/step *)
 Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
@@ -788,7 +788,7 @@ Definition adv_period_open_ok (pre : UState) r p s : Prop :=
 (* Notes: - Corresponds to transition advance_period_val in the automaton model *)
 Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
   valid_rps pre r p s /\
-  size [seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]  >= tau_v.
+  #|[seq x <- (pre.(nextvotes_val) r p s) | matchValue x v]|  >= tau_v.
 
 (* State update -- The bottom-value case *)
 Definition adv_period_open_result (pre : UState) : UState :=
@@ -813,7 +813,7 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   exists b,
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
-  size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c .
+  #|[seq x <- pre.(certvotes) r p | matchValue x v]| >= tau_c .
 
 (* State update *)
 Definition certify_result r (pre : UState) : UState := advance_round {[pre with round := r]}.
