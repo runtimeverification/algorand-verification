@@ -1769,8 +1769,26 @@ Lemma utransition_msg_result_analysis uid upre m upost l l'
       (H_step: uid # upre; m ~> (upost, l))
       (H_step': uid # upre; m ~> (upost, l')):
   l = l'.
-Proof using.
-Admitted.
+Proof.
+  clear -H_step H_step'.
+  remember (upost,l) as ustate_out.
+  destruct H_step eqn:H_trans; case: Hequstate_out;
+    intros <- <-; inversion H_step'; subst; try (by []); exfalso.
+  subst pre'; subst pre'0; clear -H2 H6.
+  unfold set_softvotes, certvote_ok, valid_rps in H2; simpl in H2.
+    by rewrite <- H6 in H2; intuition.
+  subst pre'; subst pre'0; clear -c H6.
+  unfold set_softvotes, certvote_ok, valid_rps in c; simpl in c.
+    by rewrite H6 in c; intuition.
+  unfold vote_msg in H3; simpl in H3.
+    by intuition.
+  subst pre'; subst pre'0.
+  unfold deliver_nonvote_msg_result, certvote_result in H.
+  destruct pre; simpl in *.
+  case: H; intros <-; intro; clear -H3.
+  unfold certvote_ok, set_softvotes, valid_rps in H3; simpl in H3.
+    by intuition.
+Qed.
 
 (* used in transition_label_unique *)
 Lemma deliver_deliver_lbl_unique :
