@@ -1102,14 +1102,24 @@ Proof.
   by rewrite (perm_eq_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
 Qed.
 
-Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
+Definition send_broadcasts_def (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
   updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
+Fact send_broadcasts_key: unit. Proof using. exact tt. Qed.
+Definition send_broadcasts
+  := locked_with send_broadcasts_key send_broadcasts_def.
+Canonical send_broadcasts_unlockable := [unlockable fun send_broadcasts].
+
+Lemma send_broadcastsE now targets prev_msgs msgs:
+  send_broadcasts now targets prev_msgs msgs = updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
+Proof using.
+  by rewrite unlock.
+Qed.
 
 Lemma send_broadcasts_in : forall (msgpool : MsgPool) now uid msgs targets
                                  (h : uid \in msgpool) (h' : uid \in targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = Some (merge_msgs_deadline now msgs msgpool.[h]).
 Proof using.
-  by move => *;rewrite updf_update.
+  by move => *;rewrite send_broadcastsE updf_update.
 Qed.
 
 Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msgs targets
@@ -1118,7 +1128,7 @@ Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msgs targets
 Proof using.
   move => *;apply not_fnd.
   change (?k \notin ?f) with (k \notin domf f).
-  by rewrite -updf_domf.
+  by rewrite send_broadcastsE -updf_domf.
 Qed.
 
 Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs targets
@@ -1126,7 +1136,7 @@ Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs tar
   (send_broadcasts now targets msgpool msgs).[? uid] = msgpool.[? uid].
 Proof using.
   move => msgpool now uid msg targets h h'.
-  by rewrite updf_update' // in_fnd.
+  by rewrite send_broadcastsE updf_update' // in_fnd.
 Qed.
 
 Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
@@ -1818,6 +1828,7 @@ Proof using.
   assert (H_singleton: mb1 = (r,m) +` mb2).
   {
     subst mb1 mb2.
+    rewrite /g2 /delivery_result send_broadcastsE.
   rewrite updf_update'.
   simpl. by rewrite in_fset1U; apply/orP; left.
   intro H_uid.
@@ -1869,7 +1880,7 @@ Proof using.
   rewrite H_neq in H. rewrite H.
   done.
 
-  unfold send_broadcasts in H_size.
+  rewrite send_broadcastsE in H_size.
   destruct (uid2 \in domf (honest_users (g.(users)))) eqn:H_honest; last first.
   {
     rewrite updf_update' in H_size.
@@ -2001,12 +2012,27 @@ Proof using.
   unfold delivery_result, step_result.
   cbn.
   intro H_eq.
-  (* injection/case/inversion on H_eq goes too deep into breaking down record equality and also generates a bunch of existT assumptions *)
+  (* case/injection would go too deep comparing
+     users.[uid <- upost] = users.[uid' <- upost'],
+     and introduces strange equalities involving existsT because
+     it looks within the definition of {fmap K -> V} and finds
+     fields with dependent types involving the domains of the respective
+     maps, and uid |` domf users is not immediately equal to uid' |` domf users.
 
-  case: H_eq => H_eq_users H_eq_mb1 H_eq_mb2 H_eq_mb3 H_eq_history.
+     This can be avoided manually by projecting out desired field
+     equalities using f_equals.
+   *)
+  have H_eq_users := f_equal AlgoModel.users H_eq;simpl in H_eq_users.
 
-  SearchAbout "f_equal".
-  Check f_equal.
+  (* Or if you want to use a full case/inject one option is the
+     ssreflect "locking" stuff. 'locked' is a function such that
+     case/injection won't look any deeper into anything of the form
+     locked _ = locked _.
+     lock is an equality lemma saying x = locked x.
+   *)
+  rewrite [setf _ uid]lock [setf _ uid']lock in H_eq.
+  (* now with the users fields protected the case won't go too far *)
+  case:H_eq;rewrite -!lock => H_eq_users' H_eq_mb H_eq_history.
 Admitted.
 
 (* Priority:MED This lemma is necessary for technical reasons to rule out
@@ -2863,9 +2889,10 @@ Proof using.
   have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
     by case:fndP H_post;[|rewrite enum_mset0].
 
+  rewrite send_broadcastsE in H_pre.
   case:mailboxes'.[?uid]/fndP => H_mb';
-  [|by move:H_pre;rewrite not_fnd //;
-       apply (eq_ind (domf mailboxes') (fun s => uid \notin s) H_mb'), updf_domf].
+   [|by move:H_pre;rewrite not_fnd //;
+     congr (uid \notin _): H_mb';apply updf_domf].
 
   have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
     by apply/contraNN:H_post => /hasP /= [x H_in H_x];
