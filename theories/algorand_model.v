@@ -1932,7 +1932,21 @@ Lemma deliver_internal_False :
     uid' # g.(users).[key_state'] ~> (upost', l') ->
     delivery_result g uid key_mbox (r, m) upost l = step_result g uid' upost' l' ->
     False.
-Proof.
+Proof using.
+  clear.
+  move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
+  move => H_honest H_msg H_step H_honest' H_step'.
+  destruct g.
+
+  unfold delivery_result, step_result.
+  cbn.
+  intro H_eq.
+  (* injection/case/inversion on H_eq goes too deep into breaking down record equality and also generates a bunch of existT assumptions *)
+
+  case: H_eq => H_eq_users H_eq_mb1 H_eq_mb2 H_eq_mb3 H_eq_history.
+
+  SearchAbout "f_equal".
+  Check f_equal.
 Admitted.
 
 (* Priority:MED This lemma is necessary for technical reasons to rule out
@@ -1984,7 +1998,7 @@ Proof using.
       move => [key_ustate' [ustate_post' [H_step' [Hcorrupt' [key_mailbox' [Hmsg' Heq]]]]]].
       eapply deliver_deliver_lbl_unique in Heq; eauto.
       move: Heq => [Hs [Hr [Hm Hl]]].
-      by rewrite Hs Hr Hm Hl.      
+      by rewrite Hs Hr Hm Hl.
     * (* deliver/internal *)
       move => [key_user [ustate_post' [Hcorrupt' [H_step' Heq]]]].
       by eapply deliver_internal_False in Heq; eauto.
