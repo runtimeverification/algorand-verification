@@ -1091,18 +1091,15 @@ Definition msg_deadline (msg : Msg) now : R :=
   end.
 
 Definition merge_msgs_deadline (now : R) (msgs : seq Msg) (v : {mset R * Msg}) : {mset R * Msg} :=
-  foldr (fun msg v => (msg_deadline msg now, msg) +` v) v msgs.
+  seq_mset [seq (msg_deadline msg now,msg) | msg <- msgs] `+` v.
 
 Lemma in_merge_msgs : forall d (msg:Msg) now msgs mailbox,
     (d,msg) \in merge_msgs_deadline now msgs mailbox ->
     msg \in msgs \/ (d,msg) \in mailbox.
 Proof.
-  move => d msg now msgs mb.
-  induction msgs;simpl.
-  by right.
-  rewrite in_cons in_mset1D => /orP [/eqP [_ ->]| {IHmsgs}/IHmsgs].
-    by left;rewrite eq_refl.
-    by move => [->|->];[left;rewrite orbT|right].
+  move=> d msg now msgs mb.
+  move=> /msetDP [|];[|right;done].
+  by rewrite (perm_eq_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
 Qed.
 
 Definition send_broadcasts (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
@@ -1742,6 +1739,64 @@ Proof.
     end;try discriminate; by rewrite addn1 => /esym /n_Sn.
 Qed.
 
+Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
+  uniq (finsupp A).
+Proof using.
+  by rewrite -(perm_eq_uniq (perm_undup_mset A));apply undup_uniq.
+Qed.
+
+Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
+  (A `<=` B)%mset ->
+  perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
+Proof using.
+  move=>H_sub.
+  apply uniq_perm_eq.
+    by apply finsupp_mset_uniq.
+    by apply filter_uniq;apply finsupp_mset_uniq.
+  move=>x.
+  rewrite mem_filter.
+  rewrite !msuppE.
+  rewrite andb_idr //.
+  move:H_sub => /msubset_subset. apply.
+Qed.
+
+Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
+  (A `<=` B)%mset ->
+  \sum_(i <- finsupp B) A i = size A.
+Proof using.
+  move=>H_sub.
+  rewrite (bigID (fun i => i \in A)) /= -big_filter.
+  rewrite -(eq_big_perm _ (msubset_finsupp H_sub)) -size_mset big1.
+    by rewrite addn0.
+    by move=>i /mset_eq0P.
+Qed.
+
+
+Lemma mset_add_size (T:choiceType) (A B : {mset T}):
+  size (A `+` B) = (size A + size B)%nat.
+Proof using.
+  rewrite size_mset (eq_bigr (fun a => A a + B a)%nat);[|by move => ? _;rewrite msetE2].
+  rewrite big_split !msubset_size_sum //.
+  rewrite -{1}[B]mset0D. apply msetSD, msub0set.
+  rewrite -{1}[A]msetD0. apply msetDS, msub0set.
+Qed.
+
+Lemma msetn_size (T:choiceType) n (x:T):
+  size (msetn n x) = n.
+Proof using.
+  rewrite size_mset finsupp_msetn.
+  case:n=>[|n] /=.
+  exact: big_nil.
+  by rewrite big_seq_fset1 msetnxx.
+Qed.
+
+Lemma msubset_size (T:choiceType) (A B : {mset T}):
+  (A `<=` B)%mset -> size A <= size B.
+Proof using.
+  move=>H_sub.
+  by rewrite -(msetBDK H_sub) mset_add_size leq_addl.
+Qed.
+
 (* used in transition_label_unique *)
 Lemma deliver_analysis1:
   forall g uid upost r m l
@@ -1758,9 +1813,11 @@ Proof using.
   clear.
   move=> g uid upost r m l key_mbox H_pending g2.
 
-  assert (H_singleton : [mset (r,m)] =
-          ( odflt mset0 (g.(msg_in_transit).[?uid])
-                  `\` odflt mset0 (g2.(msg_in_transit).[?uid]))%mset).
+  set mb1: {mset R*Msg} := odflt mset0 (g.(msg_in_transit).[?uid]).
+  set mb2: {mset R*Msg} := odflt mset0 (g2.(msg_in_transit).[?uid]).
+  assert (H_singleton: mb1 = (r,m) +` mb2).
+  {
+    subst mb1 mb2.
   rewrite updf_update'.
   simpl. by rewrite in_fset1U; apply/orP; left.
   intro H_uid.
@@ -1770,19 +1827,16 @@ Proof using.
            assert (H :odflt mset0 (Some x) = x) by done; rewrite H; clear H
          end.
   rewrite setfNK; rewrite eq_refl.
-  rewrite msetBBK; [done | by rewrite msub1set].
-    by rewrite !inE eq_refl //.
+  by rewrite msetBDKC;[|rewrite msub1set].
+  by rewrite fsetD11.
+  }
+  split;[|by move:H_singleton => /(f_equal (msetB^~mb2)) ->;rewrite msetDC msetDKB].
 
-  split;[|done].
   move => uid2.
   split; last first.
   intros <-.
-  remember g.(msg_in_transit).[?uid] as X.
-  remember g2.(msg_in_transit).[?uid] as Y.
-  remember (r,m) as a.
-  clear -H_singleton.
-  (* a = Y \ X -> size X < size Y *)
-  admit.
+  fold mb1 mb2.
+  by rewrite H_singleton mset_add_size msetn_size leqnn.
 
   intro H_size.
   case H_neq:(uid2 == uid);[by move/eqP: H_neq|exfalso].
@@ -1838,14 +1892,20 @@ Proof using.
     subst.
     rewrite setfNK in H_size.
     rewrite H_neq in H_size.
-    admit.
+    simpl in H_size.
+    move: H_size. rewrite ltnNge.
+    apply/negP/negPn.
+    apply/msubset_size.
+    move: (g.(msg_in_transit)[`H_uid2]) => mb.
+    rewrite -{1}[mb]mset0D.
+    by apply msetSD, msub0set.
 
     rewrite in_fsetD1.
     apply/andP. split.
       by move/eqP in H_neq; move/eqP: H_neq.
       by apply/negP; move/negP in H_honest.
   }
-Admitted.
+Qed.
 
 Lemma utransition_msg_result_analysis uid upre m upost l l'
       (H_step: uid # upre; m ~> (upost, l))
