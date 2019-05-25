@@ -65,6 +65,24 @@ Inductive MType :=
   | Nextvote_Open
   | Nextvote_Val.
 
+Definition MType_eq (a b:MType) : bool :=
+  nosimpl match a,b with
+  | Block, Block => true
+  | Proposal, Proposal => true
+  | Reproposal, Reproposal => true
+  | Softvote, Softvote => true
+  | Certvote, Certvote => true
+  | Nextvote_Open, Nextvote_Open => true
+  | Nextvote_Val, Nextvote_Val => true
+  | _, _ => false
+  end.
+Lemma MType_eq_good: Equality.axiom MType_eq.
+Proof using.
+  move => a b;apply Bool.iff_reflect;split.
+    by move <-;destruct a.
+    by move/(ifT (a=b) True) => <-;destruct a, b.
+Qed.
+
 (* Make MType a finType by showing an isomorphism
    with the ssreflect bounded nat type 'I_7 *)
 Definition mtype2o (m:MType) : 'I_7 :=
@@ -91,7 +109,7 @@ Definition o2mtype (i:'I_7) : option MType :=
 Lemma pcancel_MType_7 : pcancel mtype2o o2mtype.
 Proof using. by case;rewrite /o2mtype /= inordK. Qed.
 
-Canonical mtype_eqType     := EqType     MType (PcanEqMixin     pcancel_MType_7).
+Canonical mtype_eqType     := EqType     MType (Equality.Mixin MType_eq_good).
 Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7).
 Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
 Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
