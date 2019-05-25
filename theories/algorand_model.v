@@ -1756,13 +1756,95 @@ Lemma deliver_analysis1:
        `\` odflt mset0 (g2.(msg_in_transit).[?uid]))%mset.
 Proof using.
   clear.
-  move=> g uid upost r m l key_mbox H_pending.
-  unfold delivery_result.
+  move=> g uid upost r m l key_mbox H_pending g2.
+
+  assert (H_singleton : [mset (r,m)] =
+          ( odflt mset0 (g.(msg_in_transit).[?uid])
+                  `\` odflt mset0 (g2.(msg_in_transit).[?uid]))%mset).
+  rewrite updf_update'.
+  simpl. by rewrite in_fset1U; apply/orP; left.
+  intro H_uid.
+  rewrite in_fnd.
+  repeat match goal with
+           [|- context C[odflt mset0 (Some ?x)]] =>
+           assert (H :odflt mset0 (Some x) = x) by done; rewrite H; clear H
+         end.
+  rewrite setfNK; rewrite eq_refl.
+  rewrite msetBBK; [done | by rewrite msub1set].
+    by rewrite !inE eq_refl //.
+
+  split;[|done].
+  move => uid2.
+  split; last first.
+  intros <-.
+  remember g.(msg_in_transit).[?uid] as X.
+  remember g2.(msg_in_transit).[?uid] as Y.
+  remember (r,m) as a.
+  clear -H_singleton.
+  (* a = Y \ X -> size X < size Y *)
+  admit.
+
+  intro H_size.
+  case H_neq:(uid2 == uid);[by move/eqP: H_neq|exfalso].
+
+  subst g2.
+  unfold delivery_result in *.
   cbn [global_state.msg_in_transit
          set_GState_users
          set_GState_msg_history
-         set_GState_msg_in_transit].
-  unfold send_broadcasts.
+         set_GState_msg_in_transit] in *.
+
+  remember (global_state.msg_in_transit UserId UState [choiceType of Msg] g) as mailboxes.
+  remember (mailboxes.[uid <- (mailboxes.[key_mbox] `\ (r, m))%mset]) as mailboxes'.
+  case:mailboxes'.[?uid2]/fndP => H_mb.
+  2: {
+    assert (H_mb' := H_mb).
+    move/not_fnd in H_mb'.
+    subst mailboxes'. rewrite fnd_set in H_mb'.
+    rewrite H_neq in H_mb'.
+    rewrite H_mb' in H_size.
+    rewrite size_mset0 in H_size.
+    inversion H_size.
+  }
+
+  assert (H_uid2 : uid2 \in domf mailboxes).
+  rewrite -fndSome.
+  assert (mailboxes'.[? uid2] = Some mailboxes'.[H_mb]). by rewrite in_fnd.
+  subst mailboxes'.
+  rewrite fnd_set in H.
+  rewrite H_neq in H. rewrite H.
+  done.
+
+  unfold send_broadcasts in H_size.
+  destruct (uid2 \in domf (honest_users (g.(users)))) eqn:H_honest; last first.
+  {
+    rewrite updf_update' in H_size.
+    rewrite in_fnd in H_size.
+    simpl in H_size.
+    subst.
+    rewrite setfNK in H_size.
+    rewrite H_neq in H_size.
+    rewrite ltnn in H_size; discriminate.
+
+    rewrite in_fsetD1.
+    apply/andP. move => [_ H_honest'].
+      by rewrite H_honest in H_honest'.
+  }
+
+  {
+    rewrite updf_update in H_size.
+    rewrite in_fnd in H_size.
+    simpl in H_size.
+    subst.
+    rewrite setfNK in H_size.
+    rewrite H_neq in H_size.
+    admit.
+
+    rewrite in_fsetD1.
+    apply/andP. split.
+      by move/eqP in H_neq; move/eqP: H_neq.
+      by apply/negP; move/negP in H_honest.
+  }
 Admitted.
 
 Lemma utransition_msg_result_analysis uid upre m upost l l'
