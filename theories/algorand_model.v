@@ -2053,6 +2053,33 @@ Proof using.
   case:H_eq;rewrite -!lock => H_eq_users' H_eq_mb H_eq_history.
 Admitted.
 
+Lemma mset_lem1 (T:choiceType) (A: {mset T}) (l l': seq T):
+  A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
+Proof using.
+  move/(f_equal (msetB^~A)); rewrite !msetDKB => H_seq_eq.
+  apply/(perm_eq_trans _ (perm_eq_seq_mset l')).
+  rewrite perm_eq_sym -H_seq_eq.
+  apply perm_eq_seq_mset.
+Qed.
+
+Definition some_message_received (g1 g2:GState) : Prop :=
+  exists uid, size (odflt mset0 g2.(msg_in_transit).[?uid])
+            < size (odflt mset0 g1.(msg_in_transit).[?uid]).
+Definition some_user_changed (g1 g2:GState) : Prop :=
+  exists uid, g1.(users).[?uid] <> g2.(users).[?uid].
+
+Lemma classify_deliver l g1 g2:
+  related_by l g1 g2 ->
+  ((if l is lbl_deliver _ _ _ _ then true else false)
+   <-> (some_user_changed g1 g2 /\ some_message_received g1 g2)).
+Admitted.
+
+Lemma classify_utransition l g1 g2:
+  related_by l g1 g2 ->
+  ((if l is lbl_step_internal _ _ then true else false)
+   <-> (some_user_changed g1 g2 /\ ~some_message_received g1 g2)).
+Admitted.
+
 (* Priority:MED This lemma is necessary for technical reasons to rule out
    the possibility that a step that counts as one user sending a message
    can't also count as a send from a different user or different message *)
