@@ -1284,7 +1284,7 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  let msgh' := (pre.(msg_history)  `|` (seq_mset sent))%mset in
+  let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -1296,7 +1296,7 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let users' := pre.(users).[uid <- ustate_post] in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
-  let msgh' := (pre.(msg_history)  `|` (seq_mset sent))%mset in
+  let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
   {[ {[ {[ pre with users          := users' ]}
                with msg_in_transit := msgs' ]}
                with msg_history    := msgh' ]}.
@@ -2866,22 +2866,25 @@ Proof using.
     move => [<- H_l].
     exists l;split;[|left;exists r, m];assumption.
     simpl in H_rel;decompose record H_rel;clear H_rel.
-    move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
-      [by move => Hp Hn;exfalso;apply/negP: Hp|].
+    move: H_post H_pre;subst g2.
+    rewrite in_msetD.
+    move=> /orP []; [by move => Hp Hn;exfalso;apply/negP: Hp|].
     rewrite in_seq_mset.
     move => H_l. split;[|assumption].
-    apply (utransition_msg_sender_good H H_l).
+    by apply (utransition_msg_sender_good H H_l).
   * (* internal *)
     unfold user_sent.
     suff: s = msg_sender msg /\ msg \in l.
     move => [<- H_l].
     exists l;split;[|right];assumption.
     simpl in H_rel;decompose record H_rel;clear H_rel.
-    move: H_post H_pre;subst g2;rewrite /= in_msetU => /orP [];
+    move: H_post H_pre;subst g2.
+    rewrite in_msetD.
+    move=> /orP [];
       [by move => Hp Hn;exfalso;apply/negP: Hp|].
     rewrite in_seq_mset.
     move => H_l. split;[|assumption].
-    apply (utransition_internal_sender_good H0 H_l).
+    by apply (utransition_internal_sender_good H0 H_l).
 Qed.
 
 Definition user_forged (msg:Msg) (g1 g2: GState) :=
