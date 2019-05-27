@@ -2294,23 +2294,29 @@ Proof using.
       move/eqP: Hs => Hs.
       move: Heq.
       rewrite -Hs.
-      (*have luniq: uniq l by apply internal_uniq in Hstep.
-      have l0uniq: uniq l0 by apply internal_uniq in Htr0.*)
-      rewrite /step_result /=.
-      set bs1 := send_broadcasts _ _ _ _.
-      set bs2 := send_broadcasts _ _ _ _.
+      rewrite /step_result /= /step_result /=.
+      set us1 := _.[_ <- _].
+      set us2 := _.[_ <- _].
+      set mh1 := (_ `+` seq_mset _)%mset.
+      set mh2 := (_ `+` seq_mset _)%mset.
       move => Heq.
-      have Hbs: bs1 = bs2 by move/(f_equal msg_in_transit):Heq.
-      clear Heq.
+      have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
+      have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
+      move: Hus1c.
+      rewrite 2!fnd_set -Hs.
+      case: ifP; last by move/eqP.
+      move => _; case => Hustate.
+      have Hmh: mh1 = mh2 by case: Heq.
+      clear Heq Hcorrupt0.
+      move: key_user Htr0.
+      rewrite -Hs -Hustate => key_user.      
+      rewrite -(eq_getf key_ustate) => Hstep'.
+      move: Hmh.
+      rewrite /mh1 /mh2.
+      move/msetD_seq_mset_perm_eq => Hprm.
       suff Hsuff: l = l0 by rewrite Hsuff.
-      move: Hbs.
-      rewrite /bs1 {bs1} /bs2 {bs2}.
-      clear Htr0 H_lbl Hstep.
-      elim: l => /=.
-        case: l0 => //=.
-        move => a l.
-        by admit.
-      by admit.
+      move: Hstep Hstep' Hprm.
+      exact: utransition_result_perm_eq.
     * (* internal/exit *)
       move => [H_partitioned H_g2].
       case: H_g2 => Hpart.
