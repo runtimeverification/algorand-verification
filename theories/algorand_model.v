@@ -2175,31 +2175,14 @@ Qed.
 Lemma transition_label_unique : forall lbl lbl2 g1 g2,
     related_by lbl g1 g2 ->
     related_by lbl2 g1 g2 ->
-    lbl2 = lbl.
+    match lbl with
+    | lbl_deliver _ _ _ _ => lbl2 = lbl
+    | lbl_step_internal _ _ => lbl2 = lbl
+    | _ => True
+    end.
 Proof using.
   move => lbl lbl2 g1 g2.
-  destruct lbl eqn:H_lbl.
-  * (* tick *)
-    simpl.
-    move => [H_ok1 ->].
-    by destruct lbl2 eqn:H_lbl2;
-      [ (* tick / tick *)
-        move => [H_ok2 H_results];
-        assert (pos p = pos p0)
-          by (destruct g1;injection H_results;eauto using Rplus_eq_reg_l);
-        clear -H;
-        destruct p,p0;simpl in H;subst;
-        repeat f_equal;
-        apply Prop_irrelevance
-      | (* Other cases can be refuted uniformly because no other action advances now *)
-        by (simpl;intro H;decompose record H;
-        match goal with [H : @eq GState _ _ |- _] =>
-                        apply (f_equal now) in H;contradict H
-        end;
-        destruct g1;simpl;clear;destruct p;simpl;
-        contradict cond_pos;apply Rplus_0_r_uniq in cond_pos;subst pos;apply Rlt_irrefl)
-        ..
-      ].
+  destruct lbl eqn:H_lbl;try done.
   + (* deliver *)
     (* one user changed, with a message removed from their mailbox *)
     rewrite /=.
@@ -2397,143 +2380,6 @@ Proof using.
       by admit.
     * (* internal/forge *)
       by admit.
-  + (* exit partition *)
-    move => [H_partitioned H_g2].
-    assert (g1.(network_partition) <> g2.(network_partition))
-      by (subst g2;destruct g1;simpl;clear;destruct network_partition;simpl;congruence).
-    clear -H_partitioned H.
-    unfold is_partitioned, is_true in H_partitioned.
-    destruct lbl2;simpl;intro H_g2;try reflexivity; (* handles the exit/exit case *)
-      decompose record H_g2;clear H_g2;subst g2;
-        exfalso;destruct H;destruct g1;simpl in * |- *;try reflexivity. (* handles all but exit/enter *)
-    destruct notF;subst;assumption.
-  + (* enter *)
-    move => [H_unpartitioned H_g2].
-    assert (g1.(network_partition) <> g2.(network_partition))
-      by (subst g2;destruct g1;simpl;clear;destruct network_partition;simpl;congruence).
-    clear -H_unpartitioned H.
-    apply Bool.negb_true_iff in H_unpartitioned.
-    destruct lbl2;simpl;intro H_g2;try reflexivity; (* handles the exit/exit case *)
-      decompose record H_g2;clear H_g2;subst g2;
-        exfalso;destruct H;destruct g1;simpl in * |- *;try reflexivity. (* handles all but enter/exit *)
-    destruct notF;subst;assumption.
-  + (* corrupt user *)
-    simpl.
-    move => [ustate_key [H_honest ->]].
-    {
-      destruct lbl2;simpl;intro H;decompose record H;clear H.
-      (* corrupt/tick *)
-      apply (f_equal (fun g => g.(users).[? s])) in H1.
-      destruct g1;unfold tick_update, tick_users in H1;cbn -[in_mem mem] in * |- *.
-      rewrite fnd_set eq_refl updf_update in H1.
-      exfalso. injection H1. revert H_honest. generalize (users.[ustate_key]). clear.
-      unfold make_corrupt, user_advance_timer. destruct u, corrupt;simpl;done.
-      assumption.
-      (* corrupt /deliver *)
-      {
-        exfalso.
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite fnd_set.
-        case (_ == _) eqn:H_eq.
-        + move/eqP in H_eq. subst s0.
-          injection 1 as <-.
-          apply utransition_msg_preserves_corrupt in H0.
-          exact (H1 H0).
-        + rewrite in_fnd.
-          injection 1. revert H_honest. generalize (users.[ustate_key]).
-          clear. move => u H_honest. move/(f_equal corrupt).
-          destruct u;simpl in * |- *. congruence.
-      }
-      (* corrupt / internal *)
-      {
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite fnd_set.
-        case (_ == _) eqn:H_eq.
-        + move/eqP in H_eq. subst s0.
-          injection 1 as <-.
-          apply utransition_internal_preserves_corrupt in H1.
-          exfalso;exact (H0 H1).
-        + rewrite in_fnd.
-          injection 1. revert H_honest. generalize (users.[ustate_key]).
-          clear. move => u H_honest. move/(f_equal corrupt).
-          destruct u;simpl in * |- *. congruence.
-      }
-      (* corrupt/exit *)
-      {
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite in_fnd.
-        injection 1. revert H_honest. generalize (users.[ustate_key]).
-        clear. move => u H_honest. move/(f_equal corrupt).
-        destruct u;simpl in * |- *;congruence.
-      }
-      (* corrupt/enter *)
-      {
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite in_fnd.
-        injection 1. revert H_honest. generalize (users.[ustate_key]).
-        clear. move => u H_honest. move/(f_equal corrupt).
-        destruct u;simpl in * |- *. congruence.
-      }
-      (* corrupt/corrupt *)
-      { f_equal.
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite fnd_set.
-        case (_ == _) eqn:H_eq.
-        + clear 1. move/eqP: H_eq. clear;congruence.
-        + rewrite in_fnd.
-          injection 1. revert H_honest. generalize (users.[ustate_key]).
-          clear. move => u H_honest. move/(f_equal corrupt).
-          destruct u;simpl in * |- *. congruence.
-      }
-      (* corrupt/replay *)
-      {
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite in_fnd.
-        injection 1. revert H_honest. generalize (users.[ustate_key]).
-        clear. move => u H_honest. move/(f_equal corrupt).
-        destruct u;simpl in * |- *. congruence.
-      }
-      (* corrupt/forge *)
-      {
-        match goal with
-          [H_results : @eq GState _ _ |- _] => move/(f_equal (fun g => g.(users).[? s])): H_results
-        end.
-        destruct g1;autounfold with gtransition_unfold;cbn -[in_mem mem] in * |- *.
-        rewrite fnd_set eq_refl.
-        rewrite in_fnd.
-        injection 1. revert H_honest. generalize (users.[ustate_key]).
-        clear. move => u H_honest. move/(f_equal corrupt).
-        destruct u;simpl in * |- *. congruence.
-      }
-    }
-  + (* replay *)
-    by admit.
-  + (* forge *)
-    by admit.
 Admitted.
 
 Definition step_at path ix lbl :=
