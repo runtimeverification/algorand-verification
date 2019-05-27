@@ -2053,6 +2053,85 @@ Proof using.
   case:H_eq;rewrite -!lock => H_eq_users' H_eq_mb H_eq_history.
 Admitted.
 
+Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
+  A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
+Proof using.
+  move/(f_equal (msetB^~A)); rewrite !msetDKB => H_seq_eq.
+  apply/(perm_eq_trans _ (perm_eq_seq_mset l')).
+  rewrite perm_eq_sym -H_seq_eq.
+  apply perm_eq_seq_mset.
+Qed.
+
+Lemma perm_eq_cons1P (T : eqType) (s : seq T) (a : T) : reflect (s = [:: a]) (perm_eq s [:: a]).
+Proof.
+case: s => [|x s]; first by rewrite /perm_eq /= ?eqxx; constructor.
+case: s => [|y s].
+  apply: (iffP idP).
+    rewrite /perm_eq /= ?eqxx.
+    move/andP => [Ht Ht'].
+    move: Ht.
+    case Hax: (a == x) => //.
+    by move/eqP: Hax =>->.
+  by move =>->; apply perm_eq_refl.
+apply: (iffP idP) => //.
+set s1 := [:: _ & _].
+set s2 := [:: _].
+move => Hpr.
+by have Hs: size s1 = size s2 by apply perm_eq_size.
+Qed.
+
+Lemma utransition_result_perm_eq uid upre upost l l' :
+  uid # upre ~> (upost, l) ->
+  uid # upre ~> (upost, l') ->
+  perm_eq l l' ->
+  l = l'.
+Proof.
+move => Htr Htr' Hpq.
+case Hs: (size l') => [|n].
+  move: Hs Hpq.
+  move/size0nil =>->.
+  by move/perm_eq_nilP.
+case Hn: n => [|n'].
+  move: Hs.
+  rewrite Hn.
+  destruct l' => //=.
+  case Hl': (size l') => //.
+  move: Hpq.
+  move/size0nil: Hl' =>->.
+  by move/perm_eq_cons1P.
+move: Hs.
+rewrite Hn => Hl'.
+have Heq: size l = size l' by apply perm_eq_size.
+move: Heq.
+rewrite Hl' => Hl.
+have Hll': size l' >= 2 by rewrite Hl'.
+have Hll: size l >= 2 by rewrite Hl.
+clear n n' Hn Hl' Hl.
+inversion Htr; inversion Htr'; subst; simpl in *; try by [].
+move: Hpq.
+set m1 := (Proposal, _, _, _, _).
+set m2 := (Block, _, _, _, _).
+set s1 :=  [:: _; _].
+set s2 :=  [:: _; _].
+move => Hpm.
+have Hm1: m1 \in s2.
+  rewrite -(perm_eq_mem Hpm) /= inE.
+  by apply/orP; left.
+have Hm2: m2 \in s2.
+  rewrite -(perm_eq_mem Hpm) /= inE.
+  apply/orP; right.
+  by rewrite inE.
+move: Hm1 Hm2.
+rewrite inE.
+move/orP; case; last by rewrite inE.
+rewrite /s2.
+move/eqP =><-.
+rewrite inE.
+move/orP; case; first by move/eqP.
+rewrite inE.
+by move/eqP =><-.
+Qed.
+
 (* Priority:MED This lemma is necessary for technical reasons to rule out
    the possibility that a step that counts as one user sending a message
    can't also count as a send from a different user or different message *)
