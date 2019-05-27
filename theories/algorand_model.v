@@ -2062,6 +2062,24 @@ Proof using.
   apply perm_eq_seq_mset.
 Qed.
 
+Definition some_message_received (g1 g2:GState) : Prop :=
+  exists uid, size (odflt mset0 g2.(msg_in_transit).[?uid])
+            < size (odflt mset0 g1.(msg_in_transit).[?uid]).
+Definition some_user_changed (g1 g2:GState) : Prop :=
+  exists uid, g1.(users).[?uid] <> g2.(users).[?uid].
+
+Lemma classify_deliver l g1 g2:
+  related_by l g1 g2 ->
+  ((if l is lbl_deliver _ _ _ _ then true else false)
+   <-> (some_user_changed g1 g2 /\ some_message_received g1 g2)).
+Admitted.
+
+Lemma classify_utransition l g1 g2:
+  related_by l g1 g2 ->
+  ((if l is lbl_step_internal _ _ then true else false)
+   <-> (some_user_changed g1 g2 /\ ~some_message_received g1 g2)).
+Admitted.
+
 Lemma perm_eq_cons1P (T : eqType) (s : seq T) (a : T) : reflect (s = [:: a]) (perm_eq s [:: a]).
 Proof.
 case: s => [|x s]; first by rewrite /perm_eq /= ?eqxx; constructor.
