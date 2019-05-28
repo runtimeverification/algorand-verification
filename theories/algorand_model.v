@@ -5859,6 +5859,47 @@ Definition round_advance_at n path uid r g1 g2 : Prop :=
   step_lt (step_of_ustate ustate1) (r,1,1)
   /\ step_of_ustate ustate2 = (r,1,1)}}.
 
+Lemma honest_softvote_respects_excl_stv uid g1 g2 v v' r p u:
+  1 < p ->
+  g1.(users).[?uid] = Some u ->
+  u.(stv) p = Some v ->
+  (forall s, ~nextvote_bottom_quorum u r p.-1 s) ->
+  user_sent uid (Softvote, val v', r, p, uid) g1 g2 ->
+  v' = v.
+Proof.
+  move => H_p H_u H_stv H_excl H_sent.
+  move: H_sent => [ms [H_msg [[d [pending H_deliver]]|H_internal]]].
+  *
+    move: H_deliver => [key1 [upost]] /=.
+    have H_u_key: (g1.(users))[`key1] = u by rewrite in_fnd in H_u;case:H_u.
+    rewrite !H_u_key.
+    move => [H_step [H_honest _]].
+    contradict H_msg => /Iter.In_mem.
+    move: H_step;clear.
+    by inversion 1;simpl;intuition.
+  *
+    move: H_internal => [key1 [upost]] /=.
+    have H_u_key: (g1.(users))[`key1] = u by rewrite in_fnd in H_u;case:H_u.
+    rewrite !H_u_key.
+    move => [H_honest [H_step {g2}_]].
+
+    inversion H_step;subst pre uid0 upost ms;clear H_step;try done;
+      move:H_msg;rewrite mem_seq1 => /eqP [Hv Hr Hp];subst v0 r0 p0.
+    +
+    unfold softvote_new_ok in H2;decompose record H2;clear H2.
+    contradict H3.
+    unfold cert_may_exist.
+    move:H1 => [H_r [H_u_p H_s]].
+    by rewrite H_u_p H_r subn1.
+
+    +
+    unfold softvote_repr_ok in H2;decompose record H2;clear H2.
+    move: H5 => [[H_cert H_asdfd1]|[H_cert H_stv0]].
+     - contradict H_cert;unfold cert_may_exist.
+         by move:H1 => [H_r [H_u_p H_s]];rewrite H_r H_u_p subn1;split.
+     - by move:H_stv;rewrite H_stv0;clear;case.
+Qed.
+
 (* main subargument for excl_enter_limits_cert_vote *)
 Lemma honest_certvote_respects_stv uid g1 g2 v v' r p u:
   g1.(users).[?uid] = Some u ->
