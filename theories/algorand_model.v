@@ -6018,18 +6018,47 @@ Proof using quorums_c_honest_overlap.
   by destruct (no_two_certvotes_in_p H_path H_cert1 H_honest1 H_cert2 H_honest2).
 Qed.
 
-Lemma certificate_is_start_of_later_periods:
+Lemma certificate_is_start_of_next_period:
   forall trace r p v,
     certified_in_period trace r p v ->
+    forall uid,
+      honest_during_step (r,p.+1,1) uid trace ->
+      enters_exclusively_for_value uid r p.+1 v trace.
+Proof using.
+Admitted.
+
+Lemma excl_enter_excl_next:
+  forall g0 trace (H_path: is_trace g0 trace),
+  forall (r p : nat) (v : Value),
+    p >= 1 ->
+    (forall (uid : UserId),
+      honest_during_step (r,p,1) uid trace ->
+      enters_exclusively_for_value uid r p v trace) ->
+    (forall (uid : UserId),
+      honest_during_step (r,p.+1,1) uid trace ->
+      enters_exclusively_for_value uid r p.+1 v trace).
+Proof using.
+Admitted.
+
+Lemma certificate_is_start_of_later_periods:
+  forall trace g0  (H_path: is_trace g0 trace) r p v,
+    certified_in_period trace r p v ->
   forall p', p' > p ->
-    forall uid g1 g2 n,
-      period_advance_at n trace uid r p' g1 g2 ->
-      user_honest uid g1 ->
+    forall uid,
+      honest_during_step (r,p',1) uid trace ->
       enters_exclusively_for_value uid r p' v trace.
 Proof using.
-  move => trace r p v H_cert p' H_p_lt.
-  move => uid g1 g2 n H_advance.
-Admitted.
+  clear.
+  move => trace g0 H_path r p v H_cert p' H_p_lt.
+  have: p' = (p.+1 + (p' - p.+1))%nat by symmetry;apply subnKC.
+  move: (p' - p.+1)%nat => n {p' H_p_lt}->.
+  elim:n.
+  (* Next step after certification *)
+  by rewrite addn0; exact: certificate_is_start_of_next_period.
+  (* Later steps *)
+  move => n;rewrite addnS addSn.
+  by apply (excl_enter_excl_next H_path).
+Qed.
 
 Lemma honest_in_from_during_and_send: forall r p s uid trace,
       honest_during_step (r,p,s) uid trace ->
@@ -6256,7 +6285,7 @@ Proof.
   assert (honest_in_period r p2 honest_voter trace)
    by (eapply honest_in_from_during_and_send;[eassumption..|apply step_le_refl]).
 
-  pose proof (certificate_is_start_of_later_periods H_cert1 Hlt) as H_entry.
+  pose proof (certificate_is_start_of_later_periods H_path H_cert1 Hlt) as H_entry.
   specialize (H_entry honest_voter).
 
   pose proof (@excl_enter_limits_cert_vote _ _ H_path r p2 v1 Hpos) as H_recert.
@@ -6266,21 +6295,9 @@ Proof.
   eapply H_recert;try eassumption.
 
   move:H_advance => [n [g1 [g2 H_advance]]].
-  specialize (H_entry g1 g2 n H_advance).
-
+  have: honest_during_step (r,p2,1) honest_voter trace
+    by apply/honest_during_le/step_leP: H_honest_in;rewrite /= !eq_refl !ltnn.
   apply H_entry.
-  clear -H_path H_honest_in H_advance.
-  move: H_advance => [H_step [key1 [key2 [H_round [H_step_lt H_step_eq]]]]].
-  have H_g1 := step_in_path_onth_pre H_step.
-  pose proof (honest_at_from_during H_honest_in H_path H_g1 (in_fnd key1)).
-
-  lapply H;clear H.
-  intro H. exact (at_step_onth H H_g1).
-
-  apply step_ltW.
-  refine (step_lt_trans H_step_lt _).
-  simpl. clear. change (1 < 3) with true.
-  intuition.
 Qed.
 
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
