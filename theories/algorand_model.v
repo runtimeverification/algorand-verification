@@ -2041,35 +2041,39 @@ Lemma deliver_internal_False :
     delivery_result g uid key_mbox (r, m) upost l = step_result g uid' upost' l' ->
     False.
 Proof using.
-  clear.
-  move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
-  move => H_honest H_msg H_step H_honest' H_step'.
-  destruct g.
-
-  unfold delivery_result, step_result.
-  cbn.
-  intro H_eq.
-  (* case/injection would go too deep comparing
-     users.[uid <- upost] = users.[uid' <- upost'],
-     and introduces strange equalities involving existsT because
-     it looks within the definition of {fmap K -> V} and finds
-     fields with dependent types involving the domains of the respective
-     maps, and uid |` domf users is not immediately equal to uid' |` domf users.
-
-     This can be avoided manually by projecting out desired field
-     equalities using f_equals.
-   *)
-  have H_eq_users := f_equal AlgoModel.users H_eq;simpl in H_eq_users.
-
-  (* Or if you want to use a full case/inject one option is the
-     ssreflect "locking" stuff. 'locked' is a function such that
-     case/injection won't look any deeper into anything of the form
-     locked _ = locked _.
-     lock is an equality lemma saying x = locked x.
-   *)
-  rewrite [setf _ uid]lock [setf _ uid']lock in H_eq.
-  (* now with the users fields protected the case won't go too far *)
-  case:H_eq;rewrite -!lock => H_eq_users' H_eq_mb H_eq_history.
+clear.
+move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
+move => H_honest H_msg H_step H_honest' H_step'.
+rewrite/delivery_result /= /step_result /=.
+set us1 := _.[uid <- _].
+set us2 := _.[uid' <- _].
+set sb1 := send_broadcasts _ _ _ _.
+set sb2 := send_broadcasts _ _ _ _.
+move => Heq.
+have Hus: us2 = us1 by move: Heq; move: (us1) (us2) => us3 us4; case.
+have Hsb: sb1 = sb2 by case: Heq.
+clear Heq.
+case Hueq: (uid' == uid); last first.
+  move/eqP: Hueq => Hueq.
+  have Hus1c: us2.[? uid'] = us1.[? uid'] by rewrite Hus.
+  move: Hus1c.
+  rewrite 2!fnd_set.
+  case: ifP; case: ifP.
+  - by move/eqP.
+  - move => _ _ Hpost.
+    suff Hsuff: (global_state.users UserId UState [choiceType of Msg] g) [` key_state'] = upost'.
+      move: H_step'.
+      by move/internal_not_noop.
+    apply sym_eq in Hpost.
+    move: Hpost.
+    rewrite in_fnd.
+    by case.
+  - by move /eqP.
+  - by move => _ /eqP.
+move/eqP: Hueq => Hueq.
+move: Hsb.
+rewrite /sb1 /sb2 Hueq.
+clear.
 Admitted.
 
 Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
