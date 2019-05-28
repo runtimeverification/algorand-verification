@@ -2087,18 +2087,6 @@ Definition some_message_received (g1 g2:GState) : Prop :=
 Definition some_user_changed (g1 g2:GState) : Prop :=
   exists uid, g1.(users).[?uid] <> g2.(users).[?uid].
 
-Lemma classify_deliver l g1 g2:
-  related_by l g1 g2 ->
-  ((if l is lbl_deliver _ _ _ _ then true else false)
-   <-> (some_user_changed g1 g2 /\ some_message_received g1 g2)).
-Admitted.
-
-Lemma classify_utransition l g1 g2:
-  related_by l g1 g2 ->
-  ((if l is lbl_step_internal _ _ then true else false)
-   <-> (some_user_changed g1 g2 /\ ~some_message_received g1 g2)).
-Admitted.
-
 Lemma perm_eq_cons1P (T : eqType) (s : seq T) (a : T) : reflect (s = [:: a]) (perm_eq s [:: a]).
 Proof.
 case: s => [|x s]; first by rewrite /perm_eq /= ?eqxx; constructor.
@@ -2176,8 +2164,18 @@ Lemma transition_label_unique : forall lbl lbl2 g1 g2,
     related_by lbl g1 g2 ->
     related_by lbl2 g1 g2 ->
     match lbl with
-    | lbl_deliver _ _ _ _ => lbl2 = lbl
-    | lbl_step_internal _ _ => lbl2 = lbl
+    | lbl_deliver _ _ _ _ =>
+      match lbl2 with
+      | lbl_deliver _ _ _ _ => lbl2 = lbl
+      | lbl_step_internal _ _=> lbl2 = lbl
+      | _ => True
+      end
+    | lbl_step_internal _ _=>
+      match lbl2 with
+      | lbl_deliver _ _ _ _ => lbl2 = lbl
+      | lbl_step_internal _ _=> lbl2 = lbl
+      | _ => True
+      end
     | _ => True
     end.
 Proof using.
@@ -2189,14 +2187,7 @@ Proof using.
     move => [key_ustate [ustate_post [H_step H]]].
     move: H => [Hcorrupt [key_mailbox [Hmsg Hg2]]].
     rewrite Hg2 {Hg2} /related_by.
-    destruct lbl2.
-    * (* deliver/tick *)
-      move => [Htick Hres].
-      move: Hres.
-      move/(f_equal now) => /= Hpos.
-      contradict Hpos.
-      move: g1.(now) => now.
-      by destruct p => /=; lra.
+    destruct lbl2;try done.
     * (* deliver/deliver *)
       move => [key_ustate' [ustate_post' [H_step' [Hcorrupt' [key_mailbox' [Hmsg' Heq]]]]]].
       eapply deliver_deliver_lbl_unique in Heq; eauto.
@@ -2205,72 +2196,11 @@ Proof using.
     * (* deliver/internal *)
       move => [key_user [ustate_post' [Hcorrupt' [H_step' Heq]]]].
       by eapply deliver_internal_False in Heq; eauto.
-    * (* deliver/exit *)
-      move => [H_partitioned /(f_equal network_partition) /= Hpart].
-      contradict Hpart.
-      by case: (global_state.network_partition _ _ _ _).
-    * (* deliver/enter *)
-      move => [H_partitioned /(f_equal network_partition) /= Hpart].
-      contradict Hpart.
-      by case:(global_state.network_partition _ _ _ _).
-    * (* deliver/corrupt *)
-      case Hs: (s == s0).
-        move/eqP: Hs =><-.
-        move => [ustate_key [Hcorrupt' Hstep']].
-        rewrite /corrupt_user_result /= /delivery_result /= in Hstep'.
-        move: Hstep'.
-        set us1 := _.[s <- _].
-        set ms := _.[s <- _].
-        set us2 := _.[s <- _].
-        move => Hstep'.
-        have Hus: us1 = us2 := f_equal users Hstep'.
-        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.
-        move: Hss.
-        rewrite 2!fnd_set.
-        case: ifP; last by move/eqP.
-        move => _; case.
-        set post := make_corrupt _.
-        move => Hpost.
-        have Hcorr: ustate_post.(corrupt) = post.(corrupt) by rewrite Hpost.
-        apply utransition_msg_preserves_corrupt in H_step.
-        rewrite -H_step in Hcorr.
-        case: Hcorrupt.
-        by rewrite Hcorr.
-      move/eqP: Hs => Hs.
-      move => [ustate_key [Hcorr Heq]].
-      move: Heq.
-      rewrite /delivery_result /corrupt_user_result.
-      set us1 := _.[_ <- _].
-      set ms := _.[_ <- _].
-      set us2 := _.[_ <- _].
-      move => Heq.
-      have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
-      clear Heq.
-      have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
-      move: Hus1c.
-      rewrite 2!fnd_set.
-      case: ifP => [|_]; first by move/eqP => Hs'; case: Hs.
-      case: ifP => [_|]; last by move/eqP.
-      rewrite in_fnd; case => Hg.
-      case: Hcorr.
-      by rewrite Hg.
-    * (* deliver/replay *)
-      by admit.
-    * (* deliver/forge *)
-      move => [sender_key [target_key [s2 [Hcorrupt' H]]]].
-      by admit.
   + (* step internal *)
     rewrite /=. (* one user changed, no message removed *)
     move => [key_ustate [ustate_post [H_corrupt [Hstep Hres]]]].
     rewrite Hres {Hres} /related_by.
-    destruct lbl2.
-    * (* internal/tick *)
-      move => [Htick Hres].
-      move: Hres.
-      case => Hpos.
-      contradict Hpos.
-      move: (global_state.now UserId UState [choiceType of Msg] g1) => now.
-      by destruct p => /=; lra.
+    destruct lbl2;try done.
     * (* internal/deliver *)
       move => [key_ustate' [upost' [H_step' [H_corrupt' [key_mbox [Hmsg Heq]]]]]].
       apply sym_eq in Heq.
@@ -2311,7 +2241,7 @@ Proof using.
       have Hmh: mh1 = mh2 by case: Heq.
       clear Heq Hcorrupt0.
       move: key_user Htr0.
-      rewrite -Hs -Hustate => key_user.      
+      rewrite -Hs -Hustate => key_user.
       rewrite -(eq_getf key_ustate) => Hstep'.
       move: Hmh.
       rewrite /mh1 /mh2.
@@ -2319,68 +2249,7 @@ Proof using.
       suff Hsuff: l = l0 by rewrite Hsuff.
       move: Hstep Hstep' Hprm.
       exact: utransition_result_perm_eq.
-    * (* internal/exit *)
-      move => [H_partitioned H_g2].
-      case: H_g2 => Hpart.
-      contradict Hpart.
-      set gbn := global_state.network_partition _ _ _ _.
-      by move: (gbn); case.
-    * (* internal/enter *)
-      move => [H_partitioned H_g2].
-      case: H_g2 => Hpart.
-      contradict Hpart.
-      set gbn := global_state.network_partition _ _ _ _.
-      by move: (gbn); case.
-    * (* internal/corrupt *)
-      case Hs: (s == s0).
-        move/eqP: Hs =><-.
-        move => [ustate_key [Hcorrupt' Hstep']].
-        rewrite /corrupt_user_result /= /step_result /= in Hstep'.
-        move: Hstep'.
-        set us1 := _.[s <- _].
-        set us2 := _.[s <- _].
-        move => Hstep'.
-        have Hus: us1 = us2 by move: Hstep'; move: (us1) (us2) => us3 us4; case.
-        have Hss: us1.[? s] = us2.[? s] by rewrite Hus.
-        move: Hss.
-        rewrite 2!fnd_set.
-        case: ifP; last by move/eqP.
-        move => _; case.
-        set post := make_corrupt _.
-        move => Hpost.
-        have Hcorr: ustate_post.(corrupt) = post.(corrupt) by rewrite Hpost.
-        apply utransition_internal_preserves_corrupt in Hstep.
-        rewrite -Hstep in Hcorr.
-        case: H_corrupt.
-        by rewrite Hcorr.
-      move/eqP: Hs => Hs.
-      move => [ustate_key [Hcorr Heq]].
-      move: Heq.
-      rewrite /step_result /corrupt_user_result.
-      set us1 := _.[_ <- _].
-      set us2 := _.[_ <- _].
-      move => Heq.
-      have Hus: us1 = us2 by move: Heq; move: (us1) (us2) => us3 us4; case.
-      clear Heq.
-      have Hus1c: us1.[? s0] = us2.[? s0] by rewrite Hus.
-      move: Hus1c.
-      rewrite 2!fnd_set.
-      case: ifP => [|_]; first by move/eqP => Hs'; case: Hs.
-      case: ifP => [_|]; last by move/eqP.
-      rewrite in_fnd; case => Hg.
-      case: Hcorr.
-      by rewrite Hg.
-    * (* internal/replay *)
-      move => [ustate_key [msg [Hcorrupt [Hmsg Heq]]]].
-      rewrite /replay_msg_result /= /step_result /= in Heq.
-      move: Heq.
-      set now := global_state.now _ _ _ _.
-      set np := global_state.network_partition _ _ _ _.
-      set us := global_state.users _ _ _ _.
-      by admit.
-    * (* internal/forge *)
-      by admit.
-Admitted.
+Qed.
 
 Definition step_at path ix lbl :=
   exists g1 g2,
