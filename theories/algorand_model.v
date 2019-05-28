@@ -2689,29 +2689,30 @@ Lemma path_gsteps_onth
     (* exists n g1 g2, step_in_path_at g1 g2 n (g0::trace) /\ ~~ P g1 /\ P g2. *)
     exists n g1 g2, step_in_path_at g1 g2 n trace /\ ~~ P g1 /\ P g2.
 Proof using.
-  (* have H_path' := path_prefix ix_p.+1 H_path. *)
-  (* move => P H_nP_g0 H_P_g_p. *)
-  (* pose proof (path_steps H_path' H_nP_g0). *)
-  (* have H_size_trace := onth_size H_g_p. *)
-  (* rewrite -nth_last nth_take size_takel // (onth_nth H_g_p) in H. *)
-  (* specialize (H H_P_g_p). *)
+  destruct trace;[by contradict H_path|].
+  move: H_path => [H_g0 H_path];subst g.
+  move=> P H_NPg0 H_Pg.
+  have H_path' := path_prefix ix_p H_path.
+  destruct ix_p as [|ix_p];
+    first by exfalso;move:H_g_p H_NPg0;case => ->;rewrite H_Pg.
+  change (onth trace ix_p = Some g_p) in H_g_p.
 
-  (* move:H. clear -H_nP_g0. move => [n H]. *)
+  pose proof (path_steps H_path' H_NPg0).
+  have H_size_trace := onth_size H_g_p.
+  rewrite -nth_last nth_take size_takel // (onth_nth H_g_p) in H.
+  specialize (H H_Pg).
+  move:H;clear -H_NPg0;move => [n H].
 
-  (* suff: exists n g1 g2, step_in_path_at g1 g2 n (g0::trace) /\ ~~ P g1 /\ P g2 by admit. *)
-  (* exists n. *)
-  (* unfold step_in_path_at. *)
-  (* destruct (drop n (g0 :: take ix_p.+1 trace)) as [|x l] eqn: H_eq;[|destruct l];[done..|]. *)
-  (* rewrite -[trace](cat_take_drop ix_p.+1). *)
-
-  (* move/andP in H. exists x, g. *)
-
-  (* destruct n;simpl in H_eq |- *. *)
-  (* case:H_eq;intros -> ->;simpl;tauto. *)
-  (* rewrite drop_cat H_eq. *)
-  (* replace (n < size (take ix_p.+1 trace)) with true. simpl;tauto. *)
-  (* symmetry. rewrite ltnNge. apply/negP. move/drop_oversize. rewrite H_eq. discriminate. *)
-Admitted.
+  exists n.
+  unfold step_in_path_at.
+  destruct (drop n (g0 :: take ix_p.+1 trace)) as [|x l] eqn: H_eq;[|destruct l];[done..|].
+  rewrite -[g0::trace](cat_take_drop ix_p.+2).
+  move/andP in H;exists x, g;split;[|assumption].
+  rewrite drop_cat.
+  case:ifP;[rewrite H_eq;done|].
+  move => /negP /negP /=;rewrite ltnS -ltnNge => H_oversize.
+  by rewrite drop_oversize // in H_eq.
+Qed.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
     let: (mtype,v,r_m,p_m,uid_m) := msg in
