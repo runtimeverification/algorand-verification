@@ -2073,8 +2073,45 @@ case Hueq: (uid' == uid); last first.
 move/eqP: Hueq => Hueq.
 move: Hsb.
 rewrite /sb1 /sb2 Hueq.
+move: H_msg.
 clear.
-Admitted.
+set fs := [fset _ | _ in _].
+set sb1 := send_broadcasts _ _ _ _.
+set sb2 := send_broadcasts _ _ _ _.
+move => H_msg Hsb.
+have Hsb12: sb1.[? uid] = sb2.[? uid] by rewrite Hsb.
+move: Hsb12.
+rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets //.
+- rewrite fnd_set.
+  case: ifP; last by move/eqP.
+  move => _.
+  rewrite in_fnd; case.
+  move: H_msg.
+  set ms := (global_state.msg_in_transit _ _ _ _ _).
+  move => H_msg.
+  move/msetP => Hms.
+  move: (Hms (r, m)).
+  rewrite msetB1E.
+  case Hrm: ((r, m) == (r, m)); last by move/eqP: Hrm.
+  rewrite /=.
+  move: H_msg.
+  rewrite -mset_neq0.
+  move/eqP.
+  case: (ms (r, m)) => //.
+  move => n _.
+  by ppsimpl; lia.
+- rewrite in_fsetE /=.
+  apply/negP.
+  case/andP => Hf.
+  case/negP: Hf.
+  by rewrite in_fsetE.
+- rewrite 2!in_fsetE.
+  by apply/orP; left.
+- rewrite in_fsetE /= in_fsetE.
+  apply/negP.
+  case/andP => Hf.
+  by case/negP: Hf.
+Qed.
 
 Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
   A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
