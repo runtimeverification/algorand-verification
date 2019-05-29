@@ -6,8 +6,8 @@ Requirements
 ------------
 
 - [`Coq 8.9.0`](https://coq.inria.fr)
-- [`MathComp ssreflect 1.8.0`](https://math-comp.github.io/math-comp/)
-- [`MathComp algebra 1.8.0`](https://math-comp.github.io/math-comp/)
+- [`MathComp ssreflect 1.8.0`](https://math-comp.github.io)
+- [`MathComp algebra 1.8.0`](https://math-comp.github.io)
 - [`MathComp finmap 1.2.0`](https://github.com/math-comp/finmap)
 - [`Interval 3.4.0`](http://coq-interval.gforge.inria.fr)
 - [`Ppsimpl 8.9.0`](https://gforge.inria.fr/scm/?group_id=5430)
@@ -20,7 +20,7 @@ We recommend installing the dependencies of the project via
 
 ```
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq-mathcomp-ssreflect coq-mathcomp-algebra coq-mathcomp-finmap coq-interval coq-ppsimpl
+opam install coq-mathcomp-ssreflect.1.8.0 coq-mathcomp-algebra.1.8.0 coq-mathcomp-finmap.1.2.0 coq-interval.3.4.0 coq-ppsimpl.8.9.0
 ```
 
 Then, run `make` in the project root directory.
