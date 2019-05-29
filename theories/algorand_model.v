@@ -2568,16 +2568,6 @@ Proof.
   split;[done|by apply path_prefix].
 Qed.
 
-(* Generic lemmas *)
-Lemma path_drop'' T (R:rel T) x p (H:path R x p) n:
-  match drop n p with
-  | List.nil => true
-  | List.cons x' p' => path R x' p'
-  end.
-Proof using.
-  by elim: n x p H=> [|n IHn] x [|a l /andP [] H_path];last apply IHn.
-Qed.
-
 Lemma is_trace_drop g0 g0' trace trace' (H_trace: is_trace g0 trace) n:
   drop n trace = g0' :: trace' -> is_trace g0' (g0' :: trace').
 Proof using.
@@ -4139,6 +4129,44 @@ Definition nextvoted_open_in_path path r p s uid : Prop :=
 (* A user has nextvoted a value for a given period along a given path *)
 Definition nextvoted_value_in_path path r p s uid v : Prop :=
   exists ix, user_sent_at ix path uid (Nextvote_Val, next_val v s, r, p, uid).
+
+Lemma certvote_precondition g1 g2 uid v r p:
+  user_sent uid (Certvote, val v, r, p, uid) g1 g2 ->
+  forall u, g1.(users).[?uid] = Some u ->
+  (exists i b,
+      certvote_ok (set_softvotes u r p (i, v)) uid v b r p
+      /\ g2.(users).[?uid] =
+         Some (certvote_result (set_softvotes u r p (i, v)))) \/
+  (exists b, certvote_ok u uid v b r p).
+Proof.
+  move => H_sent u H_u.
+  destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
+  * { (* message delivery cases *)
+      destruct H_step as (key_ustate & ustate_post & H_step & H_honest
+                          & key_mailbox & H_msg_in_mailbox & ->).
+      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_ustate] = u).
+      rewrite in_fnd in H_u; inversion H_u; trivial.
+      rewrite H in H_step; clear H.
+      remember (ustate_post,ms) as ustep_out in H_step.
+      destruct H_step; injection Hequstep_out; clear Hequstep_out;
+      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      simpl in H_msg; destruct H_msg; try contradiction; inversion H0.
+      left. exists i, b; split; subst; auto.
+      rewrite fnd_set eq_refl. auto.
+    }
+  * { (* internal transition cases *)
+      destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+      remember (ustate_post,ms) as ustep_out in H_step.
+      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_user] = u).
+      rewrite in_fnd in H_u; inversion H_u; trivial.
+      rewrite H in H_step. clear H.
+      destruct H_step; injection Hequstep_out; clear Hequstep_out;
+        intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction;
+      simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
+      try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
+      by right; exists b; subst.
+    }
+Qed.
 
 Lemma certvote_postcondition uid v r p g1 g2:
   user_sent uid (Certvote,val v,r,p,uid) g1 g2 ->
@@ -6092,9 +6120,9 @@ Qed.
 (* L6: if all honest nodes that entered a period p >= 2 did so exclusively for value v *)
 (* then an honest node cannot cert-vote for any value other than v in step 3 of period p'. *)
 Lemma excl_enter_limits_cert_vote :
-  forall g0 trace (H_path: is_trace g0 trace),
+  forall r0 g0 trace (H_start: state_before_round r0 g0) (H_path: is_trace g0 trace),
   forall p, 1 < p ->
-  forall r v,
+  forall r v, r0 <= r ->
   (forall (uid : UserId),
     honest_in_period r p uid trace ->
     enters_exclusively_for_value uid r p v trace) ->
@@ -6102,8 +6130,8 @@ Lemma excl_enter_limits_cert_vote :
     honest_during_step (r,p,3) uid trace ->
     certvoted_in_path trace uid r p v' -> v' = v.
 Proof using.
-  clear.
-  move => g0 trace H_path p H_p r v H_excl uid v' H_honest H_vote.
+  clear -quorums_s_honest_overlap.
+  move => r0 g0 trace H_before H_path p H_p r v H_r H_excl uid v' H_honest H_vote.
   destruct H_vote as [ix_vote H_vote].
 
   have H_honest_in:= user_honest_in_from_send H_vote.
@@ -6195,9 +6223,39 @@ Proof using.
     exact (honest_softvote_respects_excl_stv H_p no_bot_quorum_fwd H_u_sv stv_fwd H_send).
   }
 
-  (* To finish get assumption that a softvote quorum exists from
-     examining the certvoting *)
-  admit.
+  pose proof (certvote_precondition H_vote_send H_u) as H_cert_pre.
+  destruct H_cert_pre as [[i [b [H_cert_ok H_u2]]] | [b H_cert_ok]];
+  destruct H_cert_ok as [_ [_ [_ [_ [_ H_certvals]]]]].
+
+  (* case where user_sent certvote came from message delivery transition *)
+  {
+    admit.
+  }
+
+  (* case where user_sent certvote came from internal transition *)
+  unfold certvals in H_certvals.
+  assert (tau_s <= soft_weight v' u r p) as H_v'
+      by (move: H_certvals;rewrite mem_filter => /andP [] //).
+
+  apply step_in_path_onth_pre in H_vote_step.
+  have H_votes_checked :=
+    softvote_credentials_checked H_path H_before H_vote_step H_u H_r.
+
+  have Hq := quorums_s_honest_overlap trace.
+  specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
+
+  move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
+  assert (H_sent_v': softvoted_in_path trace softvoter r p v').
+  {
+    apply (softvotes_sent H_path H_before H_vote_step H_u H_r).
+    move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+    unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+    assumption.
+    assumption.
+  }
+  destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
+  unfold user_sent_at in honest_softvotes_only_for_v.
+  by eapply honest_softvotes_only_for_v; eauto.
 Admitted.
 
 Lemma onth_last_take: forall T (s:seq T) n x,
@@ -6453,13 +6511,7 @@ Proof.
   pose proof (certificate_is_start_of_later_periods H_path H_cert1 Hlt) as H_entry.
 
   symmetry.
-  apply/(excl_enter_limits_cert_vote H_path H_p2 H_entry): H_cert2_voted.
-  have H_honest_ga2 := negbT (user_sent_honest_post H_send_vote2).
-  have H_in2:= (in_fnd (user_sent_in_post H_send_vote2)).
-
-  exact (honest_during_from_ustate H_path (step_in_path_onth_post H_step2)
-                                   H_in2
-        H_honest_ga2 (utransition_label_end H_send_vote2 H_in2)).
+  eapply excl_enter_limits_cert_vote; try eassumption; done.
 Qed.
 
 (* L4: A vote message sent by t_H committee members in a step s>3 must have been sent by some honest nodes that decided to cert-vote for v during step 3. *)
