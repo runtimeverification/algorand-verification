@@ -6229,33 +6229,55 @@ Proof using.
 
   (* case where user_sent certvote came from message delivery transition *)
   {
-    admit.
+    assert (tau_s <= soft_weight v' (set_softvotes u r p (i, v')) r p) as H_v'
+        by (move: H_certvals;rewrite mem_filter => /andP [] //).
+
+    apply step_in_path_onth_post in H_vote_step.
+    have H_votes_checked :=
+      softvote_credentials_checked H_path H_before H_vote_step H_u2 H_r.
+
+    have Hq := quorums_s_honest_overlap trace.
+    specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
+
+    move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
+    assert (H_sent_v': softvoted_in_path trace softvoter r p v').
+    {
+      apply (softvotes_sent H_path H_before H_vote_step H_u2 H_r).
+      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+      assumption.
+      assumption.
+    }
+    destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
+    unfold user_sent_at in honest_softvotes_only_for_v.
+      by eapply honest_softvotes_only_for_v; eauto.
   }
 
   (* case where user_sent certvote came from internal transition *)
-  unfold certvals in H_certvals.
-  assert (tau_s <= soft_weight v' u r p) as H_v'
-      by (move: H_certvals;rewrite mem_filter => /andP [] //).
-
-  apply step_in_path_onth_pre in H_vote_step.
-  have H_votes_checked :=
-    softvote_credentials_checked H_path H_before H_vote_step H_u H_r.
-
-  have Hq := quorums_s_honest_overlap trace.
-  specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
-
-  move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
-  assert (H_sent_v': softvoted_in_path trace softvoter r p v').
   {
-    apply (softvotes_sent H_path H_before H_vote_step H_u H_r).
-    move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
-    unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
-    assumption.
-    assumption.
+    assert (tau_s <= soft_weight v' u r p) as H_v'
+        by (move: H_certvals;rewrite mem_filter => /andP [] //).
+
+    apply step_in_path_onth_pre in H_vote_step.
+    have H_votes_checked :=
+      softvote_credentials_checked H_path H_before H_vote_step H_u H_r.
+
+    have Hq := quorums_s_honest_overlap trace.
+    specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
+
+    move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
+    assert (H_sent_v': softvoted_in_path trace softvoter r p v').
+    {
+      apply (softvotes_sent H_path H_before H_vote_step H_u H_r).
+      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+      assumption.
+      assumption.
+    }
+    destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
+    unfold user_sent_at in honest_softvotes_only_for_v.
+      by eapply honest_softvotes_only_for_v; eauto.
   }
-  destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
-  unfold user_sent_at in honest_softvotes_only_for_v.
-  by eapply honest_softvotes_only_for_v; eauto.
 Admitted.
 
 Lemma onth_last_take: forall T (s:seq T) n x,
