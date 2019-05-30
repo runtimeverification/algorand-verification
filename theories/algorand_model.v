@@ -6203,23 +6203,63 @@ Proof using.
     exact (user_honest_from_during H_path (step_in_path_onth_pre H_vote_step) H_honest).
   }
 
-  have honest_softvotes_only_for_v:
-    forall ix uid_sv v', user_sent_at ix trace uid_sv (Softvote,val v',r,p,uid_sv) -> v' = v. {
+  have honest_softvotes_all_for_v:
+    forall ix uid_sv v', user_sent_at ix trace uid_sv (Softvote,val v',r,p,uid_sv) -> v' = v.
+  {
     move => ix uid_sv v0 H_softvote_send.
     have H_honest_sv := (user_honest_in_from_send H_softvote_send).
     have := H_excl _ H_honest_sv.
     clear ix_enter H_enter_step H_order.
     move => [g1_enter [g2_enter [ix_enter [H_adv [u_sv_entry
             [H_u_sv_entry [H_uv_entry_honest [H_uv_entry_stv H_uv_entry_no_botq]]]]]]]].
-    clear g1 g2 H_lookup_enter H_enter H_reach.
-    move: H_softvote_send => [g1 [g2 [H_step H_send]]].
+    clear g1 H_enter H_reach.
+    move: H_softvote_send => [g1 [g2_sv [H_step H_send]]].
     have H_u_sv := in_fnd (user_sent_in_pre H_send).
     set u_sv := g1.(users) [`user_sent_in_pre H_send] in H_u_sv.
 
-    have no_bot_quorum_fwd:  (forall s : nat, ~ nextvote_bottom_quorum u_sv r p.-1 s)
+    assert (forall s : nat, ~ nextvote_bottom_quorum u_sv r p.-1 s) as no_bot_quorum_fwd
       by admit. (* probably unprovable without revising 'enters_exclusively_for_value' *)
-    have stv_fwd : u_sv.(stv) p = Some v
-      by admit. (* should be provable through greach *)
+    have stv_fwd : u_sv.(stv) p = Some v.
+    move: H_uv_entry_stv.
+    assert (greachable g2_enter g1). {
+      clear -H_adv H_step H_send H_path H_u_sv_entry.
+      move:H_adv => [H_adv_step H_adv].
+      refine (at_greachable H_path _ (step_in_path_onth_post H_adv_step)
+                            (step_in_path_onth_pre H_step)).
+      have H1: step_of_ustate u_sv_entry = (r,p,1). {
+        move: H_adv => [x [ukey_2 [_ [_]]]].
+        rewrite (in_fnd ukey_2) in H_u_sv_entry.
+        case: H_u_sv_entry => ->.
+        done.
+      }
+      apply ltnW.
+      move: H_adv => [_ [ukey_2 [_ [_ H_ukey_2_step]]]].
+      pose proof (order_ix_from_steps H_path (step_in_path_onth_post H_adv_step)
+                                      (step_in_path_onth_pre H_step)).
+      specialize (H _ ukey_2 (user_sent_in_pre H_send)).
+      apply:H.
+      rewrite H_ukey_2_step.
+      rewrite (utransition_label_start H_send (in_fnd (user_sent_in_pre H_send))).
+      apply/step_ltP.
+      by rewrite /= !eq_refl !ltnn.
+    }
+
+    pose proof (utransition_label_start H_send (in_fnd (user_sent_in_pre H_send))).
+    fold u_sv in H0.
+    simpl in H0.
+
+    have H1: step_of_ustate u_sv_entry = (r,p,1). {
+      move: H_adv => [_ [x [ukey_2 [_ [_]]]]].
+      rewrite (in_fnd ukey_2) in H_u_sv_entry.
+      case: H_u_sv_entry => ->.
+      done.
+    }
+    injection H1 as ? ? _. injection H0 as ? ? _.
+
+    rewrite (stv_forward H H_u_sv_entry (in_fnd (user_sent_in_pre H_send))) -/u_sv //.
+    congruence.
+    congruence.
+
     exact (honest_softvote_respects_excl_stv H_p no_bot_quorum_fwd H_u_sv stv_fwd H_send).
   }
 
@@ -6236,10 +6276,9 @@ Proof using.
     have H_votes_checked :=
       softvote_credentials_checked H_path H_before H_vote_step H_u2 H_r.
 
-    have Hq := quorums_s_honest_overlap trace.
-    specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
+    have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v'.
 
-    move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
+    move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
     assert (H_sent_v': softvoted_in_path trace softvoter r p v').
     {
       apply (softvotes_sent H_path H_before H_vote_step H_u2 H_r).
@@ -6249,8 +6288,8 @@ Proof using.
       assumption.
     }
     destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
-    unfold user_sent_at in honest_softvotes_only_for_v.
-      by eapply honest_softvotes_only_for_v; eauto.
+    unfold user_sent_at in honest_softvotes_all_for_v.
+      by eapply honest_softvotes_all_for_v; eauto.
   }
 
   (* case where user_sent certvote came from internal transition *)
@@ -6262,10 +6301,8 @@ Proof using.
     have H_votes_checked :=
       softvote_credentials_checked H_path H_before H_vote_step H_u H_r.
 
-    have Hq := quorums_s_honest_overlap trace.
-    specialize (Hq r p 2 _ _ (H_votes_checked _ _) H_v' (H_votes_checked _ _) H_v').
-
-    move: Hq => [softvoter [H_voted_v [_ H_softvoter_honest]]].
+    have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v'.
+    move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
     assert (H_sent_v': softvoted_in_path trace softvoter r p v').
     {
       apply (softvotes_sent H_path H_before H_vote_step H_u H_r).
@@ -6275,8 +6312,8 @@ Proof using.
       assumption.
     }
     destruct H_sent_v' as [ix [g1' [g2' H_sent_softvote]]].
-    unfold user_sent_at in honest_softvotes_only_for_v.
-      by eapply honest_softvotes_only_for_v; eauto.
+    unfold user_sent_at in honest_softvotes_all_for_v.
+      by eapply honest_softvotes_all_for_v; eauto.
   }
 Admitted.
 
