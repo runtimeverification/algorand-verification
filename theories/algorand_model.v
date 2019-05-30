@@ -6089,15 +6089,19 @@ Proof.
   suff: user_honest uid g2 by rewrite /user_honest in_fnd => /negbTE.
   move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]];
       simpl in H_ustep;decompose record H_ustep;clear H_ustep;subst g2.
-  *
-    unfold user_honest, delivery_result;simpl.
-    rewrite fnd_set eq_refl.
-    move: H H0. clear. admit.
-  *
-    unfold user_honest, step_result;simpl.
-    rewrite fnd_set eq_refl.
-    move: H0 H. clear. admit.
-Admitted.
+  - unfold user_honest, delivery_result;simpl.
+    rewrite fnd_set eq_refl.    
+    move: H H0. clear.
+    move/utransition_msg_preserves_corrupt =>->.
+    move => Hcorrupt.
+    by apply/negP.
+- unfold user_honest, step_result;simpl.
+  rewrite fnd_set eq_refl.
+  move: H0 H. clear.
+  move/utransition_internal_preserves_corrupt =>->.
+  move => Hcorrupt.
+  by apply/negP.
+Qed.
 
 Lemma user_honest_in_from_send uid mty v r p ix trace
       (H_vote: user_sent_at ix trace uid (mty,v,r,p,uid)):
