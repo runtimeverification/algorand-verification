@@ -5,7 +5,7 @@ Coq formalization and verification of the Algorand distributed ledger.
 Requirements
 ------------
 
-- [`Coq 8.9.0`](https://coq.inria.fr)
+- [`Coq 8.9`](https://coq.inria.fr)
 - [`MathComp ssreflect 1.8.0`](https://math-comp.github.io)
 - [`MathComp algebra 1.8.0`](https://math-comp.github.io)
 - [`MathComp finmap 1.2.0`](https://github.com/math-comp/finmap)
