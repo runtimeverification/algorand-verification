@@ -6443,12 +6443,87 @@ Proof using quorums_c_honest_overlap.
 Qed.
 
 Lemma certificate_is_start_of_next_period:
-  forall trace r p v,
+  forall g0 trace r0 r p v,
+    is_trace g0 trace ->
+    state_before_round r0 g0 ->
     certified_in_period trace r p v ->
-    forall uid,
+    forall uid, r0 <= r ->
       honest_in_period r p.+1 uid trace ->
       enters_exclusively_for_value uid r p.+1 v trace.
 Proof using.
+  clear -quorums_s_honest_overlap quorums_c_honest_overlap.
+  move => g0 trace r0 r p v H_path H_start H_cert uid H_r H_honest.
+  destruct H_cert as [certvote_quorum [H_comm [H_q_size H_vote]]].
+
+  unfold quorum_honest_overlap_statement in quorums_c_honest_overlap.
+  specialize (@quorums_c_honest_overlap trace r p 3 certvote_quorum certvote_quorum
+                                        H_comm H_q_size H_comm H_q_size).
+  destruct quorums_c_honest_overlap as [voter [H_inq [_ H_honest_voter]]].
+
+  specialize (H_vote voter H_inq).
+  destruct H_vote as [ix [g1 [g2 [H_step H_sent]]]].
+
+  have key1 := user_sent_in_pre H_sent.
+  pose proof (in_fnd key1) as H_g1.
+  have key2 := user_sent_in_post H_sent.
+  pose proof (in_fnd key2) as H_g2.
+
+  remember (g1.(users)[`key1]) as u1.
+
+  assert (H_softvote : exists softvoter, softvoted_in_path trace softvoter r p v).
+  {
+    pose proof (certvote_precondition H_sent H_g1) as H_cert_pre.
+    destruct H_cert_pre as [[i [b [H_cert_ok H_u2]]] | [b H_cert_ok]];
+      destruct H_cert_ok as [_ [_ [_ [_ [_ H_certvals]]]]].
+
+    (* case where user_sent certvote came from message delivery transition *)
+    {
+      assert (tau_s <= soft_weight v (set_softvotes u1 r p (i, v)) r p) as H_v
+          by (move: H_certvals;rewrite mem_filter => /andP [] //).
+
+      apply step_in_path_onth_post in H_step.
+      have H_votes_checked :=
+        softvote_credentials_checked H_path H_start H_step H_u2 H_r.
+
+      have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v.
+
+      move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
+      exists softvoter.
+      apply (softvotes_sent H_path H_start H_step H_u2 H_r).
+      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+      assumption.
+      assumption.
+      }
+
+    (* case where user_sent certvote came from internal transition *)
+    {
+      assert (tau_s <= soft_weight v u1 r p) as H_v
+          by (move: H_certvals;rewrite mem_filter => /andP [] //).
+
+      apply step_in_path_onth_pre in H_step.
+      have H_votes_checked :=
+        softvote_credentials_checked H_path H_start H_step H_g1 H_r.
+
+      have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v.
+
+      move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
+      exists softvoter.
+      apply (softvotes_sent H_path H_start H_step H_g1 H_r).
+      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
+      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
+      assumption.
+      assumption.
+    }
+  }
+
+  destruct H_honest as [n H_honest].
+  destruct (onth trace n); try contradiction.
+  destruct (g.(users).[?uid]) eqn:H_u_g; try contradiction.
+
+  unfold enters_exclusively_for_value.
+  unfold period_advance_at.
+  unfold period_advances.
 Admitted.
 
 (* Maybe define a "period only nexvote quorum for v"
@@ -6499,20 +6574,22 @@ Proof using.
 Admitted.
 
 Lemma certificate_is_start_of_later_periods:
-  forall trace g0  (H_path: is_trace g0 trace) r p v,
+  forall trace g0 r0 (H_path: is_trace g0 trace)
+         (H_before: state_before_round r0 g0) r p v,
     certified_in_period trace r p v ->
+    r0 <= r ->
   forall p', p' > p ->
     forall uid,
       honest_in_period r p' uid trace ->
       enters_exclusively_for_value uid r p' v trace.
 Proof using.
   clear.
-  move => trace g0 H_path r p v H_cert p' H_p_lt.
+  move => trace g0 r0 H_path H_before r p v H_cert H_r p' H_p_lt.
   have: p' = (p.+1 + (p' - p.+1))%nat by symmetry;apply subnKC.
   move: (p' - p.+1)%nat => n {p' H_p_lt}->.
   elim:n.
   (* Next step after certification *)
-  by rewrite addn0; exact: certificate_is_start_of_next_period.
+  by rewrite addn0; intros; eapply certificate_is_start_of_next_period; eassumption.
   (* Later steps *)
   move => n;rewrite addnS addSn.
   admit. (* by apply (excl_enter_excl_next H_path). *)
@@ -6590,7 +6667,8 @@ Proof.
   assert (honest_in_period r p2 honest_voter trace)
    by (eapply honest_in_from_during_and_send;[eassumption..|apply step_le_refl]).
 
-  pose proof (certificate_is_start_of_later_periods H_path H_cert1 Hlt) as H_entry.
+  assert (H_r : r <= r) by trivial.
+  pose proof (certificate_is_start_of_later_periods H_path H_start H_cert1 H_r Hlt) as H_entry.
 
   symmetry.
   eapply excl_enter_limits_cert_vote; try eassumption; done.
