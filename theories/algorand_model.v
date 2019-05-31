@@ -5373,16 +5373,17 @@ Lemma period_advance_only_by_next_votes
       r0 (H_start: state_before_round r0 g0):
     forall n uid r p,
       r0 <= r ->
-      (exists g1 g2, period_advance_at n trace uid r p g1 g2) ->
+    forall g1 g2, period_advance_at n trace uid r p g1 g2 ->
       let path_prefix := take n.+2 trace in
       exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
         next_voters `<=` committee r p.-1 s
-        /\ (tau_b <= #|` next_voters | \/ tau_v <= #|` next_voters |)
+        /\ (if v then tau_v else tau_b) <= #|` next_voters |
+        /\ (exists u, g2.(users).[?uid] = Some u /\ u.(stv) p = v)
         /\ forall voter, voter \in next_voters ->
            received_next_vote uid voter r p.-1 s v path_prefix.
 Proof.
-  intros n uid r p H_r H_adv pref.
-  destruct H_adv as [g1 [g2 [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]]]].
+  intros n uid r p H_r g1 g2 H_adv pref.
+  destruct H_adv as [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]].
   assert (H_gtrans : g1 ~~> g2) by (eapply transition_from_path; eassumption).
 
   assert (H_lt_0 := H_lt).
@@ -5473,10 +5474,16 @@ Proof.
         try (subst pref; eassumption);
         try (subst dr; rewrite fnd_set; by rewrite eq_refl).
 
-      left.
+      simpl.
       unfold nextvoters_open_for.
       move: H_quorum_size.
       by rewrite card_fseq -finseq_size.
+
+      exists (adv_period_open_result pre').
+      split.
+        by rewrite Heqdr fnd_set eq_refl.
+      simpl.
+      by rewrite H_p0 -/addn addn1 eq_refl.
 
       intro voter.
       rewrite in_fset.
@@ -5523,12 +5530,18 @@ Proof.
         try (subst pref; eassumption);
         try (subst dr; rewrite fnd_set; by rewrite eq_refl).
 
-      right. move: H_quorum_size.
+      simpl.
+      move: H_quorum_size.
       unfold nextvote_value_quorum.
       rewrite finseq_size -card_fseq.
       match goal with |[|- is_true (tau_v <= ?A) -> is_true (tau_v <= ?B)]
                        => suff ->: A = B by[] end.
       by apply/imfset_filter_size_lem.
+
+      exists (adv_period_val_result pre' v).
+      split.
+        by rewrite Heqdr fnd_set eq_refl.
+        by rewrite /= H_p0 -/addn addn1 eq_refl.
 
       intros voter H_voter.
       have H_nextvote : (voter,v) \in pre'.(nextvotes_val) r1 p0 s
@@ -5832,13 +5845,14 @@ Lemma adv_period_from_honest_in_prev g0 trace (H_path: is_trace g0 trace)
     exists uid', honest_in_period r (p.-1) uid' trace.
 Proof.
   intros n uid r p.
-  intros H_p H_r H_adv.
+  intros H_p H_r [g1 [g2 H_adv]].
   eapply period_advance_only_by_next_votes in H_adv;[|eassumption..].
-  destruct H_adv as (s & v & next_voters & H_voters_cred & H_voters_size & ?).
+  destruct H_adv as (s & v & next_voters & H_voters_cred & H_voters_size & _ & ?).
+  clear g1 g2.
   assert (H_n : n.+2 > 0) by intuition.
   pose proof (is_trace_prefix H_path H_n) as H_path_prefix.
   assert (exists honest_voter, honest_voter \in next_voters /\ honest_during_step (r,p.-1,s) honest_voter (take n.+2 trace)) as (uid_honest & H_honest_voter & H_honest)
-      by (destruct H_voters_size;[eapply quorum_b_has_honest|eapply quorum_v_has_honest];eassumption).
+    by (destruct v;simpl in H_voters_size;[eapply quorum_v_has_honest|eapply quorum_b_has_honest];eassumption).
   clear H_voters_size.
   exists uid_honest.
   specialize (H uid_honest H_honest_voter).
@@ -6661,8 +6675,8 @@ Lemma enters_exclusively_from_nextvotes
   move: (honest_in_period_entered H_path H_start H_honest H_p'_gt)
           => [n H_advance].
 
-  have H_nextvotes := (period_advance_only_by_next_votes H_path H_start (leqnn r) H_advance).
   move:H_advance =>[g1 [g2 H_advance]].
+  have H_nextvotes := (period_advance_only_by_next_votes H_path H_start (leqnn r) H_advance).
 
   exists g1, g2, n.
   split;[assumption|].
