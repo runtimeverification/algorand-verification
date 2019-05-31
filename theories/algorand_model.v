@@ -6337,6 +6337,17 @@ Proof using.
   by case.
 Qed.
 
+Definition eqGState (g1 g2 : GState) : bool :=
+  if pselect (g1 = g2) then true else false.
+
+Lemma eqGStateP : Equality.axiom eqGState.
+Proof.
+by move => g1 g2; rewrite /eqGState; case: pselect => //= ?; apply/(iffP idP).
+Qed.
+
+Canonical GState_eqMixin := EqMixin eqGStateP.
+Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
+
 Lemma honest_during_from_ustate trace g0 (H_path : is_trace g0 trace):
   forall ix g,
     onth trace ix = Some g ->
@@ -6348,12 +6359,20 @@ Lemma honest_during_from_ustate trace g0 (H_path : is_trace g0 trace):
     honest_during_step (r,p,s) uid trace.
 Proof using.
   move => ix g H_g uid u H_u H_honest r p s H_lt.
-  SearchAbout all.
   have : user_honest uid g by rewrite /user_honest H_u.
   rewrite -(onth_last_take H_g g0).
   move/(honest_last_all uid (is_trace_prefix H_path (ltn0Sn ix))) => H_prefix.
   unfold honest_during_step.
   suff H_suffix: (all (upred uid (fun u => ~~step_leb (step_of_ustate u) (r,p,s))) (drop ix.+1 trace)).
+    apply/allP => /=.
+    move => x Hx.
+    rewrite /upred.
+    case Hin: (uid \in domf (global_state.users UserId UState [choiceType of Msg] x)).
+      rewrite in_fnd //.
+      by admit.
+    rewrite not_fnd.
+    move/allP: H_suffix => H_suffix.
+    move: (H_suffix x) => Hx'.
 Admitted.
 
 Lemma honest_at_from_during r p s uid trace:
