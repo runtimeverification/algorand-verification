@@ -1210,6 +1210,15 @@ Proof using.
   destruct (drop ix s);simpl;congruence.
 Qed.
 
+Lemma onth_in (T:eqType) (s:seq T) ix x:
+  onth s ix = Some x -> x \in s.
+Proof using.
+  clear.
+  intro H.
+  rewrite -(onth_nth H x).
+  exact (mem_nth _ (onth_size H)).
+Qed.
+
 Lemma onth_take_last T (s:seq T) n x:
   onth s n = some x ->
   forall x0, last x0 (take n.+1 s) = x.
@@ -4204,7 +4213,8 @@ Lemma certvote_postcondition uid v r p g1 g2:
   user_sent uid (Certvote,val v,r,p,uid) g1 g2 ->
   forall u, g2.(users).[?uid] = Some u ->
   v \in certvals u r p /\
-        exists b, b \in u.(blocks) r /\ valid_block_and_hash b v.
+        (exists b, b \in u.(blocks) r /\ valid_block_and_hash b v)
+  /\ valid_rps u r p 4.
 Proof using.
   move => H_sent u H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
@@ -4220,7 +4230,10 @@ Proof using.
       unfold certvote_ok in H;decompose record H;clear H.
       rewrite fnd_set eq_refl in H_u. case: H_u => {u}<-.
       unfold certvote_result.
-      split;[|exists b;split];assumption.
+      by (split;[|split]);
+        [
+        |exists b;split
+        |move:H0 =>-[? [? ?]];split;[|split;[|reflexivity]]].
     }
   * { (* internal transition cases *)
       destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
@@ -4232,7 +4245,9 @@ Proof using.
       rewrite fnd_set eq_refl in H_u. case:H_u => H_u.
       subst.
       unfold certvote_ok in H;decompose record H;clear H.
-      split;[|exists b;split];assumption.
+      by (split;[|split]);
+        [|exists b;split
+         |move:H0 =>-[? [? ?]]].
     }
 Qed.
 
@@ -4513,7 +4528,7 @@ Proof using.
       by assumption.
   }
   move => H_certval_nv.
-  move: H_softvotes =>  [_ [b [H_b H_valid]]].
+  move: H_softvotes =>  [_ [[b [H_b H_valid]] _]].
 
   refine (H_no_softvotes H_certval_nv b _ H_valid).
   apply/subsetP: {H_valid}b H_b.
@@ -5285,7 +5300,7 @@ Proof using quorums_s_honest_overlap.
   have H_reach : greachable g2_cv g1_nv
     := steps_greachable H_path H H_step_cv H_step_nv.
 
-  destruct H_cv_cond as [H_certval_cv [b' [H_blocks H_valid]]].
+  destruct H_cv_cond as [H_certval_cv [[b' [H_blocks H_valid]] _]].
 
   assert (v \in certvals ustate_nv r p) as H_certval_v.
   {
@@ -6541,75 +6556,237 @@ Proof using quorums_c_honest_overlap.
   by destruct (no_two_certvotes_in_p H_path H_cert1 H_honest1 H_cert2 H_honest2).
 Qed.
 
+Definition saw_v trace r p v := fun uid =>
+  has (fun g =>
+         match g.(users).[? uid] with
+         | None => false
+         | Some u =>
+           (v \in u.(certvals) r p)
+             && has (fun b => `[< valid_block_and_hash b v>]) (u.(blocks) r)
+             && step_leb (step_of_ustate u) (r,p,4)
+         end) trace.
+
+Hypothesis interquorum_c_v_certinfo:
+  forall trace r p v,
+    interquorum_property tau_c tau_v (saw_v trace r p v) trace.
+Hypothesis interquorum_c_b_certinfo:
+  forall trace r p v,
+    interquorum_property tau_c tau_b (saw_v trace r p v) trace.
+
+Lemma certinfo_forward
+  g0 trace (H_path: is_trace g0 trace)
+  r (H_start: state_before_round r g0)
+  p v uid (H_saw: saw_v trace r p v uid)
+  ix g1 g2 (H_step: step_in_path_at g1 g2 ix trace)
+  u (H_u: g1.(users).[? uid] = Some u)
+  msg (H_send: user_sent uid msg g1 g2)
+  (H_u_step: step_le (r,p,4) (msg_step msg)):
+  v \in certvals u r p
+  /\ exists b, b \in blocks u r /\ valid_block_and_hash b v.
+Proof using.
+  move: H_saw => /(@hasP _ _ trace)=> -[g_mid H_g_mid].
+  case:fndP => // key_mid.
+  set u_mid: UState := g_mid.(users)[`key_mid].
+  move => /andP [/andP[H_v_certval_mid H_blocks_mid] /step_leP H_mid_step_le].
+
+  set H_g1 := step_in_path_onth_pre H_step.
+  set key1 := user_sent_in_pre H_send.
+  rewrite (in_fnd key1) in H_u.
+  case: H_u => ?;subst u.
+  set u := g1.(users)[`key1].
+
+  assert (greachable g_mid g1) as H_reach.
+  {
+    assert (index g_mid trace <= ix). {
+      rewrite -ltnS.
+      pose proof (order_ix_from_steps H_path (onth_index H_g_mid) (step_in_path_onth_post H_step)).
+      apply (H _ key_mid (user_sent_in_post H_send)).
+
+      apply (step_le_lt_trans H_mid_step_le).
+      have:= (utransition_label_end H_send (in_fnd (user_sent_in_post H_send))).
+      apply/step_le_lt_trans.
+      assumption.
+    }
+    exact (at_greachable H_path H (onth_index H_g_mid) (step_in_path_onth_pre H_step)).
+  }
+  have H_softvotes_advance := softvotes_monotone H_reach (in_fnd key_mid) (in_fnd key1) r p.
+
+  assert (v \in certvals u r p).
+  {
+    move: H_v_certval_mid.
+    rewrite !mem_filter => /andP [H_size_mid H_votes_mid].
+    apply/andP.
+    split.
+    *
+      apply (leq_trans H_size_mid).
+      apply fsubset_leq_card.
+      apply subset_imfset.
+      move => x /andP [x_mem x_prop].
+      apply/andP;split;[|exact x_prop].
+      move: H_softvotes_advance x_mem => /subsetP/(_ x).
+        by apply.
+    *
+      move: H_votes_mid.
+      rewrite !mem_undup.
+      move/mapP => -[x H_x_in H_x2].
+      apply/mapP;exists x;[|assumption].
+      move: H_softvotes_advance H_x_in => /subsetP.
+        by apply.
+  }
+
+  move: H_blocks_mid => /hasP [b' H_b' /asboolP H_b'_valid].
+  assert (b' \in u.(blocks) r).
+  {
+    move: {H_b'_valid}b' H_b'.
+    apply/subsetP.
+    exact (blocks_monotone H_reach (in_fnd key_mid) (in_fnd key1) r).
+  }
+
+  by split;[|exists b';split].
+Qed.
+
 Lemma certificate_is_start_of_next_period
   g0 trace (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0)
   p v (H_cert: certified_in_period trace r p v):
     period_nextvoted_exclusively_for v r p trace.
-Proof using quorums_s_honest_overlap quorums_c_honest_overlap.
-  clear -quorums_s_honest_overlap quorums_c_honest_overlap H_path H_start H_cert.
+Proof using quorums_s_honest_overlap quorums_c_honest_overlap interquorum_c_v_certinfo interquorum_c_b_certinfo.
+  clear -quorums_s_honest_overlap quorums_c_honest_overlap interquorum_c_v_certinfo interquorum_c_b_certinfo
+        H_path H_start H_cert.
   destruct H_cert as [certvote_quorum [H_comm [H_q_size H_vote]]].
 
-  destruct (quorum_c_has_honest trace H_comm H_q_size) as [voter [H_inq H_honest]].
+  destruct (quorum_c_has_honest trace H_comm H_q_size) as [certvoter [H_inq H_cv_honest]].
 
-  specialize (H_vote voter H_inq).
-  destruct H_vote as [ix [g1 [g2 [H_step H_sent]]]].
+  move:(H_vote certvoter H_inq) => [ix_cv [g1_cv [g2_cv [H_step_cv H_sent_cv]]]].
 
-  have key1 := user_sent_in_pre H_sent.
-  pose proof (in_fnd key1) as H_g1.
-  have key2 := user_sent_in_post H_sent.
-  pose proof (in_fnd key2) as H_g2.
+  have H_g2 := step_in_path_onth_post H_step_cv.
+  have key2 := user_sent_in_post H_sent_cv.
+  have H_u2 := in_fnd key2.
+  set u2: UState := g2_cv.(users)[`key2] in H_u2.
 
-  remember (g1.(users)[`key1]) as u1.
+  move:(certvote_postcondition H_sent_cv H_u2) => [H_certvals [[b [H_blocks H_block_valid]] H_g2_step]].
 
-  assert (H_softvote : exists softvoter, softvoted_in_path trace softvoter r p v).
+  have H_certvoters_saw_v:
+    forall uid : UserId, uid \in certvote_quorum -> honest_during_step (r, p, 3) uid trace -> saw_v trace r p v uid.
   {
-    pose proof (certvote_precondition H_sent H_g1) as H_cert_pre.
-    destruct H_cert_pre as [[i [b [H_cert_ok H_u2]]] | [b H_cert_ok]];
-      destruct H_cert_ok as [_ [_ [_ [_ [_ H_certvals]]]]].
-
-    (* case where user_sent certvote came from message delivery transition *)
-    {
-      assert (tau_s <= soft_weight v (set_softvotes u1 r p (i, v)) r p) as H_v
-          by (move: H_certvals;rewrite mem_filter => /andP [] //).
-
-      apply step_in_path_onth_post in H_step.
-      have H_votes_checked :=
-        softvote_credentials_checked H_path H_start H_step H_u2 (leqnn r).
-
-      have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v.
-
-      move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
-      exists softvoter.
-      apply (softvotes_sent H_path H_start H_step H_u2 (leqnn r)).
-      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
-      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
-      assumption.
-      assumption.
-      }
-
-    (* case where user_sent certvote came from internal transition *)
-    {
-      assert (tau_s <= soft_weight v u1 r p) as H_v
-          by (move: H_certvals;rewrite mem_filter => /andP [] //).
-
-      apply step_in_path_onth_pre in H_step.
-      have H_votes_checked :=
-        softvote_credentials_checked H_path H_start H_step H_g1 (leqnn r).
-
-      have Hq := quorum_s_has_honest trace (H_votes_checked _ _) H_v.
-
-      move: Hq => [softvoter [H_voted_v H_softvoter_honest]].
-      exists softvoter.
-      apply (softvotes_sent H_path H_start H_step H_g1 (leqnn r)).
-      move:H_voted_v => /imfsetP /= [] x /andP [H_x_in].
-      unfold matchValue. destruct x. move => /eqP ? /= ?;subst.
-      assumption.
-      assumption.
-    }
+    move => cv2 H_in2 H_hon2.
+    move: (H_vote _ H_in2) => [ix2 [g1' [g2' [H_step' H_send']]]].
+    move:(certvote_postcondition H_send' (in_fnd (user_sent_in_post H_send'))) =>
+    [H_certvals' [[b' [H_blocks' H_block_valid']] H_g2'_step]].
+    unfold saw_v.
+    apply/(@hasP _ _ trace).
+    exists g2'.
+    apply (onth_in (step_in_path_onth_post H_step')).
+    rewrite (in_fnd (user_sent_in_post H_send')).
+    apply/andP;split;[apply/andP;split|].
+    assumption.
+      by apply/hasP;exists b';[|apply/asboolP].
+    unfold step_of_ustate;move: H_g2'_step => [-> [-> ->]].
+    apply/step_leP/step_le_refl.
   }
-  (* found a softvote *)
-Admitted.
+
+  have H_softvote_quorums_only_for_v :
+    forall quorum2,
+      quorum2 `<=` committee r p 2 ->
+      tau_s <= #|` quorum2| ->
+    forall v',
+    (forall voter, voter \in quorum2 ->
+                   honest_during_step (r,p,2) voter trace ->
+                   softvoted_in_path trace voter r p v') ->
+      v' = v.
+  {
+    move => q2 H_certs_q2 H_size_q2 v' H_voters_q2.
+    assert (tau_s <= soft_weight v u2 r p) as H_v
+        by (move: H_certvals;rewrite mem_filter => /andP [] //).
+    have H_votes_checked :=
+      softvote_credentials_checked H_path H_start (step_in_path_onth_post H_step_cv) H_u2 (leqnn r).
+    move:(quorums_s_honest_overlap trace (H_votes_checked v p) H_v H_certs_q2 H_size_q2)
+    => [common_voter [H_voter_in_q1 [H_voter_in_q2 H_voter_honest]]].
+
+    move/(_ _ H_voter_in_q2 H_voter_honest):H_voters_q2 => {H_voter_in_q2}[ix_sv' H_voted_v'].
+
+    move: H_voter_in_q1 => /imfsetP [[x_1 x_2]] /= /andP [H] /eqP H1 H2.
+    move:H1 H2 H => {x_1}<- {x_2}<- => H_in_softvotes.
+
+    move:(softvotes_sent H_path H_start H_g2 H_u2 (leqnn r) H_in_softvotes H_voter_honest) => [ix_sv].
+    by apply (no_two_softvotes_in_p H_path H_voted_v').
+  }
+
+  have H_interquorum_v := interquorum_c_v_certinfo H_comm H_q_size H_certvoters_saw_v.
+  have H_interquorum_b := interquorum_c_b_certinfo H_comm H_q_size H_certvoters_saw_v.
+
+  split.
+  (* For value votes:
+     By interquorum assumptions, any nextvote quorum contains an honest voter
+     which (would have) certvoted for v in step 3.
+       Having seen a quorum of softvotes rules out an stv-based nextvote.
+       A quorum of softvotes for the v' they voted for
+       would have honest overlap with the softvote v quorum
+       so by no_two_softvotes_in_p we have v = v'.
+   *)
+  {
+  move => s nextvoters H_nv_creds H_nv_size v' H_nv_voted.
+  move: H_interquorum_v => /(_ r p s _ H_nv_creds H_nv_size)
+    => -[uid_nv [H_in_nv [H_saw_v H_honest]]].
+  move:H_nv_voted =>/(_ _ H_in_nv H_honest){H_in_nv} [ix_nv [g1_nv [g2_nv [H_step_nv H_send_nv]]]].
+
+  set key1_nv := user_sent_in_pre H_send_nv.
+  set u1_nv := g1_nv.(users)[` key1_nv].
+
+  case:(nextvote_val_precondition H_send_nv (in_fnd key1_nv)) => [[b0]|].
+  * (* nextvote_val_ok *)
+    unfold nextvote_val_ok => -[_] [_] [_] [_] [_] [_].
+    unfold certvals.
+    rewrite !mem_filter => /andP [H_sv_size H_sv_votes].
+    have H_sv_creds := (softvote_credentials_checked H_path H_start
+         (step_in_path_onth_pre H_step_nv) (in_fnd key1_nv) (leqnn r) v' p).
+
+    apply (H_softvote_quorums_only_for_v _ H_sv_creds H_sv_size).
+
+    have:= softvotes_sent H_path H_start (step_in_path_onth_pre H_step_nv) (in_fnd key1_nv) (leqnn r).
+    clear.
+    move=> H_sv_sent voter H_in.
+    apply H_sv_sent.
+      by move: H_in => /imfsetP [[x0 x1] /andP [H_in /eqP ->] /= ->].
+  * (* nextvote_stv_ok *)
+    unfold nextvote_stv_ok => -[] [_] [_] [_] [H_s] [/(_ v)H_no_good_certvals _] _.
+    have H_good_certval := certinfo_forward H_path H_start H_saw_v H_step_nv (in_fnd key1_nv) H_send_nv.
+    unfold msg_step, msg_round, msg_period in H_good_certval;cbn -[step_le] in H_good_certval.
+    have: step_le (r,p,4) (r,p,s) by apply/step_leP;rewrite /= !ltnn !eq_refl H_s /=.
+    move/H_good_certval => [H_v_certval [b0 [H_b0_blocks H_b0_valid]]].
+    exfalso.
+    exact (H_no_good_certvals H_v_certval _ H_b0_blocks H_b0_valid).
+  }
+
+  (* For no bottom votes:
+     By interquorum assumption, any nextvote quorum contains an honest voter
+     which (would have) certvoted for v in step 3.
+       Having seen enough softvotes violates the precondition for voting for bottom.
+   *)
+  {
+
+  move => s bot_voters H_bot_creds H_bot_size H_bot_voted.
+  move: H_interquorum_b
+    => /(_ r p s _ H_bot_creds H_bot_size){H_bot_creds H_bot_size}
+    => -[honest_bot_voter [H_honest_in [H_honest_saw H_honest_honest]]].
+  move: H_bot_voted => /(_ _ H_honest_in H_honest_honest){H_honest_in}
+                       [ix_nv [g1_nv [g2_nv [H_step_nv H_send_nv]]]].
+
+
+  set key1_nv := user_sent_in_pre H_send_nv.
+  set u1_nv := g1_nv.(users)[` key1_nv].
+
+  have := nextvote_open_precondition H_send_nv (in_fnd key1_nv).
+  move => -[_] [_] [_] [H_s] [/(_ v)H_no_good_certvals _].
+
+  have H_good_certval := certinfo_forward H_path H_start H_honest_saw H_step_nv (in_fnd key1_nv) H_send_nv.
+  unfold msg_step, msg_round, msg_period in H_good_certval;cbn -[step_le] in H_good_certval.
+  have: step_le (r,p,4) (r,p,s) by apply/step_leP;rewrite /= !ltnn !eq_refl H_s /=.
+  move/H_good_certval => [H_v_certval [b0 [H_b0_blocks H_b0_valid]]].
+  exfalso.
+  exact (H_no_good_certvals H_v_certval _ H_b0_blocks H_b0_valid).
+  }
+Qed.
 
 Lemma nextvotes_val_follow_softvotes
       g0 trace (H_path: is_trace g0 trace)
