@@ -32,9 +32,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(* Algorand Model *)
-Section AlgoModel.
-
 (* We assume a finite set of users *)
 Parameter UserId : finType.
 
@@ -100,7 +97,7 @@ Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7)
 Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
 Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
 
-(* Inspired by the strucutres used as values in messages in Victor's paper *)
+(* Inspired by the structures used as values in messages in the automaton model *)
 Inductive ExValue :=
   | val      : Value -> ExValue
   | step_val : nat -> ExValue
@@ -299,7 +296,7 @@ Parameter L : R.
 
 (* assumptions on how these bounds relate *)
 Axiom delays_positive : (lambda > 0)%R .
-Axiom delays_order : (3 * lambda <= big_lambda < L)%R .  (* As per the note from Victor *)
+Axiom delays_order : (3 * lambda <= big_lambda < L)%R .
 
 (* some other thresholds *)
 (* number of soft-votes needed to cert-vote *)
@@ -490,7 +487,6 @@ Definition leader_reprop_value (v : Value) (prs : seq PropRecord) : Prop :=
 (* The timer deadline value for the NEXT step following the given step value *)
 (* Note: k is zero-based and hence the apparent difference from the algorand paper.
          The computed deadline values are exactly as given in the paper. *)
-(* Note: Updated to accommodate the 27March change *)
 Definition next_deadline k : R :=
   match k with
   (* deadline for step 1 *)
@@ -509,7 +505,7 @@ Definition next_deadline k : R :=
 (* The proposal step preconditions *)
 (* Note that this covers both: (a) the case when p = 1, and (b)
    the case when p > 1 with the previous period voting for bottom.
-   Just as in Victor's model, the fact that the last period's quorum
+   Just as in the automaton model, the fact that the last period's quorum
    was not for bottom is captured by the predicate cert_may_exist *)
 Definition propose_ok (pre : UState) uid v b r p : Prop :=
   pre.(timer) = 0%R /\
@@ -549,7 +545,7 @@ Definition propose_result (pre : UState) : UState :=
 (* The Softvoting-a-proposal step preconditions *)
 (* Note that this covers both: (a) the case when p = 1, and (b)
    the case when p > 1 with the previous period voting for bottom. *)
-(* Notes: - Victor's model has the constraint clock >= 2*lambda
+(* Notes: - the automaton model has the constraint clock >= 2*lambda
           - The phrase "v is a period 1 block" in the Algorand2 description
             is interpreted here as "v is a reproposal" for simplicity *)
 Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
@@ -571,8 +567,6 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
     leader_reprop_value v (pre.(proposals) r p))
     \/
     (cert_may_exist pre /\ pre.(stv) p = Some v) ).
-(* Victor: Technically, I think it would be correct to vote for your (non-bottom)
-   starting value even if `~ cert_may_exist pre` *)
 
 (* The no-softvoting step preconditions *)
 (* Three reasons a user may not be able to soft-vote:
@@ -648,7 +642,6 @@ Definition certvote_result (pre : UState) : UState :=
             model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the
             committee membership constraint)
-          - Updated to accommodate the 27March change
  *)
 Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -665,7 +658,6 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
             model (but not the same) *)
 (*        - Corresponds more closely to the Algorand2 description (but with the
             committee membership constraint)
-          - Updated to accommodate the 27March change
  *)
 Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -681,7 +673,6 @@ Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
 (* Notes: - Not sure if this is captured in the automaton model *)
 (*        - Corresponds more closely to the Algorand2 description (but with
             additional constraints given explicitly)
-          - Updated to accommodate the 27March change
  *)
 Definition nextvote_stv_ok (pre : UState) uid r p s : Prop :=
   pre.(timer) = (lambda + big_lambda + (INR s - 4) * L)%R /\
@@ -700,7 +691,6 @@ Definition no_nextvote_ok (pre : UState) uid r p s : Prop :=
   ~ comm_cred_step uid r p s.
 
 (* Nextvoting step state update for steps s >= 4 (all cases) *)
-(* Note: Updated to accommodate the 27March change *)
 Definition nextvote_result (pre : UState) s : UState :=
   {[ {[ pre with step := (s + 1) ]}
             with deadline := next_deadline s ]}.
@@ -1261,5 +1251,3 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
       /\ mtype_matches_step mtype mval s
       /\ post = forge_msg_result pre sender r p mtype mval
   end.
-
-End AlgoModel.

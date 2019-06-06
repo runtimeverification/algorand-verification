@@ -39,8 +39,6 @@ Unset Printing Implicit Defensive.
 (* Quorum definitions and hypotheses *)
 (* --------------------------------- *)
 
-Section AlgoQuorums.
-
 (* committee is set of users with sufficiently small credential *)
 Definition committee (r p s:nat) : {fset UserId} :=
   [fset uid : UserId | `[<committee_cred (credential uid r p s)>] ].
@@ -133,5 +131,3 @@ Definition quorum_b_has_honest : quorum_has_honest_statement tau_b
 Axiom quorums_v_honest_overlap : quorum_honest_overlap_statement tau_v.
 Definition quorum_v_has_honest : quorum_has_honest_statement tau_v
   := quorum_has_honest_from_overlap_stmt quorums_v_honest_overlap.
-
-End AlgoQuorums.

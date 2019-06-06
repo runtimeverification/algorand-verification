@@ -102,13 +102,11 @@ Hint Unfold
 
 Arguments delivery_result : clear implicits.
 
-Section AlgoSafetyHelpers.
+(* ------------------- *)
+(* Generic path lemmas *)
+(* ------------------- *)  
 
-(* -------------- *)
-(* Generic lemmas *)
-(* -------------- *)  
-
-(* Dropping elements from a path still results in a path *)
+(* dropping elements from a path still results in a path *)
 Lemma path_drop T (R:rel T) x p (H:path R x p) n:
   match drop n p with
   | List.nil => true
@@ -132,7 +130,59 @@ Proof using.
   by destruct (drop n p);[|destruct l;[|move/andP => []]].
 Qed.
 
-(* multiset lemmas *)
+(* path still holds after taking n elements *)
+Lemma path_prefix : forall T R p (x:T) n,
+    path R x p -> path R x (take n p).
+Proof using.
+  induction p;[done|].
+  move => /= x n /andP [Hr Hpath].
+  destruct n. done.
+  simpl;apply /andP;by auto.
+Qed.
+
+(* proposition does not hold initially but holds for last element implies there
+   must be a point in the path where it becomes true *)
+Lemma path_steps : forall {T} (R : rel T) x0 p,
+    path R x0 p ->
+    forall (P : pred T),
+    ~~ P x0 -> P (last x0 p) ->
+    exists n,
+      match drop n (x0 :: p) with
+      | x1 :: x2 :: _ => ~~ P x1 && P x2
+      | _ => false
+      end.
+Proof using.
+  clear.
+  intros T R x0 p H_path P H_x0.
+  revert p H_path. induction p using last_ind.
+  * simpl. intros _ H_b. exfalso. revert H_b. apply /negP. assumption.
+  * rewrite last_rcons. rewrite rcons_path.
+    move => /andP [H_path H_step] H_x.
+    destruct (P (last x0 p)) eqn:H_last.
+  + destruct IHp as [n' Hind];[done..|]. exists n'.
+    destruct n';simpl in Hind |- *. destruct p;[by exfalso|assumption].
+    destruct (ltnP n' (size p));[|by (rewrite drop_oversize in Hind)].
+    rewrite drop_rcons;[destruct (drop n' p) as [|? [|]];[done..|tauto]|].
+    apply ltnW;assumption.
+  + clear IHp. exists (size p).
+    destruct (size p) eqn:H_size. simpl.
+    rewrite (size0nil H_size) in H_last |- *. simpl. by apply/andP.
+    simpl.
+    rewrite (drop_nth x0).
+    rewrite <- cats1, <- H_size.
+    rewrite drop_size_cat;[|reflexivity].
+    rewrite nth_cat.
+    rewrite H_size ltnSn.
+    change n with (n.+1.-1).
+    rewrite <- H_size, nth_last, H_last.
+    simpl. assumption.
+    rewrite size_rcons H_size.
+    rewrite ltnS. apply leqnSn.
+Qed.
+
+(* ----------------------- *)
+(* generic multiset lemmas *)
+(* ----------------------- *)
 
 (* x in mset of seq iff x is in seq *)
 Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
@@ -224,7 +274,9 @@ Proof using.
   apply perm_eq_seq_mset.
 Qed.
 
-(* sequence lemmas *)
+(* ----------------------- *)
+(* generic sequence lemmas *)
+(* ----------------------- *)
 
 Lemma perm_eq_cons1P (T : eqType) (s : seq T) (a : T) : reflect (s = [:: a]) (perm_eq s [:: a]).
 Proof.
@@ -435,7 +487,7 @@ Qed.
 
 (* send_broadcasts at uid results in merge_msgs_deadline *)
 Lemma send_broadcasts_in : forall (msgpool : MsgPool) now uid msgs targets
-                                 (h : uid \in msgpool) (h' : uid \in targets),
+                                  (h : uid \in msgpool) (h' : uid \in targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = Some (merge_msgs_deadline now msgs msgpool.[h]).
 Proof using.
   by move => *;rewrite send_broadcastsE updf_update.
@@ -459,6 +511,47 @@ Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs tar
 Proof using.
   move => msgpool now uid msg targets h h'.
   by rewrite send_broadcastsE updf_update' // in_fnd.
+Qed.
+
+(* send_broadcast contains msg but original mailbox does not, msg must be in l *)
+Lemma broadcasts_prop
+  uid (msg:Msg) (l:seq Msg)
+  time (targets : {fset UserId}) (mailboxes' mailboxes : {fmap UserId -> {mset R * Msg}}):
+  (odflt mset0 mailboxes'.[? uid] `<=` odflt mset0 mailboxes.[? uid])%mset ->
+  match (send_broadcasts time targets mailboxes' l).[? uid] with
+  | Some msg_mset => has (fun p : R * Msg => p.2 == msg) msg_mset
+  | None => false
+  end ->
+  ~~
+  match mailboxes.[? uid] with
+  | Some msg_mset => has (fun p : R * Msg => p.2 == msg) msg_mset
+  | None => false
+  end -> msg \in l.
+Proof using.
+  clear.
+  move => H_sub H_pre H_post.
+  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
+    by case:fndP H_post;[|rewrite enum_mset0].
+
+  rewrite send_broadcastsE in H_pre.
+  case:mailboxes'.[?uid]/fndP => H_mb';
+   [|by move:H_pre;rewrite not_fnd //;
+     congr (uid \notin _): H_mb';apply updf_domf].
+
+  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
+    by apply/contraNN:H_post => /hasP /= [x H_in H_x];
+       apply/hasP;exists x;[apply (msubset_subset H_sub);rewrite in_fnd|].
+
+  move: {mailboxes H_sub}H_pre.
+
+  case:(uid \in targets)/boolP=>H_tgt;
+    [|by apply contraTT;rewrite updf_update'].
+
+  rewrite updf_update {targets H_tgt}// => /hasP /=[[d msg'] H_in /eqP /=H_msg].
+  move:H_msg H_in=> {msg'}-> /in_merge_msgs [//|H_in].
+
+  move/negP in H_post;contradict H_post.
+  by apply /hasP;exists (d,msg).
 Qed.
 
 (* ---------------------- *)
@@ -729,19 +822,22 @@ Qed.
 (* by split => //; apply/asboolP. *)
 (* Qed. *)
 
-(* ------------------------------------------- *)
-(* Definitions and lemmas for sending messages *)
-(* ------------------------------------------- *)
+(* ----------------------------------------------- *)
+(* Definitions and lemmas for sent/forged messages *)
+(* ----------------------------------------------- *)
 
 Definition user_sent sender (m : Msg) (pre post : GState) : Prop :=
   exists (ms : seq Msg), m \in ms
   /\ ((exists d incoming, related_by (lbl_deliver sender d incoming ms) pre post)
       \/ (related_by (lbl_step_internal sender ms) pre post)).
 
+Definition user_forged (msg:Msg) (g1 g2: GState) :=
+  let: (mty,v,r,p,sender) := msg in
+  related_by (lbl_forge_msg sender r p mty v) g1 g2.
+
 Definition user_sent_at ix path uid msg :=
   exists g1 g2, step_in_path_at g1 g2 ix path
                 /\ user_sent uid msg g1 g2.
-
 
 (* user who sends a message must be in both pre and post states *)
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
@@ -760,8 +856,140 @@ Proof using.
   change (sender \in domf (users.[sender <- x0])); rewrite dom_setf; apply fset1U1.
 Qed.
 
+(* step of user in pre-state who sends message is same as message step *)
+Lemma utransition_label_start uid msg g1 g2 :
+    user_sent uid msg g1 g2 ->
+    forall u, g1.(users).[? uid] = Some u ->
+    (step_of_ustate u) = (msg_step msg).
+Proof using.
+  unfold user_sent.
+  move => [sent [msg_in H_trans]] u H_u.
+  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: H_trans => [[d [body H_recv]]|H_step].
+  * { (* message delivery cases *)
+  destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
+                     & key_mailbox & H_msg_in_mailbox & ->).
+  destruct g1;simpl in * |- *.
+  unfold step_of_ustate.
+  rewrite in_fnd in H_u. injection H_u;clear H_u. intros <-.
+
+  remember (ustate_post,sent) as ustep_out in H_step.
+  destruct H_step;injection Hequstep_out;clear Hequstep_out;intros <- <-;
+    try (exfalso;exact (notF msg_in)).
+
+  (* Only one delivery transition actually sends a message *)
+  move/Iter.In_mem in msg_in;case: msg_in => [[*]|[]];subst.
+  unfold certvote_ok in H;decompose record H;clear H.
+  revert H0.
+  clear;unfold pre',valid_rps;autounfold with utransition_unfold;simpl;clear.
+  move => [-> [->  ->]];reflexivity.
+  }
+  * { (* internal transition cases *)
+    destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+    destruct g1;simpl in * |- *.
+    rewrite in_fnd in H_u;injection H_u;clear H_u.
+    intro H. rewrite -> H in * |- *. clear key_user users H.
+    move/Iter.In_mem in msg_in.
+    clear -msg_in H_step.
+
+    unfold step_of_ustate.
+    remember (ustate_post,sent) as ustep_out in H_step;
+      destruct H_step;
+    injection Hequstep_out;clear Hequstep_out;intros <- <-;
+    let rec use_mem H :=
+      first [exfalso;exact H
+
+      |destruct H as [H|H];[injection H as <- <- <- <- <-|use_mem H]]
+    in use_mem msg_in;
+    autounfold with utransition_unfold in H;
+      decompose record H;clear H;
+    match goal with
+    | [H:valid_rps _ _ _ _ |- _] => unfold valid_rps in H;move: H
+    | [H:advancing_rp _ _ _ |- _] => unfold advancing_rp in H;move :H
+    end;clear;simpl;move=> [-> [-> ->]];reflexivity.
+  }
+Qed.
+
+(* step of user in post-state who sends message is greater than message step *)
+Lemma utransition_label_end : forall uid msg g1 g2,
+    user_sent uid msg g1 g2 ->
+    forall u, g2.(users).[? uid] = Some u ->
+    step_lt (msg_step msg) (step_of_ustate u).
+Proof using.
+  move => uid msg g1 g2.
+  unfold user_sent.
+  move => [sent [msg_in H_trans]] u H_u.
+  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: H_trans => [[d [body H_recv]]|H_step].
+  * { (* message delivery cases *)
+  destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
+                     & key_mailbox & H_msg_in_mailbox & ->).
+  revert H_u. rewrite fnd_set eq_refl. case => {u}<-.
+
+  destruct g1;cbn -[in_mem mem eq_op] in * |- *.
+  remember (ustate_post,sent) as ustep_out in H_step.
+  destruct H_step;injection Hequstep_out;clear Hequstep_out;intros <- <-;
+  try (exfalso;exact (notF msg_in));
+  match type of msg_in with
+  | is_true (_ \in [:: _]) =>
+    unfold in_mem in msg_in; simpl in msg_in;
+      rewrite Bool.orb_false_r in msg_in;
+      apply (elimT eqP) in msg_in;
+      injection msg_in;clear msg_in;
+      intros -> -> -> -> ->
+  end.
+
+  autounfold with utransition_unfold in H. decompose record H.
+  revert H0;subst pre';clear;unfold valid_rps;destruct pre;simpl.
+    by intuition.
+  }
+  * { (* internal transition cases *)
+  destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
+  revert H_u. rewrite fnd_set eq_refl. case => {u}<-.
+
+  destruct g1;cbn -[in_mem mem eq_op] in * |- *.
+  move/Iter.In_mem in msg_in.
+
+  clear -msg_in H_step.
+  remember (ustate_post,sent) as ustep_out in H_step.
+  destruct H_step;
+  injection Hequstep_out;clear Hequstep_out;intros <- <-;
+   let rec use_mem H :=
+       first [exfalso;exact H
+      |destruct H as [H|H];[injection H as <- <- <- <- <-|use_mem H]]
+  in use_mem msg_in;
+    autounfold with utransition_unfold in H;
+    decompose record H;clear H;
+    match goal with
+    | [H:valid_rps _ _ _ _ |- _] => move: H; unfold valid_rps
+    | [H:advancing_rp _ _ _ |- _] => move: H; unfold advancing_rp
+    end;clear;destruct pre;simpl;clear;move=> [-> [-> H_step_val]];
+    repeat (split || right);
+      by rewrite addn1 ltnSn.
+  }
+Qed.
+
+(* ---------------------------------- *)
+(* Definitions for receiving messages *)
+(* ---------------------------------- *)
+
+Definition step_at path ix lbl :=
+  exists g1 g2,
+    step_in_path_at g1 g2 ix path
+    /\ related_by lbl g1 g2.
+
+Definition msg_received uid msg_deadline msg path : Prop :=
+  exists n ms, step_at path n
+   (lbl_deliver uid msg_deadline msg ms).
+
+Definition received_next_vote u voter round period step value path : Prop :=
+  exists d, msg_received u d ((match value with
+                               | Some v => (Nextvote_Val,next_val v step)
+                               | None => (Nextvote_Open,step_val step)
+                               end),round,period,voter) path.
+
 (* --------------------- *)
-(* labelling transitions *)
+(* Labelling transitions *)
 (* --------------------- *)
 
 (* all global transitions have some label *)
@@ -1227,6 +1455,43 @@ Proof using.
       exact: utransition_result_perm_eq.
 Qed.
 
+(* ----------------------------------------------- *)
+(* User transition lemmas - destructing post state *)
+(* ----------------------------------------------- *)
+
+(* transition on uid results in msg sent by uid *)
+Lemma utransition_msg_sender_good uid u msg result:
+  uid # u ; msg ~> result ->
+  forall m, m \in result.2 -> uid = msg_sender m.
+Proof using.
+  clear.
+  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+Qed.
+
+Lemma utransition_internal_sender_good uid u result:
+  uid # u ~> result ->
+  forall m, m \in result.2 -> uid = msg_sender m.
+Proof using.
+  clear.
+  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+Qed.
+
+
+(* internal transition does not change preserves corrupt flag *)
+Lemma corrupt_preserved_ustep_internal : forall uid upre upost,
+    uid # upre ~> upost ->
+    upre.(corrupt) -> upost.1.(corrupt).
+Proof using.
+  by destruct 1.
+Qed.
+
+Lemma utransition_internal_preserves_corrupt uid pre post sent:
+  uid # pre ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
+Proof using.
+  set result:=(post,sent). change post with (result.1). clearbody result.
+  destruct 1;reflexivity.
+Qed.
+
 (* --------------------------------------- *)
 (* Definitions and lemmas for user honesty *)
 (* --------------------------------------- *)
@@ -1264,4 +1529,136 @@ Proof using.
   apply /H /step_leP /(step_le_trans H1 H_le).
 Qed.
 
-End AlgoSafetyHelpers.
+(* message transition preserves corrupt flag *)
+Lemma utransition_msg_preserves_corrupt uid msg pre post sent:
+  uid # pre ; msg ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
+Proof using.
+  set result:=(post,sent). change post with (result.1). clearbody result.
+  destruct 1;try reflexivity.
+  + unfold deliver_nonvote_msg_result;simpl.
+    destruct msg as [[[[? ?] ?] ?] ?];simpl.
+    destruct e;[destruct m|..];reflexivity.
+Qed.
+
+(* propagate user_honest backwards through transition *)
+Lemma honest_backwards_gstep : forall (g1 g2 : GState),
+    GTransition g1 g2 ->
+    forall uid, user_honest uid g2 ->
+                user_honest uid g1.
+Proof using.
+  move => g1 g2 Hstep uid.
+  destruct Hstep;unfold user_honest;destruct pre;
+    unfold tick_update,tick_users;simpl global_state.users in * |- *;try done.
+  + (* step_tick *)
+    destruct (fndP users uid).
+    by rewrite updf_update //;destruct (users.[kf]), corrupt.
+    by rewrite not_fnd // -[uid \in _]/(uid \in domf _) -updf_domf.
+  + (* step_deliver_msg UTransitionMsg *)
+  rewrite fnd_set.
+  destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
+  subst uid0;rewrite (in_fnd key_ustate).
+  by move/negP: H0.
+  + (* step_internal UTransitionInternal *)
+  rewrite fnd_set.
+  destruct (@eqP (Finite.choiceType UserId) uid uid0);[|done].
+  subst uid0;rewrite (in_fnd ustate_key).
+  apply/contraNN => H1. by apply corrupt_preserved_ustep_internal in H0.
+  + (* step_corrupt_user *)
+  rewrite fnd_set.
+  by destruct (@eqP (Finite.choiceType UserId) uid uid0).
+Qed.
+
+(* user honest at last state implies user honest in all states in path *)
+Lemma honest_last_all uid g0 p (H_path : is_trace g0 p):
+    user_honest uid (last g0 p) ->
+    all (user_honest uid) (g0::p).
+Proof using.
+  move => H_honest.
+  destruct p. inversion H_path.
+  destruct H_path as [H_g0 H_path]; subst.
+  revert H_honest.
+  elim/last_ind: p H_path => [|s x IH] /=; first by move=> _ ->.
+  rewrite rcons_path last_rcons all_rcons.
+  move/andP => [Hpath Hstep] Hx.
+  specialize (IH Hpath).
+  rewrite Hx.
+  apply IH. by apply/honest_backwards_gstep /asboolP: Hx.
+Qed.
+Arguments honest_last_all uid [g0] [p].
+
+(* honesty is monotone *)
+Lemma honest_monotone uid g1 g2:
+  greachable g1 g2 ->
+  user_honest uid g2 ->
+  user_honest uid g1.
+Proof.
+  move => [p H_path H_last] H_honest2.
+  subst g2.
+  pose proof (honest_last_all uid H_path H_honest2).
+  by move: H => /andP [].
+Qed.
+
+(* -------------------------- *)
+(* Lemmas manipulating traces *)
+(* -------------------------- *)
+
+(* non-empty prefix of a trace is a trace *)
+Lemma is_trace_prefix : forall trace g0 n,
+    is_trace g0 trace -> n > 0 -> is_trace g0 (take n trace).
+Proof.
+  clear.
+  induction trace;[done|].
+  destruct n. done.
+  simpl.
+  unfold is_trace.
+  move => [H_g0 H_path] _.
+  split;[done|by apply path_prefix].
+Qed.
+
+(* dropping elements from a trace still results in a trace *)
+Lemma is_trace_drop g0 g0' trace trace' (H_trace: is_trace g0 trace) n:
+  drop n trace = g0' :: trace' -> is_trace g0' (g0' :: trace').
+Proof using.
+  move => H_drop.
+  destruct trace. inversion H_trace.
+  destruct H_trace as [H_g0 H_trace]; subst.
+  eapply path_drop' with (n:=n) in H_trace.
+  unfold is_trace.
+  destruct n.
+    by rewrite drop0 in H_trace; rewrite drop0 in H_drop; inversion H_drop; subst.
+    by rewrite H_drop in H_trace.
+Qed.
+
+(* see path_steps: predicate not true initiall and true for some state g_p 
+   implies there must have been a step from g1 to g2 where it became true *)
+Lemma path_gsteps_onth
+      g0 trace (H_path : is_trace g0 trace)
+      ix_p g_p (H_g_p : onth trace ix_p = Some g_p):
+    forall (P : pred GState),
+    ~~ P g0 -> P g_p ->
+    exists n g1 g2, step_in_path_at g1 g2 n trace /\ ~~ P g1 /\ P g2.
+Proof using.
+  destruct trace;[by contradict H_path|].
+  move: H_path => [H_g0 H_path];subst g.
+  move=> P H_NPg0 H_Pg.
+  have H_path' := path_prefix ix_p H_path.
+  destruct ix_p as [|ix_p];
+    first by exfalso;move:H_g_p H_NPg0;case => ->;rewrite H_Pg.
+  change (onth trace ix_p = Some g_p) in H_g_p.
+
+  pose proof (path_steps H_path' H_NPg0).
+  have H_size_trace := onth_size H_g_p.
+  rewrite -nth_last nth_take size_takel // (onth_nth H_g_p) in H.
+  specialize (H H_Pg).
+  move:H;clear -H_NPg0;move => [n H].
+
+  exists n.
+  unfold step_in_path_at.
+  destruct (drop n (g0 :: take ix_p.+1 trace)) as [|x l] eqn: H_eq;[|destruct l];[done..|].
+  rewrite -[g0::trace](cat_take_drop ix_p.+2).
+  move/andP in H;exists x, g;split;[|assumption].
+  rewrite drop_cat.
+  case:ifP;[rewrite H_eq;done|].
+  move => /negP /negP /=;rewrite ltnS -ltnNge => H_oversize.
+  by rewrite drop_oversize // in H_eq.
+Qed.

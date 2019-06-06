@@ -35,8 +35,6 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Section AlgoLiveness.
-
 (** LIVENESS **)
 
 Lemma utr_nomsg_preserves_sensibility : forall uid us us' ms,
@@ -407,5 +405,3 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     (exists v, certvoted_in_path path_seq uid r p v
                \/ period_advance_at 1 path_seq uid r p g1 g2) .
 Admitted.
-
-End AlgoLiveness.
