@@ -1263,4 +1263,3 @@ Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   end.
 
 End AlgoModel.
-

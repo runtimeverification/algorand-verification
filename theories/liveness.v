@@ -26,7 +26,10 @@ From Algorand
 Require Import boolp Rstruct R_util fmap_ext.
 
 From Algorand
-Require Export algorand_model safety_helpers safety.
+Require Import local_state global_state.
+
+From Algorand
+Require Import algorand_model safety_helpers quorums safety.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

@@ -6,6 +6,7 @@
 
 theories/liveness.v
 theories/safety.v
+theories/quorums.v
 theories/safety_helpers.v
 theories/algorand_model.v
 theories/boolp.v
