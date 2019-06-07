@@ -424,6 +424,27 @@ Proof using.
   clear;unfold step_le;intuition.
 Qed.
 
+(* ustate_after and step_le equivalence *)
+Lemma ustate_after_iff_step_le u1 u2:
+  step_le (step_of_ustate u1) (step_of_ustate u2)
+  <-> ustate_after u1 u2.
+Proof using.
+  unfold ustate_after;destruct u1, u2;simpl.
+  clear;tauto.
+Qed.
+
+(* transitivity of ustate_after *)
+Lemma ustate_after_transitive :
+  forall us1 us2 us3,
+    ustate_after us1 us2 ->
+    ustate_after us2 us3 ->
+    ustate_after us1 us3.
+Proof using.
+move => us1 us2 us3.
+rewrite -!ustate_after_iff_step_le.
+apply step_le_trans.
+Qed.
+
 (* --------------------------- *)
 (* Lemmas about tick functions *)
 (* --------------------------- *)
@@ -1598,6 +1619,21 @@ Proof.
   by move: H => /andP [].
 Qed.
 
+(* propagating honest backwards *)
+Lemma user_honest_from_during g0 trace (H_path: is_trace g0 trace):
+  forall ix g1,
+    onth trace ix = Some g1 ->
+  forall uid (H_in : uid \in g1.(users)),
+    honest_during_step (step_of_ustate (g1.(users)[`H_in])) uid trace ->
+  user_honest uid g1.
+Proof using.
+  move => ix g1 H_onth uid H_in /all_nthP.
+  move/(_ g1 ix (onth_size H_onth)).
+  rewrite (onth_nth H_onth g1) /user_honest /upred' (in_fnd H_in).
+  move/implyP;apply.
+  by apply /step_leP /step_le_refl.
+Qed.
+
 (* -------------------------- *)
 (* Lemmas manipulating traces *)
 (* -------------------------- *)
@@ -1661,4 +1697,570 @@ Proof using.
   case:ifP;[rewrite H_eq;done|].
   move => /negP /negP /=;rewrite ltnS -ltnNge => H_oversize.
   by rewrite drop_oversize // in H_eq.
+Qed.
+
+(* -------------------------------- *)
+(* Monotonicity/preservation lemmas *)
+(* -------------------------------- *)
+
+(* global transition preserves domain of users *)
+Lemma gtrans_preserves_users: forall gs1 gs2,
+  gs1 ~~> gs2 -> domf gs1.(users) = domf gs2.(users).
+Proof using.
+move => gs1 gs2.
+elim => //.
+- move => increment pre Htick.
+  by rewrite -tick_users_domf.
+- move => pre uid msg_key pending Hpending key_ustate ustate_post sent Hcorrupt Huser /=.
+  by rewrite mem_fset1U //.
+- move => pre uid ustate_key Hcorrupt ustate_post sent Huser /=.
+  by rewrite mem_fset1U //.
+- move => pre uid ustate_key Hcorrupt /=.
+  by rewrite mem_fset1U //.
+Qed.
+
+Lemma gtrans_domf_users: forall gs1 gs2,
+  gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
+Proof using.
+  move => gs1 gs2 H_trans.
+  apply gtrans_preserves_users in H_trans.
+  move/eqP in H_trans; rewrite eqEfsubset in H_trans; move/andP in H_trans.
+  tauto.
+Qed.
+
+(* softvotes monotone over internal user transition *)
+Lemma softvotes_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  forall r p, pre.(softvotes) r p \subset post.(softvotes) r p.
+Proof using.
+  move => uid pre post msgs step r p.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+(* softvotes monotone over user message transition *)
+Lemma softvotes_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  forall r p,
+    pre.(softvotes) r p \subset post.(softvotes) r p.
+Proof using.
+  move => uid pre post m msgs step r p;
+  remember (post,msgs) as result eqn:H_result;
+    destruct step;case:H_result => [? ?];subst;
+  destruct pre;simpl;autounfold with utransition_unfold;
+    repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end;
+  try (by apply subxx_hint);
+  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+Qed.
+
+(* softvotes monotone over global transition *)
+Lemma softvotes_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+             /\ forall r p, u1.(softvotes) r p \subset u2.(softvotes)  r p.
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply softvotes_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply softvotes_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
+(* softvotes monotone between reachable states *)
+Lemma softvotes_monotone g1 g2 (H_reach:greachable g1 g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  forall u2, g2.(users).[?uid] = Some u2 ->
+  forall r p,
+    u1.(softvotes) r p \subset u2.(softvotes)  r p.
+Proof using.
+  clear -H_reach.
+  move => u1 H_u1 u2 H_u2.
+  destruct H_reach as [trace H_path H_last].
+  destruct trace. inversion H_path.
+  destruct H_path as [H_g0 H_path]. subst g.
+  move: g1 H_path H_last u1 H_u1.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := softvotes_gtransition H_step H_u1.
+    specialize (H_sub r p).
+    specialize (IHtrace umid H_umid r p).
+    refine (subset_trans H_sub IHtrace).
+Qed.
+
+(* weight of softvotes monotone between reachable states *)
+Lemma soft_weight_monotone g1 g2 (H_reach:greachable g1 g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  forall u2, g2.(users).[?uid] = Some u2 ->
+  forall v r p,
+    soft_weight v u1 r p <= soft_weight v u2 r p.
+Proof using.
+  move => u1 H_u1 u2 H_u2 v r p.
+  have H_mono := softvotes_monotone H_reach H_u1 H_u2 r p.
+  apply fsubset_leq_card.
+  unfold softvoters_for.
+  move: (u1.(softvotes)) (u2.(softvotes)) H_mono;clear => s1 s2 /subsetP H_mono.
+  apply subset_imfset.
+  simpl.
+  move => x /andP [H_x_s1 H_val].
+  by apply/andP;split;[apply/H_mono|].
+Qed.
+
+(* blocks monotone over internal user transition *)
+Lemma blocks_utransition_internal:
+  forall uid pre post msgs, uid # pre ~> (post, msgs) ->
+  forall r, pre.(blocks) r \subset post.(blocks) r.
+Proof using.
+  move => uid pre post msgs step r.
+  remember (post,msgs) as result eqn:H_result;
+  destruct step;case:H_result => [? ?];subst;done.
+Qed.
+
+(* blocks monotone over user message transition *)
+Lemma blocks_utransition_deliver:
+  forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
+  forall r,
+    pre.(blocks) r \subset post.(blocks) r.
+Proof using.
+  move => uid pre post m msgs step r;
+  remember (post,msgs) as result eqn:H_result;
+    destruct step;case:H_result => [? ?];subst;
+  destruct pre;simpl;autounfold with utransition_unfold;
+    repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b
+           | _ => progress simpl end;
+  try (by apply subxx_hint);
+  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+Qed.
+
+(* blocks monotone over global transition *)
+Lemma blocks_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
+  forall u1, g1.(users).[?uid] = Some u1 ->
+  exists u2, g2.(users).[?uid] = Some u2
+             /\ forall r, u1.(blocks) r \subset u2.(blocks) r.
+Proof using.
+  clear -H_step => u1 H_u1.
+  have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
+  have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
+  destruct H_step;simpl users;autounfold with gtransition_unfold;
+    try (rewrite fnd_set;case H_eq:(uid == uid0);
+      [move/eqP in H_eq;subst uid0|]);
+    try (eexists;split;[eassumption|done]);
+    first rewrite updf_update //;
+    (eexists;split;[reflexivity|]).
+  * (* tick *)
+    rewrite H_in1' /user_advance_timer.
+    by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  * (* deliver *)
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_deliver.
+  * (* internal *)
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_internal.
+  * (* corrupt *)
+    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+Qed.
+
+(* blocks monotone between reachable states *)
+Lemma blocks_monotone g1 g2 (H_reach: greachable g1 g2) uid:
+  forall u1, g1.(users).[? uid] = Some u1 ->
+  forall u2, g2.(users).[? uid] = Some u2 ->
+  forall r, u1.(blocks) r \subset u2.(blocks) r.
+Proof using.
+  clear -H_reach.
+  move => u1 H_u1 u2 H_u2.
+  destruct H_reach as [trace H_path H_last].
+  destruct trace. inversion H_path.
+  destruct H_path as [H_g0 H_path]. subst g.
+  move: g1 H_path H_last u1 H_u1.
+  induction trace.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r.
+    specialize (IHtrace a H_path H_last).
+    have [umid [H_umid H_sub]] := blocks_gtransition H_step H_u1.
+    specialize (H_sub r).
+    specialize (IHtrace umid H_umid r).
+    refine (subset_trans H_sub IHtrace).
+Qed.
+
+(* ------------------------------------------ *)
+(* Transitions do not decrease step-of-ustate *)
+(* ------------------------------------------ *)
+
+(* A one-step user-level transition never decreases round-period-step *)
+Lemma utr_rps_non_decreasing_msg : forall uid m us1 us2 ms,
+  uid # us1 ; m ~> (us2, ms) -> ustate_after us1 us2.
+Proof using.
+move => uid m us1 us2 ms utrH.
+inversion_clear utrH.
+- rewrite /pre'.
+  unfold ustate_after => /=.
+  do 2! [right]. by do 2! [split; auto].
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- rewrite /pre'.
+  unfold ustate_after => /=.
+  do 2! [right]. by do 2! [split; auto].
+- rewrite /pre'.
+  unfold ustate_after => /=.
+  right. left. split ; first by [].
+  rewrite addn1. by [].
+- rewrite /pre'.
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+- case: H => vH oH.
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  right. left. split ; first by [].
+  rewrite addn1. by [].
+- rewrite /pre'.
+  unfold ustate_after => /=.
+  do 2! [right]. by do 2! [split; auto].
+- unfold ustate_after => /=.
+  left. unfold certify_ok in H. decompose record H;clear H.
+  revert H0;unfold pre';clear.
+  destruct us1;simpl. rewrite addn1 ltnS.
+  unfold advancing_rp. simpl.
+  by move => [|[->] _];[apply ltnW|apply leqnn].
+- destruct m.1.1.1.2 eqn:E.
+  destruct m.1.1.1.1 eqn:E'.
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  unfold deliver_nonvote_msg_result. rewrite E. unfold ustate_after => /=.
+  do 2! [right]. by do 2! [split; auto].
+Qed.
+
+(* A one-step user-level transition never decreases round-period-step *)
+Lemma utr_rps_non_decreasing_internal : forall uid us1 us2 ms,
+  uid # us1 ~> (us2, ms) -> ustate_after us1 us2.
+Proof using.
+move => uid us1 us2 ms utrH.
+inversion_clear utrH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H  => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+- elim: H => tH [vH [vbH [svH oH]]].
+  elim: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by subst.
+- case: H => tH [vH [vbH [svH oH]]].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by subst.
+- case: H => H v'H.
+  case: H => tH [vH [vbH [svH oH]]].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by subst.
+- case: H => H [vH cH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto].
+  rewrite addn1. by subst.
+- case: H => tH [vH oH].
+  case: vH => rH [pH sH].
+  unfold ustate_after => /=.
+  do 2! [right]. do 2! [split; auto]. by rewrite sH.
+Qed.
+
+(* A one-step global transition never decreases round-period-step of any user *)
+Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
+  g1 ~~> g2 ->
+  g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
+  ustate_after us1 us2.
+Proof using.
+move => g1 g2 uid us1 us2.
+elim => //.
+- move => increment pre Htick.
+  set users : GState -> _ := global_state.users _ _ _.
+  move => Hu.
+  case Hd: (uid \in domf (users pre)); last first.
+    by move/negP/negP: Hd => Hd; move: Hu; rewrite not_fnd.
+  rewrite tick_users_upd //.
+  case =><-; move: Hu.
+  rewrite in_fnd; case =>->.
+  rewrite /user_advance_timer /= /ustate_after /=.
+  by case: ifP => //=; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => msg_key [r m] Hpend key_ustate ustate_post sent Hloc.
+  move/utr_rps_non_decreasing_msg => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => ustate_key Hloc ustate_post sent.
+  move/utr_rps_non_decreasing_internal => Hst.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //; case =><-; rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    by case =><-.
+  move => Hus.
+  rewrite fnd_set /= Huid_eq Hus.
+  by case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre Hpre.
+  set users : GS -> _ := global_state.users _ _ _.
+  rewrite /= -/users => Hus1.
+  by rewrite Hus1; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0 ustate_key.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => Hcorrupt Hst; move: Hst Hcorrupt.
+  case Huid_eq: (uid == uid0).
+    move/eqP: Huid_eq =>->.
+    rewrite in_fnd //.
+    rewrite fnd_set /=.
+    have ->: (uid0 == uid0) by apply/eqP.
+    rewrite -/(users pre).
+    by case =>-> => Hcorrupt; case =><-; right; right.
+  rewrite fnd_set /= Huid_eq -/(users pre).
+  by move =>-> => Hcorrupt; case =>->; right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre uid0.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => ustate_key m Hc Hm.
+  rewrite /= =>->; case =>->.
+  by right; right.
+- set GS := global_state.GState UserId UState [choiceType of Msg].
+  move => pre sender.
+  set users : GS -> _ := global_state.users _ _ _.
+  move => sender_key r p s mtype mval Hhave Hcomm Hmatch.
+  rewrite /= =>->; case =>->.
+  by right; right.
+Qed.
+
+(* Generalization of non-decreasing round-period-step results to paths *)
+Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
+  greachable g1 g2 ->
+  g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
+  ustate_after us1 us2.
+Proof using.
+move => g1 g2 uid us1 us2.
+case => gtrace Hpath Hlast.
+destruct gtrace. inversion Hpath.
+destruct Hpath as [H_g0 Hpath]; subst g.
+set GS := global_state.GState UserId UState [choiceType of Msg].
+set users : GS -> _ := global_state.users _ _ _.
+elim: gtrace g1 g2 uid us1 us2 Hpath Hlast => //=.
+  move => g1 g2 uid us1 us2 Htr ->->; case =>->.
+  by right; right.
+move => g gtrace IH.
+move => g1 g2 uid us1 us2.
+move/andP => [Htrans Hpath] Hlast Hg1 Hg2.
+move/asboolP: Htrans => Htrans.
+case Hg: (users g).[? uid] => [u|].
+  have IH' := IH _ _ _ _ _ Hpath Hlast Hg Hg2.
+  have Haft := gtr_rps_non_decreasing Htrans Hg1 Hg.
+  move: Haft IH'.
+  exact: ustate_after_transitive.
+move/gtrans_domf_users: Htrans => Hdomf.
+case Hd: (uid \in domf (users g1)); last first.
+  by move/negP/negP: Hd => Hd; move: Hg1; rewrite not_fnd.
+move/idP: Hd => Hd.
+move: Hdomf.
+move/fsubsetP => Hsub.
+move: Hd; move/Hsub => Hdom.
+move: Hg.
+by rewrite in_fnd.
+Qed.
+
+(* ------------------------------------------------------ *)
+(* Lemmas for deducing reachability between global states *)
+(* ------------------------------------------------------ *)
+
+(* index of g1 less than index of g2, both in trace implies g2 reachable from g1 *)
+Lemma at_greachable
+      g0 states (H_path: is_trace g0 states)
+      ix1 ix2 (H_le : ix1 <= ix2)
+      g1 (H_g1 : onth states ix1 = Some g1)
+      g2 (H_g2 : onth states ix2 = Some g2):
+  greachable g1 g2.
+Proof using.
+  clear -H_path H_le H_g1 H_g2.
+  assert (ix2 < size states) by
+  (rewrite -subn_gt0 -size_drop;
+   move: H_g2;clear;unfold onth;
+   by destruct (drop ix2 states)).
+
+  exists (g1 :: (drop ix1.+1 (take ix2.+1 states))).
+  {
+    eapply is_trace_prefix with (n:=ix2.+1) in H_path; try (by intuition).
+    eapply is_trace_drop with (g0':=g1) (n:=ix1) in H_path; try eassumption.
+    rewrite {1}(drop_nth g2).
+    rewrite nth_take //.
+    rewrite (onth_nth H_g1) //.
+    rewrite size_take.
+    destruct (ix2.+1 < size states); by ppsimpl; lia.
+  }
+  {
+    simpl.
+    rewrite (last_nth g1) size_drop size_takel //.
+    move:(H_le). rewrite leq_eqVlt.
+    move/orP => [H_eq | H_lt].
+    by move/eqP in H_eq;subst;rewrite subnn;simpl;congruence.
+    by rewrite subSn //= nth_drop subnKC // nth_take ?ltnS // (onth_nth H_g2).
+  }
+Qed.
+
+(* step_in_path_at from pre to post and pre2 to post2 implies pre2 reachable
+   from post *)
+Lemma steps_greachable
+      g0 path (H_path : is_trace g0 path)
+      ix ix2 (H_lt : ix < ix2)
+      pre post (H_step : step_in_path_at pre post ix path)
+      pre2 post2 (H_step2 : step_in_path_at pre2 post2 ix2 path):
+  greachable post pre2.
+Proof using.
+  apply step_in_path_onth_post in H_step.
+  apply step_in_path_onth_pre in H_step2.
+  eapply at_greachable;eassumption.
+Qed.
+
+(* ---------------------------------------- *)
+(* Lemmas about order of indices in a trace *)
+(* ---------------------------------------- *)
+
+(* step of user is smaller in g1 than g2 implies index of g1 < index of g2 *)
+Lemma order_ix_from_steps g0 trace (H_path: is_trace g0 trace):
+  forall ix1 g1, onth trace ix1 = Some g1 ->
+  forall ix2 g2, onth trace ix2 = Some g2 ->
+  forall uid (key1: uid \in g1.(users)) (key2: uid \in g2.(users)),
+    step_lt (step_of_ustate (g1.(users)[`key1])) (step_of_ustate (g2.(users)[`key2])) ->
+    ix1 < ix2.
+Proof using.
+  move => ix1 g1 H_g1 ix2 g2 H_g2 uid key1 key2 H_step_lt.
+  rewrite ltnNge. apply /negP => H_ix_le.
+
+  suff: ustate_after (g2.(users)[`key2]) (g1.(users)[`key1])
+    by move/ustate_after_iff_step_le /(step_lt_le_trans H_step_lt);apply step_lt_irrefl.
+
+  have H_reach: greachable g2 g1 by eapply at_greachable;eassumption.
+  exact (greachable_rps_non_decreasing H_reach (in_fnd _) (in_fnd _)).
+Qed.
+
+Lemma order_state_from_step g0 states (H_path: is_trace g0 states) uid
+  ix1 g1 (H_g1: onth states ix1 = Some g1)
+      u1 (H_u1: g1.(users).[? uid] = Some u1)
+  ix2 g2 (H_g2: onth states ix2 = Some g2)
+      u2 (H_u2: g2.(users).[? uid] = Some u2):
+  step_lt (step_of_ustate u1) (step_of_ustate u2) ->
+  ix1 < ix2.
+Proof using.
+  move => H_step_lt.
+  rewrite ltnNge. apply /negP => H_le.
+
+  have H_greach: greachable g2 g1 by (eapply at_greachable;eassumption).
+  have := greachable_rps_non_decreasing H_greach H_u2 H_u1.
+
+  rewrite -ustate_after_iff_step_le.
+  move: (step_of_ustate u1) (step_of_ustate u2) H_step_lt => [[r1 p1] s1] [[r2 p2] s2].
+  clear.
+  move => H_lt H_le.
+
+  exact (step_lt_irrefl (step_lt_le_trans H_lt H_le)).
+Qed.
+
+(* step of msg_step for msg1 smaller than msg2 implies index of msg1 < index of msg2 *)
+Lemma order_sends g0 trace (H_path: is_trace g0 trace) uid
+      ix1 msg1 (H_send1: user_sent_at ix1 trace uid msg1)
+      ix2 msg2 (H_send2: user_sent_at ix2 trace uid msg2):
+  step_le (msg_step msg1) (msg_step msg2) ->
+  ix1 <= ix2.
+Proof.
+  move => H_step_le.
+  move: H_send1 => [pre1 [post1 [H_step1 H_send1]]].
+  move: H_send2 => [pre2 [post2 [H_step2 H_send2]]].
+
+  rewrite leqNgt. apply /negP => H_lt.
+  have H_reach: greachable post2 pre1.
+  eapply (at_greachable H_path H_lt);eauto using step_in_path_onth_pre, step_in_path_onth_post.
+  have := greachable_rps_non_decreasing H_reach
+                                        (in_fnd (user_sent_in_post H_send2))
+                                        (in_fnd (user_sent_in_pre H_send1)).
+  move/ustate_after_iff_step_le.
+  have:= utransition_label_end H_send2 (in_fnd (user_sent_in_post H_send2)).
+  have -> := utransition_label_start H_send1 (in_fnd (user_sent_in_pre H_send1)).
+  move => H_step_lt H_step_le1.
+  have {H_step_le1}H_step_lt1 := step_lt_le_trans H_step_lt H_step_le1.
+  have:= step_le_lt_trans H_step_le H_step_lt1.
+  clear.
+  move: (msg_step msg1) => [[r p] s].
+  by apply step_lt_irrefl.
 Qed.

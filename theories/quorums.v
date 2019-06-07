@@ -131,3 +131,74 @@ Definition quorum_b_has_honest : quorum_has_honest_statement tau_b
 Axiom quorums_v_honest_overlap : quorum_honest_overlap_statement tau_v.
 Definition quorum_v_has_honest : quorum_has_honest_statement tau_v
   := quorum_has_honest_from_overlap_stmt quorums_v_honest_overlap.
+
+(* ------------------------------------------- *)
+(* Definitions for voting and sufficient votes *)
+(* ------------------------------------------- *)
+
+(* A user has certvoted at a specifix index along a path *)
+Definition certvoted_in_path_at ix path uid r p v : Prop :=
+  user_sent_at ix path uid (Certvote,val v,r,p,uid).
+
+(* A user has certvoted along a path *)
+Definition certvoted_in_path path uid r p v : Prop :=
+  exists ix, certvoted_in_path_at ix path uid r p v.
+
+(* Value v was certified in a given round/period along a path *)
+Definition certified_in_period trace r p v :=
+  exists (certvote_quorum:{fset UserId}),
+     certvote_quorum `<=` committee r p 3
+  /\ #|` certvote_quorum | >= tau_c
+  /\ forall (voter:UserId), voter \in certvote_quorum ->
+       certvoted_in_path trace voter r p v.
+
+(* A user has softvoted at a specific index along a path *)
+Definition softvoted_in_path_at ix path uid r p v : Prop :=
+  exists g1 g2, step_in_path_at g1 g2 ix path
+   /\ user_sent uid (Softvote,val v,r,p,uid) g1 g2.
+
+(* A user has softvoted along a path *)
+Definition softvoted_in_path path uid r p v : Prop :=
+  exists ix, softvoted_in_path_at ix path uid r p v.
+
+(* Enough softvotes for a value v in a given round/period along a path *)
+Definition enough_softvotes_in_period trace r p v :=
+  exists (softvote_quorum:{fset UserId}),
+     softvote_quorum `<=` committee r p 2
+  /\ #|` softvote_quorum | >= tau_s
+  /\ forall (voter:UserId), voter \in softvote_quorum ->
+       softvoted_in_path trace voter r p v.
+
+(* A user has nextvoted bottom at a specific index along a path *)
+Definition nextvoted_bot_in_path_at ix path uid (r p s:nat) : Prop :=
+  exists g1 g2, step_in_path_at g1 g2 ix path
+   /\ user_sent uid (Nextvote_Open, step_val s,r,p,uid) g1 g2.
+
+(* A user has nextvoted bottom along a path *)
+Definition nextvoted_bot_in_path path uid r p s : Prop :=
+  exists ix, nextvoted_bot_in_path_at ix path uid r p s.
+
+(* Enough nextvotes for bottom in a given round/period along a path *)
+Definition enough_nextvotes_bot_in_step trace r p s :=
+  exists (nextvote_quorum:{fset UserId}),
+     nextvote_quorum `<=` committee r p s
+  /\ #|` nextvote_quorum | >= tau_b
+  /\ forall (voter:UserId), voter \in nextvote_quorum ->
+       nextvoted_bot_in_path trace voter r p s.
+
+(* A user has nextvoted for a value v at a specific index along a path *)
+Definition nextvoted_val_in_path_at ix path uid r p s v : Prop :=
+  exists g1 g2, step_in_path_at g1 g2 ix path
+   /\ user_sent uid (Nextvote_Val,next_val v s,r,p,uid) g1 g2.
+
+(* A user has nextvoted for a value v along a path *)
+Definition nextvoted_val_in_path path uid r p s v : Prop :=
+  exists ix, nextvoted_val_in_path_at ix path uid r p s v.
+
+(* Enough nextvotes for a value v in a given round/period along a path *)
+Definition enough_nextvotes_val_in_step trace r p s v :=
+  exists (nextvote_quorum:{fset UserId}),
+     nextvote_quorum `<=` committee r p s
+  /\ #|` nextvote_quorum | >= tau_v
+  /\ forall (voter:UserId), voter \in nextvote_quorum ->
+       nextvoted_val_in_path trace voter r p s v.

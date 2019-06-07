@@ -37,6 +37,60 @@ Unset Printing Implicit Defensive.
 
 (** LIVENESS **)
 
+(* Sensible states *)
+(* This notion specifies what states can be considered valid states. The idea
+   is that we only consider execution traces that begin at sensible states,
+   since sensibility is preserved by the transition system (to be shown), the
+   set of reachable states will also be sensible (to be shown). This means that
+   it is not important which specific state is assumed as the initial state as
+   long as the state is sensible.
+   Note: the traditional operational notion of an initial state is a now a
+   special case of sensibility *)
+Definition sensible_ustate (us : UState) : Prop :=
+  (us.(p_start) >= 0)%R /\
+  (0 <= us.(timer) <= us.(deadline))%R .
+
+Definition sensible_gstate (gs : GState) : Prop :=
+  (gs.(now) >= 0)%R /\
+  ~ gs.(users) = [fmap] /\
+  domf gs.(msg_in_transit) `<=` domf gs.(users) /\ (* needed? *)
+  forall uid (k:uid \in gs.(users)), sensible_ustate gs.(users).[k].
+  (* more constraints if we add corrupt users map and total message history *)
+
+Lemma step_later_deadlines : forall s,
+    s > 3 -> next_deadline s = (lambda + big_lambda + (INR s - 3) * L)%R.
+Proof using.
+  intros s H_s; clear -H_s.
+  unfold next_deadline.
+  do 3 (destruct s;[exfalso;apply not_false_is_true;assumption|]).
+  reflexivity.
+Qed.
+
+(* The user transition relation preserves sensibility of user states *)
+Lemma utr_msg_preserves_sensibility : forall uid us us' m ms,
+  sensible_ustate us -> uid # us ; m ~> (us', ms) ->
+  sensible_ustate us'.
+Proof.
+  intros uid us us' m ms H_sensible Hstep;
+  remember (us',ms) as ustep_output eqn:H_output;
+  destruct Hstep; injection H_output; intros; subst;
+  match goal with
+  | [H_sensible : sensible_ustate ?s |- _] => is_var s;
+     destruct s;unfold sensible_ustate in * |- *;
+     decompose record H_sensible;clear H_sensible;simpl in * |- *
+  end;
+  autounfold with utransition_unfold in * |- *;
+  match goal with
+  | [H : context C [valid_rps] |- _] => unfold valid_rps in H;simpl in H;decompose record H
+  | _ => idtac
+  end;
+  try by intuition lra.
+  (* deliver nonvote msg needs some custom steps *)
+  clear H_output.
+  destruct msg as [[[[mtype ex_val] ?] ?] ?];
+    destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
+Qed.
+
 Lemma utr_nomsg_preserves_sensibility : forall uid us us' ms,
   sensible_ustate us -> uid # us ~> (us', ms) ->
   sensible_ustate us'.

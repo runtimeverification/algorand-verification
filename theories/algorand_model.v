@@ -355,6 +355,12 @@ Definition step_ltb (step1 step2: nat * nat * nat) : bool :=
 Definition ustate_after_strict us1 us2 : Prop :=
   step_lt (step_of_ustate us1) (step_of_ustate us2).
 
+(* State us2 is no earlier than state us1 in terms of round-period-step ordering *)
+Definition ustate_after us1 us2 : Prop :=
+  us1.(round) < us2.(round)
+  \/ (us1.(round) = us2.(round) /\ us1.(period) < us2.(period))
+  \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
+
 Definition msg_step_s (mhead: (MType * ExValue)): nat :=
   let (mtype,v) := mhead in
   match mtype with
