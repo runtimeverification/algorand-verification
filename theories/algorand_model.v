@@ -281,6 +281,19 @@ Notation msg_history       := (global_state.msg_history UserId UState [choiceTyp
 (* State with empty maps, unpartitioned, at global time 0 *)
 Definition null_state : GState := mkGState _ _ _ 0%R false [fmap] [fmap] mset0.
 
+(* Equality of global states *)
+
+Definition eqGState (g1 g2 : GState) : bool :=
+  if pselect (g1 = g2) then true else false.
+
+Lemma eqGStateP : Equality.axiom eqGState.
+Proof.
+by move => g1 g2; rewrite /eqGState; case: pselect => //= ?; apply/(iffP idP).
+Qed.
+
+Canonical GState_eqMixin := EqMixin eqGStateP.
+Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
+
 (* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
   {[ g with network_partition := ~~ g.(network_partition) ]}.

@@ -132,6 +132,23 @@ Axiom quorums_v_honest_overlap : quorum_honest_overlap_statement tau_v.
 Definition quorum_v_has_honest : quorum_has_honest_statement tau_v
   := quorum_has_honest_from_overlap_stmt quorums_v_honest_overlap.
 
+Definition saw_v trace r p v := fun uid =>
+  has (fun g =>
+         match g.(users).[? uid] with
+         | None => false
+         | Some u =>
+           (v \in u.(certvals) r p)
+             && has (fun b => `[< valid_block_and_hash b v>]) (u.(blocks) r)
+             && step_leb (step_of_ustate u) (r,p,4)
+         end) trace.
+
+Axiom interquorum_c_v_certinfo:
+  forall trace r p v,
+    interquorum_property tau_c tau_v (saw_v trace r p v) trace.
+Axiom interquorum_c_b_certinfo:
+  forall trace r p v,
+    interquorum_property tau_c tau_b (saw_v trace r p v) trace.
+
 (* ------------------------------------------- *)
 (* Definitions for voting and sufficient votes *)
 (* ------------------------------------------- *)

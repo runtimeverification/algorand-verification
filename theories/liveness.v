@@ -37,6 +37,21 @@ Unset Printing Implicit Defensive.
 
 (** LIVENESS **)
 
+Definition users_at ix path : {fmap UserId -> UState} :=
+  match drop ix path with
+  | g1 :: _ => g1.(users)
+  | _ => [fmap]
+  end.
+
+Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
+  if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
+
+Definition user_stv_val_at ix path uid p stv : bool :=
+  match drop ix path with
+  | g1 :: _ => user_stv_val uid g1 p stv
+  | _ => false
+  end.
+
 (* Sensible states *)
 (* This notion specifies what states can be considered valid states. The idea
    is that we only consider execution traces that begin at sensible states,
