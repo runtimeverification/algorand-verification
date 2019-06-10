@@ -191,6 +191,8 @@ Proof using.
   apply perm_eq_mem, perm_eq_seq_mset.
 Qed.
 
+(* TODO - KARL: please add a small comment for these 5 lemmas *)
+
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
 Proof using.
