@@ -2464,28 +2464,6 @@ Proof using.
   exact (greachable_rps_non_decreasing H_reach (in_fnd _) (in_fnd _)).
 Qed.
 
-Lemma order_state_from_step g0 states (H_path: is_trace g0 states) uid
-  ix1 g1 (H_g1: onth states ix1 = Some g1)
-      u1 (H_u1: g1.(users).[? uid] = Some u1)
-  ix2 g2 (H_g2: onth states ix2 = Some g2)
-      u2 (H_u2: g2.(users).[? uid] = Some u2):
-  step_lt (step_of_ustate u1) (step_of_ustate u2) ->
-  ix1 < ix2.
-Proof using.
-  move => H_step_lt.
-  rewrite ltnNge. apply /negP => H_le.
-
-  have H_greach: greachable g2 g1 by (eapply at_greachable;eassumption).
-  have := greachable_rps_non_decreasing H_greach H_u2 H_u1.
-
-  rewrite -ustate_after_iff_step_le.
-  move: (step_of_ustate u1) (step_of_ustate u2) H_step_lt => [[r1 p1] s1] [[r2 p2] s2].
-  clear.
-  move => H_lt H_le.
-
-  exact (step_lt_irrefl (step_lt_le_trans H_lt H_le)).
-Qed.
-
 (* step of msg_step for msg1 smaller than msg2 implies index of msg1 < index of msg2 *)
 Lemma order_sends g0 trace (H_path: is_trace g0 trace) uid
       ix1 msg1 (H_send1: user_sent_at ix1 trace uid msg1)
@@ -2554,7 +2532,11 @@ Proof using.
   apply/honest_monotone:H_g_honest.
   have H_x := onth_index H_in_x.
   refine (at_greachable H_path (ltnW _) H_x H_g).
-  exact (order_state_from_step H_path H_x (in_fnd key_x) H_g H_u H_x_lt).
+  have H_inu: uid \in (g.(users)) by rewrite -fndSome H_u.
+  have H_u_eq: g.(users)[`H_inu] = u.
+    by pose proof (in_fnd H_inu) as H_fnd; rewrite H_u in H_fnd; inversion H_fnd.
+  eapply order_ix_from_steps with (key1:=key_x) (key2:=H_inu); try eassumption.
+  by rewrite H_u_eq.
 Qed.
 
 (* honest_during (r,p,s), u is at index of n in trace, and step of u <= (r,p,s)

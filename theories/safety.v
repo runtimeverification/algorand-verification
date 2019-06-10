@@ -1367,9 +1367,9 @@ Lemma post_enter_reaches_sent
                   (step_of_ustate (gs1.(users)[` ukey_gs1])).
     apply/(step_lt_le_trans H_ge1_step_lt)/step_leP.
       by rewrite (utransition_label_start H_send (in_fnd ukey_gs1)) /= H_r_msg H_p_msg !ltnn !eq_refl leq0n.
-    apply (order_state_from_step H_path
-               (step_in_path_onth_pre H_step_enter) (in_fnd ukey_ge1)
-               (step_in_path_onth_pre H_step) (in_fnd ukey_gs1)).
+    eapply (order_ix_from_steps H_path
+              (step_in_path_onth_pre H_step_enter)
+              (step_in_path_onth_pre H_step)).
   }
 
   exact
