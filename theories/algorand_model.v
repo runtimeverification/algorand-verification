@@ -33,7 +33,7 @@ Parameter UserId : finType.
 (* And a finite set of values (blocks and block hashes) *)
 Parameter Value : finType.
 
-(* An enumerated data type of all possible kinds of messages *)
+(* An enumerated data type of all possible types (headers) of messages *)
 Inductive MessageType :=
   | Block
   | Proposal
@@ -96,7 +96,7 @@ Canonical messageType_choiceType := ChoiceType MessageType (PcanChoiceMixin pcan
 Canonical messageType_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
 Canonical messageType_finType    := FinType    MessageType (PcanFinMixin    pcancel_MessageType_7).
 
-(* Inspired by the structures used as values in messages in the automaton model *)
+(* Message payload type, packaging Value and other data *)
 Inductive ExValue :=
   | val      : Value -> ExValue
   | step_val : nat -> ExValue
@@ -112,9 +112,8 @@ Definition codeExVal (e:ExValue) :
   | repr_val v user n => inl (inr (v, user, n))
   | next_val v n => inr (v,n)
   end.
-Definition decodeExVal
-           (c:Value + nat + (Value * UserId * nat) + (Value * nat))
-           : ExValue :=
+
+Definition decodeExVal (c:Value + nat + (Value * UserId * nat) + (Value * nat)) : ExValue :=
   match c with
   | inl (inl (inl mv)) => val mv
   | inl (inl (inr k)) => step_val k
@@ -125,9 +124,10 @@ Definition decodeExVal
 Lemma cancelExVal : pcancel codeExVal (fun x => Some (decodeExVal x)).
 Proof using. case;reflexivity. Qed.
 
-Canonical exvalue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
-Canonical exvalue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
-Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
+(* Register canonical structures on ExValue; needed for using ExValue in fset, mset, etc. *)
+Canonical exValue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
+Canonical exValue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
+Canonical exValue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
 
 (* A message type as a product type *)
 (* A message is a tuple (type, ev, r, p, id) where:
@@ -143,7 +143,6 @@ Definition msg_round (m:Msg): nat := m.1.1.2.
 Definition msg_period (m:Msg): nat := m.1.2.
 
 (* Messages are grouped by the target user.
-
    Messages are paired with a delivery deadline.
    In the absence of a partition, messages must be
    delivered before the deadline is reached.
