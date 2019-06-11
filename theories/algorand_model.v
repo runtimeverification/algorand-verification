@@ -55,7 +55,7 @@ Definition MessageType_eq (a b:MessageType) : bool :=
   | _, _ => false
   end.
 
-Lemma MessageType_eq_good: Equality.axiom MessageType_eq.
+Lemma MessageType_eqP: Equality.axiom MessageType_eq.
 Proof using.
   move => a b;apply Bool.iff_reflect;split.
     by move <-;destruct a.
@@ -76,7 +76,7 @@ Definition mtype2o (m:MessageType) : 'I_7 :=
   end).
 
 Definition o2mtype (i:'I_7) : option MessageType :=
-  match val i in nat with
+  match val i with
   | 0 => Some Block
   | 1 => Some Proposal
   | 2 => Some Reproposal
@@ -90,10 +90,11 @@ Definition o2mtype (i:'I_7) : option MessageType :=
 Lemma pcancel_MessageType_7 : pcancel mtype2o o2mtype.
 Proof using. by case;rewrite /o2mtype /= inordK. Qed.
 
-Canonical mtype_eqType     := EqType     MessageType (Equality.Mixin MessageType_eq_good).
-Canonical mtype_choiceType := ChoiceType MessageType (PcanChoiceMixin pcancel_MessageType_7).
-Canonical mtype_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
-Canonical mtype_finType    := FinType    MessageType (PcanFinMixin    pcancel_MessageType_7).
+(* Register canonical structures on MessageType; needed for fset, mset, etc. *)
+Canonical messageType_eqType     := EqType     MessageType (Equality.Mixin MessageType_eqP).
+Canonical messageType_choiceType := ChoiceType MessageType (PcanChoiceMixin pcancel_MessageType_7).
+Canonical messageType_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
+Canonical messageType_finType    := FinType    MessageType (PcanFinMixin    pcancel_MessageType_7).
 
 (* Inspired by the structures used as values in messages in the automaton model *)
 Inductive ExValue :=
