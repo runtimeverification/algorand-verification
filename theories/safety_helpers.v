@@ -742,6 +742,24 @@ Qed.
 (* Lemmas about step_in_path_at *)
 (* ---------------------------- *)
 
+(* step_in_path_at implies global transition *)
+Lemma transition_from_path
+      g0 states ix (H_path: is_trace g0 states)
+      g1 g2
+      (H_step : step_in_path_at g1 g2 ix states):
+  g1 ~~> g2.
+Proof using.
+  unfold step_in_path_at in H_step.
+  destruct states. inversion H_path.
+  destruct H_path as [H_g0 H_path]; subst.
+  have {H_path} := path_drop' H_path ix.
+  destruct (drop ix (g :: states));[done|].
+  destruct l;[done|].
+  destruct H_step as [-> ->].
+  simpl.
+  by move/andP => [] /asboolP.
+Qed.
+
 (* step_in_path_at with same index must be with same states *)
 Lemma step_ix_same trace ix g1 g2:
     step_in_path_at g1 g2 ix trace ->
@@ -863,56 +881,6 @@ Proof using.
   unfold reset_msg_delays.
   by rewrite -updf_domf.
 Qed.
-
-(* ------------------- *)
-(* Reachability lemmas *)
-(* ------------------- *)
-
-(* step_in_path_at implies GTransition *)
-Lemma transition_from_path
-      g0 states ix (H_path: is_trace g0 states)
-      g1 g2
-      (H_step : step_in_path_at g1 g2 ix states):
-  GTransition g1 g2.
-Proof using.
-  unfold step_in_path_at in H_step.
-  destruct states. inversion H_path.
-  destruct H_path as [H_g0 H_path]; subst.
-  have {H_path} := path_drop' H_path ix.
-  destruct (drop ix (g :: states));[done|].
-  destruct l;[done|].
-  destruct H_step as [-> ->].
-  simpl.
-  by move/andP => [] /asboolP.
-Qed.
-
-(* greachable and GReachable definitions are equivalent in our setting *)
-
-Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
-Proof using.
-  move => g0 g; case => x.
-  destruct x. inversion 1.
-  move => [H_g0 H_path]; subst g1.
-  revert H_path.
-  move: g0 g.
-  elim: x => /=; first by move => g0 g Ht ->; exact: rt1n_refl.
-  move => g1 p IH g0 g.
-  move/andP => [Hg Hp] Hgg.
-  have IH' := IH _ _ Hp Hgg.
-  move: IH'; apply: rt1n_trans.
-    by move: Hg; move/asboolP.
-Qed.
-
-(* Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g. *)
-(* Proof using. *)
-(* move => g0 g. *)
-(* elim; first by move => x; exists [::]. *)
-(* move => x y z Hxy Hc. *)
-(* case => p Hp Hl. *)
-(* exists (y :: p) => //=. *)
-(* apply/andP. *)
-(* by split => //; apply/asboolP. *)
-(* Qed. *)
 
 (* ----------------------------------------------- *)
 (* Definitions and lemmas for sent/forged messages *)

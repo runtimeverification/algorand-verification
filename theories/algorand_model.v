@@ -1224,6 +1224,40 @@ Definition greachable (g0 g : GState) : Prop := exists2 p, is_trace g0 p & g = l
 (* classic definition of reachable global state *)
 Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition g0 g.
 
+(* the above notions of reachability are equivalent in our setting: *)
+
+(* our definition of reachability implies the classic definition of reachable states *)
+Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
+Proof using.
+  move => g0 g; case => x.
+  destruct x. inversion 1.
+  move => [H_g0 H_path]; subst g1.
+  revert H_path.
+  move: g0 g.
+  elim: x => /=; first by move => g0 g Ht ->; exact: rt1n_refl.
+  move => g1 p IH g0 g.
+  move/andP => [Hg Hp] Hgg.
+  have IH' := IH _ _ Hp Hgg.
+  move: IH'; apply: rt1n_trans.
+    by move: Hg; move/asboolP.
+Qed.
+
+(* classic definition of rachable states implies our definition of reachable states *)
+Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g.
+Proof using.
+  move => g0 g.
+  elim. move => x; exists [:: x]; done.
+  move => x y z Hxy Hc.
+  case => p Hp Hl.
+  unfold is_trace in Hp.
+  destruct p. contradiction.
+  destruct Hp as [Hy Hp].
+  exists (x :: y :: p) => //=; last by subst.
+  unfold is_trace; split; first by [].
+  apply/andP.
+    by split => //; apply/asboolP.
+Qed.
+
 (* labels to classify transitions more abstractly *)
 Inductive GLabel : Type :=
 | lbl_tick :  posreal -> GLabel
