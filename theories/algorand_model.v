@@ -1218,11 +1218,13 @@ Definition is_trace (g0 : GState) (p : seq GState) : Prop :=
           | [:: g' & rest] => [/\ g0 = g' & path gtransition g0 rest]
           end.
 
+(* reachability between pairs of states under the reflexive-transitive closure of the transition relation *)
 Definition greachable (g0 g : GState) : Prop := exists2 p, is_trace g0 p & g = last g0 p.
 
 (* classic definition of reachable global state *)
 Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition g0 g.
 
+(* labels to classify transitions more abstractly *)
 Inductive GLabel : Type :=
 | lbl_tick :  posreal -> GLabel
 | lbl_deliver : UserId -> R -> Msg -> seq Msg -> GLabel
@@ -1233,6 +1235,7 @@ Inductive GLabel : Type :=
 | lbl_replay_msg : UserId -> GLabel
 | lbl_forge_msg : UserId -> nat -> nat -> MessageType -> ExValue -> GLabel.
 
+(* specify when labels classify a transition between pairs of global states *)
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
   | lbl_tick increment =>
