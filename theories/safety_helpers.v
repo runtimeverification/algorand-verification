@@ -190,8 +190,7 @@ Proof using.
   apply perm_eq_mem, perm_eq_seq_mset.
 Qed.
 
-(* TODO - KARL: please add a small comment for these 5 lemmas *)
-
+(* the number of elements in the preimage of f w.r.t. b and multiset m is the same as applying map_mset on f and m and then b *)
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
 Proof using.
@@ -201,6 +200,7 @@ Proof using.
   by rewrite mset_seqE count_map.
 Qed.
 
+(* element membership w.r.t. preimage is preserved by map_mset on the multiset m *)
 Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:pred B), has b (map_mset f m) = has (preim f b) m.
 Proof using.
@@ -209,12 +209,14 @@ Proof using.
   apply eq_has_r, perm_eq_mem, perm_eq_seq_mset.
 Qed.
 
+(* the support of the multiset is unique when viewed as a sequence *)
 Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
   uniq (finsupp A).
 Proof using.
   by rewrite -(perm_eq_uniq (perm_undup_mset A));apply undup_uniq.
 Qed.
 
+(* the sequence of a subset of a multiset is equal to the subset's finite support modulo reordering *)
 Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
@@ -230,6 +232,7 @@ Proof using.
   move:H_sub => /msubset_subset. apply.
 Qed.
 
+(* summing up elements in a multiset subset is the same as taking sequence length *)
 Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   \sum_(i <- finsupp B) A i = size A.
@@ -261,7 +264,7 @@ Proof using.
   by rewrite big_seq_fset1 msetnxx.
 Qed.
 
-(* subset of a set has smaller size *)
+(* subset of a multiset has smaller size *)
 Lemma msubset_size (T:choiceType) (A B : {mset T}):
   (A `<=` B)%mset -> size A <= size B.
 Proof using.
