@@ -1,7 +1,3 @@
-Require Import Lra.
-Require Import Lia.
-
-Require Import PP.Ppsimplmathcomp.
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
@@ -18,7 +14,6 @@ Open Scope fset_scope.
 
 Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
-Require Interval.Interval_tactic.
 
 Require Import Relation_Operators.
 
@@ -59,6 +54,7 @@ Definition MType_eq (a b:MType) : bool :=
   | Nextvote_Val, Nextvote_Val => true
   | _, _ => false
   end.
+
 Lemma MType_eq_good: Equality.axiom MType_eq.
 Proof using.
   move => a b;apply Bool.iff_reflect;split.
@@ -78,6 +74,7 @@ Definition mtype2o (m:MType) : 'I_7 :=
   | Nextvote_Open => 5
   | Nextvote_Val => 6
   end.
+
 Definition o2mtype (i:'I_7) : option MType :=
   match val i in nat with
   | 0 => Some Block
@@ -122,6 +119,7 @@ Definition decodeExVal
   | inl (inr (v, user, n)) => repr_val v user n
   | inr (v,n) => next_val v n
   end.
+
 Lemma cancelExVal : pcancel codeExVal (fun x => Some (decodeExVal x)).
 Proof using. case;reflexivity. Qed.
 

@@ -1,7 +1,6 @@
-Require Import Lra.
 Require Import Lia.
-
 Require Import PP.Ppsimplmathcomp.
+
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
@@ -18,7 +17,6 @@ Open Scope fset_scope.
 
 Require Import Coq.Reals.Reals.
 Require Import Coq.Relations.Relation_Definitions.
-Require Interval.Interval_tactic.
 
 Require Import Relation_Operators.
 
