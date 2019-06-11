@@ -39,3 +39,7 @@ Files
 - `quorums.v`: definitions and hypotheses about quorums of nodes
 - `safety.v`: statement and proof of safety of the transition system
 - `liveness.v`: statement of liveness of the transition system
+
+Getting Help
+------------
+Feel free to report GitHub issues or to contact us at: contact@runtimeverification.com
