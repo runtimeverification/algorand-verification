@@ -1,6 +1,6 @@
 # Algorand verification
 
-[Coq](https://coq.inria.fr) formalization and verification of the [Algorand](https://www.algorand.com) distributed ledger.
+Formalization and verification of the [Algorand](https://www.algorand.com) distributed ledger using the [Coq](https://coq.inria.fr) proof assistant.
 
 Requirements
 ------------
