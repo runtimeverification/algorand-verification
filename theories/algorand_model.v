@@ -31,10 +31,10 @@ Unset Printing Implicit Defensive.
 Parameter UserId : finType.
 
 (* And a finite set of values (blocks and block hashes) *)
-Parameter Value : finType .
+Parameter Value : finType.
 
 (* An enumerated data type of all possible kinds of messages *)
-Inductive MType :=
+Inductive MessageType :=
   | Block
   | Proposal
   | Reproposal
@@ -43,7 +43,7 @@ Inductive MType :=
   | Nextvote_Open
   | Nextvote_Val.
 
-Definition MType_eq (a b:MType) : bool :=
+Definition MessageType_eq (a b:MessageType) : bool :=
   nosimpl match a,b with
   | Block, Block => true
   | Proposal, Proposal => true
@@ -55,17 +55,17 @@ Definition MType_eq (a b:MType) : bool :=
   | _, _ => false
   end.
 
-Lemma MType_eq_good: Equality.axiom MType_eq.
+Lemma MessageType_eq_good: Equality.axiom MessageType_eq.
 Proof using.
   move => a b;apply Bool.iff_reflect;split.
     by move <-;destruct a.
     by move/(ifT (a=b) True) => <-;destruct a, b.
 Qed.
 
-(* Make MType a finType by showing an isomorphism
+(* Make MessageType a finType by showing an isomorphism
    with the ssreflect bounded nat type 'I_7 *)
-Definition mtype2o (m:MType) : 'I_7 :=
- inord  match m with
+Definition mtype2o (m:MessageType) : 'I_7 :=
+ inord (match m with
   | Block => 0
   | Proposal => 1
   | Reproposal => 2
@@ -73,9 +73,9 @@ Definition mtype2o (m:MType) : 'I_7 :=
   | Certvote => 4
   | Nextvote_Open => 5
   | Nextvote_Val => 6
-  end.
+  end).
 
-Definition o2mtype (i:'I_7) : option MType :=
+Definition o2mtype (i:'I_7) : option MessageType :=
   match val i in nat with
   | 0 => Some Block
   | 1 => Some Proposal
@@ -86,13 +86,14 @@ Definition o2mtype (i:'I_7) : option MType :=
   | 6 => Some Nextvote_Val
   | _ => None
   end.
-Lemma pcancel_MType_7 : pcancel mtype2o o2mtype.
+
+Lemma pcancel_MessageType_7 : pcancel mtype2o o2mtype.
 Proof using. by case;rewrite /o2mtype /= inordK. Qed.
 
-Canonical mtype_eqType     := EqType     MType (Equality.Mixin MType_eq_good).
-Canonical mtype_choiceType := ChoiceType MType (PcanChoiceMixin pcancel_MType_7).
-Canonical mtype_countType  := CountType  MType (PcanCountMixin  pcancel_MType_7).
-Canonical mtype_finType    := FinType    MType (PcanFinMixin    pcancel_MType_7).
+Canonical mtype_eqType     := EqType     MessageType (Equality.Mixin MessageType_eq_good).
+Canonical mtype_choiceType := ChoiceType MessageType (PcanChoiceMixin pcancel_MessageType_7).
+Canonical mtype_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
+Canonical mtype_finType    := FinType    MessageType (PcanFinMixin    pcancel_MessageType_7).
 
 (* Inspired by the structures used as values in messages in the automaton model *)
 Inductive ExValue :=
@@ -129,13 +130,13 @@ Canonical exvalue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal)
 
 (* A message type as a product type *)
 (* A message is a tuple (type, ev, r, p, id) where:
-    type: message type as an MType
+    type: message type as an MessageType
     ev  : message payload as an ExValue
     r   : round value
     p   : period value
     id  : sender's user id
  *)
-Definition Msg : Type := MType * ExValue * nat * nat * UserId.
+Definition Msg : Type := MessageType * ExValue * nat * nat * UserId.
 Definition msg_sender (m:Msg): UserId := m.2.
 Definition msg_round (m:Msg): nat := m.1.1.2.
 Definition msg_period (m:Msg): nat := m.1.2.
@@ -372,7 +373,7 @@ Definition ustate_after us1 us2 : Prop :=
   \/ (us1.(round) = us2.(round) /\ us1.(period) < us2.(period))
   \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
 
-Definition msg_step_s (mhead: (MType * ExValue)): nat :=
+Definition msg_step_s (mhead: (MessageType * ExValue)): nat :=
   let (mtype,v) := mhead in
   match mtype with
   | Block => 1
@@ -1230,7 +1231,7 @@ Inductive GLabel : Type :=
 | lbl_enter_partition : GLabel
 | lbl_corrupt_user : UserId -> GLabel
 | lbl_replay_msg : UserId -> GLabel
-| lbl_forge_msg : UserId -> nat -> nat -> MType -> ExValue -> GLabel.
+| lbl_forge_msg : UserId -> nat -> nat -> MessageType -> ExValue -> GLabel.
 
 Definition related_by (label : GLabel) (pre post : GState) : Prop :=
   match label with
