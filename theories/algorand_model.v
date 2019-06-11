@@ -998,10 +998,10 @@ Canonical send_broadcasts_unlockable := [unlockable fun send_broadcasts].
 Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
   ohead (drop n s).
 
-(* returns True if P is true at nth element in path *)
-Definition at_step n (path : seq GState) (P : pred GState) : bool :=
-  match drop n path with
-  | (g::_) => P g
+(* returns True if P is true at nth element in path p *)
+Definition at_step n (p : seq GState) (P : pred GState) : bool :=
+  match drop n p with
+  | g :: _ => P g
   | [::] => false
   end.
 
@@ -1016,8 +1016,8 @@ Definition is_user_corrupt_gstate (uid : UserId) (g : GState) : bool :=
 Definition user_honest (uid:UserId) (g:GState) : bool :=
   if g.(users).[? uid] is Some ustate then ~~ (ustate.(corrupt)) else false.
 
-Definition user_honest_at ix path (uid : UserId) : bool :=
-  at_step ix path (user_honest uid).
+Definition user_honest_at ix p (uid : UserId) : bool :=
+  at_step ix p (user_honest uid).
 
 (* Returns the given users map restricted to honest users only *)
 Definition honest_users (users : {fmap UserId -> UState}) :=
@@ -1201,22 +1201,22 @@ Inductive GTransition : g_transition_type :=
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
-(* There is step at index n from g1 to g2 along a path. This means g1 and g2
+(* There is step at index n from g1 to g2 along a path p. This means g1 and g2
    are adjacent elements in the path *)
-Definition step_in_path_at (g1 g2 : GState) n (path : seq GState) : Prop :=
-  match drop n path with
-  | (g1'::g2'::_) => g1' = g1 /\ g2' = g2
+Definition step_in_path_at (g1 g2 : GState) n (p : seq GState) : Prop :=
+  match drop n p with
+  | g1' :: g2' :: _ => [/\ g1' = g1 & g2' = g2]
   | _ => False
   end.
 
 (* definition of reachable global state via paths *)
 Definition gtransition : rel GState := [rel x y | `[<GTransition x y>] ].
 
-(* A trace starts from g0 and transitions via GTransitions at each step in the path *)
-Definition is_trace (g0 : GState) (path : seq GState) : Prop :=
-  nosimpl match path with
+(* A trace starts from g0 and transitions via GTransitions at each step in the path p *)
+Definition is_trace (g0 : GState) (p : seq GState) : Prop :=
+  nosimpl match p with
           | [::] => False
-          | [:: g' & rest] => g0 = g' /\ path.path gtransition g0 rest
+          | [:: g' & rest] => [/\ g0 = g' & path gtransition g0 rest]
           end.
 
 Definition greachable (g0 g : GState) : Prop := exists2 p, is_trace g0 p & g = last g0 p.
