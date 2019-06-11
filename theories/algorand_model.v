@@ -90,7 +90,7 @@ Definition o2mtype (i:'I_7) : option MessageType :=
 Lemma pcancel_MessageType_7 : pcancel mtype2o o2mtype.
 Proof using. by case;rewrite /o2mtype /= inordK. Qed.
 
-(* Register canonical structures on MessageType; needed for fset, mset, etc. *)
+(* Register canonical structures on MessageType; needed for using MessageType in fset, mset, etc. *)
 Canonical messageType_eqType     := EqType     MessageType (Equality.Mixin MessageType_eqP).
 Canonical messageType_choiceType := ChoiceType MessageType (PcanChoiceMixin pcancel_MessageType_7).
 Canonical messageType_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
