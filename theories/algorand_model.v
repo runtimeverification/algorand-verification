@@ -1250,9 +1250,9 @@ Inductive GTransition : g_transition_type :=
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
-(* ---------------------------------- *)
-(* Reachability for global transition *)
-(* ---------------------------------- *)
+(* ------------------------------------------- *)
+(* Reachability for global transition relation *)
+(* ------------------------------------------- *)
 
 (* There is step at index n from g1 to g2 along a path p. This means g1 and g2
    are adjacent elements in the path *)
