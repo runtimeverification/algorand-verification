@@ -627,9 +627,13 @@ Proof using.
   by apply /hasP;exists (d,msg).
 Qed.
 
-(* ---------------------- *)
-(* Lemmas about onth/step *)
-(* -----------------------*)
+(* ------------------------------------------ *)
+(* Definition of onth, lemmas about onth/step *)
+(* ------------------------------------------ *)
+
+(* onth: option returning nth element of seq if n small enough *)
+Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
+  ohead (drop n s).
 
 (* onth results in Some if index is small *)
 Lemma onth_size : forall T (s:seq T) n x, onth s n = Some x -> n < size s.

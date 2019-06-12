@@ -27,11 +27,19 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* ------------------------ *)
+(* UserId, Value Parameters *)
+(* ------------------------ *)
+
 (* We assume a finite set of users *)
 Parameter UserId : finType.
 
 (* And a finite set of values (blocks and block hashes) *)
 Parameter Value : finType.
+
+(* ------------ *)
+(* Message Type *)
+(* ------------ *)
 
 (* An enumerated data type of all possible types (headers) of messages *)
 Inductive MessageType :=
@@ -96,6 +104,10 @@ Canonical messageType_choiceType := ChoiceType MessageType (PcanChoiceMixin pcan
 Canonical messageType_countType  := CountType  MessageType (PcanCountMixin  pcancel_MessageType_7).
 Canonical messageType_finType    := FinType    MessageType (PcanFinMixin    pcancel_MessageType_7).
 
+(* --------------- *)
+(* Extended Values *)
+(* --------------- *)
+
 (* Message payload type, packaging Value and other data *)
 Inductive ExValue :=
   | val      : Value -> ExValue
@@ -129,6 +141,10 @@ Canonical exValue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal)
 Canonical exValue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
 Canonical exValue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
 
+(* -------- *)
+(* Messages *)
+(* -------- *)
+
 (* A message type as a product type *)
 (* A message is a tuple (type, ev, r, p, id) where:
     type: message type as an MessageType
@@ -149,6 +165,10 @@ Definition msg_period (m:Msg): nat := m.1.2.
  *)
 Definition MsgPool := {fmap UserId -> {mset R * Msg}}%mset.
 
+(* ----------- *)
+(* Credentials *)
+(* ----------- *)
+
 (* The credential of a User at a round-period-step triple
    Note: We abstract away the random value produced by an Oracle
    and the fact that credentials are interpreted as integer
@@ -166,6 +186,26 @@ Parameter credential : UserId -> nat -> nat -> nat -> credType.
 Axiom credentials_different :
   forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
   u <> u' -> credential u r p s <> credential u' r' p' s'.
+
+(* A proposition for whether a given credential qualifies its
+   owner to be a committee member
+   Note: This abstracts away how credential values are
+   interpreted
+ *)
+Parameter committee_cred : credType -> Prop.
+
+(* Whether the credential is a committee credential for the given
+   round-period-step
+ *)
+Definition comm_cred_step uid r p s : Prop :=
+  committee_cred (credential uid r p s) .
+
+Axiom credentials_valid_period:
+  forall uid r p s, comm_cred_step uid r p s -> 1 <= p.
+
+(* ---------- *)
+(* User State *)
+(* ---------- *)
 
 (* A proposal/reproposal record is a quadruple consisting of
    a user id, a user's credential, a value and a boolean
@@ -199,6 +239,10 @@ Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
 Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
 Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
 Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
+
+(* ------------------- *)
+(* Updating User State *)
+(* ------------------- *)
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
@@ -249,21 +293,9 @@ Definition advance_round (u : UState) : UState :=
            with deadline := 0%R ]}
         with p_start := u.(p_start) + u.(timer) ]}.
 
-(* A proposition for whether a given credential qualifies its
-   owner to be a committee member
-   Note: This abstracts away how credential values are
-   interpreted
- *)
-Parameter committee_cred : credType -> Prop.
-
-(* Whether the credential is a committee credential for the given
-   round-period-step
- *)
-Definition comm_cred_step uid r p s : Prop :=
-  committee_cred (credential uid r p s) .
-
-Axiom credentials_valid_period:
-  forall uid r p s, comm_cred_step uid r p s -> 1 <= p.
+(* ------------ *)
+(* Global State *)
+(* ------------ *)
 
 (* The global state *)
 (* Note that the global state structure and supporting functions and notations
@@ -297,6 +329,10 @@ Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
 Definition flip_partition_flag (g : GState) : GState :=
   {[ g with network_partition := ~~ g.(network_partition) ]}.
 
+(* ------------------------------- *)
+(* Parameters/axioms of the system *)
+(* ------------------------------- *)
+
 (* small - non-block - message delivery delay *)
 Parameter lambda : R.
 
@@ -323,8 +359,9 @@ Parameter tau_b : nat.
 (* number of next-votes for a value to move to next period *)
 Parameter tau_v : nat.
 
-
-(** Helper functions/propositions for the user-state-level trnasitions **)
+(* ------------------------------------------------------------------ *)
+(* Helper functions/propositions for the user-state-level trnasitions *)
+(* ------------------------------------------------------------------ *)
 
 (* valid is an abstract proposition on values that tells us whether a value
    is valid *)
@@ -517,8 +554,9 @@ Definition next_deadline k : R :=
   | n => (lambda + big_lambda + (INR n - 3) * L)%R
   end.
 
-
-(** Step 1: Proposing propositions and user state update **)
+(* ---------------------------------------------------- *)
+(* Step 1: Proposing propositions and user state update *)
+(* ---------------------------------------------------- *)
 
 (* The proposal step preconditions *)
 (* Note that this covers both: (a) the case when p = 1, and (b)
@@ -558,7 +596,9 @@ Definition propose_result (pre : UState) : UState :=
   {[ {[ pre with deadline := (2 * lambda)%R ]}
             with step := 2 ]}.
 
-(** Step 2: Softvoting propositions and user state update **)
+(* ----------------------------------------------------- *)
+(* Step 2: Softvoting propositions and user state update *)
+(* ----------------------------------------------------- *)
 
 (* The Softvoting-a-proposal step preconditions *)
 (* Note that this covers both: (a) the case when p = 1, and (b)
@@ -614,8 +654,9 @@ Definition softvote_result (pre : UState) : UState :=
   {[ {[ pre with step := 3 ]}
             with deadline := (lambda + big_lambda)%R ]}.
 
-
-(** Step 3: Certvoting propositions and user state update **)
+(* ----------------------------------------------------- *)
+(* Step 3: Certvoting propositions and user state update *)
+(* ----------------------------------------------------- *)
 
 (* Certvoting step preconditions *)
 (* The successful case *)
@@ -652,7 +693,9 @@ Definition certvote_timeout_ok (pre : UState) uid r p : Prop :=
 Definition certvote_result (pre : UState) : UState :=
   {[ pre with step := 4 ]}.
 
-(** Steps >= 4: Nextvoting propositions and user state update **)
+(* --------------------------------------------------------- *)
+(* Steps >= 4: Nextvoting propositions and user state update *)
+(* --------------------------------------------------------- *)
 
 (* Nextvoting step preconditions *)
 (* The proper-value case *)
@@ -771,8 +814,9 @@ Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState 
   | _ => pre
   end.
 
-
-(** The inductive definition of the user state transition relations **)
+(* ------------------------------------------- *)
+(* User transition type - internal transitions *)
+(* ------------------------------------------- *)
 
 (* The internal user-level transition relation type *)
 (* An internal transition is a transition that does not consume a message *)
@@ -857,6 +901,10 @@ Inductive UTransitionInternal : u_transition_internal_type :=
 
 where "x # y ~> z" := (UTransitionInternal x y z) : type_scope.
 
+(* ------------------------------------------ *)
+(* User transition type - message transitions *)
+(* ------------------------------------------ *)
+
 (* The message-triggered user-level transition relation type *)
 (* A message-triggered transition consumes an incoming message *)
 (* A user transitions from a pre-state, while consuming a message, into a
@@ -928,8 +976,9 @@ Inductive UTransitionMsg : u_transition_msg_type :=
       uid # pre ; msg ~> (deliver_nonvote_msg_result pre msg c r p, [::])
 where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
 
-(* Global transition relation type *)
-Definition g_transition_type := relation GState.
+(* --------------------------------------- *)
+(* Helper functions for global transitions *)
+(* --------------------------------------- *)
 
 (* Is the network in a partitioned/unpartitioned state? *)
 Definition is_partitioned pre : bool := pre.(network_partition).
@@ -992,10 +1041,6 @@ Fact send_broadcasts_key: unit. Proof using. exact tt. Qed.
 Definition send_broadcasts
   := locked_with send_broadcasts_key send_broadcasts_def.
 Canonical send_broadcasts_unlockable := [unlockable fun send_broadcasts].
-
-(* onth: option returning nth element of seq if n small enough *)
-Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
-  ohead (drop n s).
 
 (* returns True if P is true at nth element in path p *)
 Definition at_step n (p : seq GState) (P : pred GState) : bool :=
@@ -1138,7 +1183,12 @@ Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval : GStat
                  pre.(msg_in_transit) [:: msg] in
   {[ pre with msg_in_transit := msgs' ]}.
 
-(* The global transition relation *)
+(* ---------------------- *)
+(* Global transition type *)
+(* ---------------------- *)
+
+(* Global transition relation type *)
+Definition g_transition_type := relation GState.
 
 Reserved Notation "x ~~> y" (at level 90).
 
@@ -1200,6 +1250,10 @@ Inductive GTransition : g_transition_type :=
 
 where "x ~~> y" := (GTransition x y) : type_scope.
 
+(* ---------------------------------- *)
+(* Reachability for global transition *)
+(* ---------------------------------- *)
+
 (* There is step at index n from g1 to g2 along a path p. This means g1 and g2
    are adjacent elements in the path *)
 Definition step_in_path_at (g1 g2 : GState) n (p : seq GState) : Prop :=
@@ -1257,6 +1311,10 @@ Proof using.
   apply/andP.
     by split => //; apply/asboolP.
 Qed.
+
+(* --------------------------- *)
+(* Labeling global transitions *)
+(* --------------------------- *)
 
 (* labels to classify transitions more abstractly *)
 Inductive GLabel : Type :=
