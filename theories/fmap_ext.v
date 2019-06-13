@@ -10,6 +10,10 @@ Unset Printing Implicit Defensive.
 Open Scope fmap_scope.
 Open Scope fset_scope.
 
+(* -------------------------------------- *)
+(* General utility lemmas for finite maps *)
+(* -------------------------------------- *)
+
 Section CheckAllFmap.
 
 Variables (V : Type) (I : choiceType).
@@ -22,6 +26,7 @@ Section AllFs.
 
 Variable s : {fset I}.
 
+(* Check some property P on given domain elements in the map f *)
 Definition allfs :=
  \big[andb/true]_(i <- s) (if f.[? i] is Some v then P v else true).
 
@@ -75,8 +80,10 @@ Variable f : {fmap I -> V}.
 
 Variable s : {fset I}.
 
+(* Update function parameter for individual values *)
 Variable upd : I -> V -> V.
 
+(* Update values for given elements in map domain *)
 Definition updf' :=
   \big[(@catf _ _)/[fmap]]_(i <- s)
    (if f.[? i] is Some v then [fmap].[i <- upd i v] else [fmap]).
@@ -180,6 +187,7 @@ move => Hi0'.
 exact: IH.
 Qed.
 
+(* Update given domain elements while retaining original mapping for other elements *)
 Definition updf := f + updf'.
 
 Lemma domf_s_updf' : forall i, i \in domf f -> (i \in enum_fset s) = (i \in domf updf').
