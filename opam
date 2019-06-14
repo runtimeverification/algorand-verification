@@ -8,7 +8,7 @@ license: "NCSA"
 
 synopsis: "A verified model of Algorand in Coq"
 description: """
-A verified formal model of the Algorand distributed consensus protocol in Coq.
+A verified formal model of the Algorand consensus protocol in Coq.
 """
 
 build: [make "-j%{jobs}%"]

@@ -1,14 +1,12 @@
-<!-- Copyright (c) 2019 Algorand verification team. All Rights Reserved. -->
-University of Illinois/NCSA
-Open Source License
-
-Copyright (c) 2009-2015 University of Illinois at Urbana-Champaign.
-All rights reserved.
+Copyright (c) 2019 Algorand verification team. All Rights Reserved.
 
 Developed by:
 
     The University of Texas at Austin
     Runtime Verification, Inc.
+
+University of Illinois/NCSA
+Open Source License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal with
