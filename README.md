@@ -2,6 +2,10 @@
 
 Formalization and verification of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq](https://coq.inria.fr) proof assistant.
 
+The project provides an abstract definition of the protocol as a transition system, and a complete formal proof of _safety_ for the transition system.
+
+A statement of _liveness_ for the transition system is also provided, but the proof of liveness is currently *incomplete*.
+
 Requirements
 ------------
 
@@ -30,6 +34,8 @@ Then, run `make` in the project root directory. This will check all the definiti
 Files
 -----
 
+All Coq vernacular files can be found under `theories`, and their content is as follows:
+
 - `boolp.v`, `reals.v`, `Rstruct.v`, `R_util.v`: definitions and lemmas for using real numbers via MathComp and SSReflect, adapted from the [MathComp analysis project](https://github.com/math-comp/analysis)
 - `fmap_ext.v`: some useful auxiliary definitions and lemmas about finite maps
 - `local_state.v`: definition of Algorand local node state
@@ -37,8 +43,8 @@ Files
 - `algorand_model.v`: definition of the Algorand transition system, along with helper functions and facts
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
 - `quorums.v`: definitions and hypotheses about quorums of nodes
-- `safety.v`: statement and proof of safety of the transition system
-- `liveness.v`: statement of liveness of the transition system
+- `safety.v`: statement and complete formal proof of safety for the transition system
+- `liveness.v`: statement of liveness for the transition system; note that this file contains *incomplete* (admitted) proofs
 
 Getting Help
 ------------
