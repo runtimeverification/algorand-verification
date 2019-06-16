@@ -2510,12 +2510,12 @@ Qed.
 
 (* The safety theorem: only one value can be certified in each round. This means
    that at most one block is approved in a given round. *)
-Theorem safety: forall g0 trace (r:nat),
-    state_before_round r g0 ->
-    is_trace g0 trace ->
-    forall p1 v1, certified_in_period trace r p1 v1 ->
-    forall p2 v2, certified_in_period trace r p2 v2 ->
-    v1 = v2.
+Theorem safety : forall (g0 : GState) (trace : seq GState) (r : nat),
+  state_before_round r g0 ->
+  is_trace g0 trace ->
+  forall (p1 : nat) (v1 : Value), certified_in_period trace r p1 v1 ->
+  forall (p2 : nat) (v2 : Value), certified_in_period trace r p2 v2 ->
+  v1 = v2.
 Proof.
   intros g0 trace r H_start H_path p1 v1 H_cert1 p2 v2 H_cert2.
   wlog: p1 v1 H_cert1 p2 v2 H_cert2 / (p1 <= p2).
