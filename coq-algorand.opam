@@ -8,7 +8,11 @@ license: "NCSA"
 
 synopsis: "A verified model of Algorand in Coq"
 description: """
-A verified formal model of the Algorand consensus protocol in Coq.
+Algorand is a consensus protocol that provides the foundation for a
+decentralized digital currency and transaction platform.
+This is a formal model of Algorand in Coq, expressed
+as a transition system over global states in a distributed system.
+Included is a full formal proof of safety for the transition system.
 """
 
 build: [make "-j%{jobs}%"]

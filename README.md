@@ -20,8 +20,7 @@ Building
 
 We recommend installing the dependencies of the project via
 [OPAM](http://opam.ocaml.org/doc/Install.html):
-
-```
+```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
 opam install coq.8.9.1 coq-mathcomp-ssreflect.1.8.0 \
   coq-mathcomp-algebra.1.8.0 coq-mathcomp-finmap.1.2.1 \
@@ -43,7 +42,7 @@ All Coq vernacular files can be found under the `theories` directory, and their 
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
 - `quorums.v`: definitions and hypotheses about quorums of nodes
 - `safety.v`: statement and complete formal proof of safety for the transition system
-- `liveness.v`: statement of liveness for the transition system; note that this file contains *incomplete* (admitted) proofs
+- `liveness.v`: statement of liveness for the transition system; note that this file contains **incomplete** (admitted) proofs
 
 Getting Help
 ------------
