@@ -1,10 +1,9 @@
 # Algorand verification
 
-Formalization and verification of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq](https://coq.inria.fr) proof assistant.
-
+A formalization of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq](https://coq.inria.fr) proof assistant.
 The project provides an abstract definition of the protocol as a transition system, and a complete formal proof of _safety_ for the transition system.
 
-A statement of _liveness_ for the transition system is also provided, but the proof of liveness is currently *incomplete*.
+A statement of _liveness_ for the transition system is also provided, but the proof of liveness is currently **incomplete**.
 
 Requirements
 ------------
@@ -34,7 +33,7 @@ Then, run `make` in the project root directory. This will check all the definiti
 Files
 -----
 
-All Coq vernacular files can be found under `theories`, and their content is as follows:
+All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
 
 - `boolp.v`, `reals.v`, `Rstruct.v`, `R_util.v`: definitions and lemmas for using real numbers via MathComp and SSReflect, adapted from the [MathComp analysis project](https://github.com/math-comp/analysis)
 - `fmap_ext.v`: some useful auxiliary definitions and lemmas about finite maps
