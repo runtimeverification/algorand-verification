@@ -67,7 +67,7 @@ As one example of the fourth kind of axiom, the assumption that ``any two large-
 Axiom quorums_c_honest_overlap :
  quorum_honest_overlap_statement tau_c.
 \end{lstlisting}
-where \lstinline{quorum_honest_overlap_statement} is a definition parameterized by the committee size threshold value tau:
+where \lstinline{quorum_honest_overlap_statement} is a definition parameterized by the committee size threshold value \lstinline{tau}:
 \begin{lstlisting}[language=Coq]
 Definition quorum_honest_overlap_statement (tau : nat) :=
  forall (trace : seq GState) (r p s : nat) (q1 q2:{fset UserId}),
