@@ -93,6 +93,30 @@
 %% extraction tools.
 
 %% Authors
+\author{Musab A. Alturki}
+\affiliation{
+  %\position{Position1}
+  %\department{Department1}              %% \department is recommended
+  \institution{Runtime Verification, Inc.}            %% \institution is required
+  %\streetaddress{Street1 Address1}
+  %\city{City1}
+  %\state{State1}
+  %\postcode{Post-Code1}
+  %\country{USA}                    %% \country is recommended
+}
+%\email{musab.alturki@runtimeverification.com}          %% \email is recommended
+\affiliation{
+  %\position{Position1}
+  %\department{Department1}              %% \department is recommended
+  \institution{King Fahd University of Petroleum and Minerals}            %% \institution is required
+  %\streetaddress{Street1 Address1}
+  %\city{City1}
+  %\state{State1}
+  %\postcode{Post-Code1}
+  %\country{USA}                    %% \country is recommended
+}
+\email{musab@kfupm.edu.sa}          %% \email is recommended
+
 \author{Brandon Moore}
 \affiliation{
   %\position{Position1}
@@ -141,7 +165,7 @@
 \affiliation{
   %\position{Position1}
   %\department{Department1}              %% \department is recommended
-  \institution{University of Illinois at Urbana-Champaign}            %% \institution is required
+  \institution{University~of~Illinois~at~Urbana-Champaign}            %% \institution is required
   %\streetaddress{Street1 Address1}
   %\city{City1}
   %\state{State1}
@@ -149,30 +173,6 @@
   %\country{USA}                    %% \country is recommended
 }
 \email{lpena7@illinois.edu}          %% \email is recommended
-
-\author{Musab A. Alturki}
-\affiliation{
-  %\position{Position1}
-  %\department{Department1}              %% \department is recommended
-  \institution{Runtime Verification, Inc.}            %% \institution is required
-  %\streetaddress{Street1 Address1}
-  %\city{City1}
-  %\state{State1}
-  %\postcode{Post-Code1}
-  %\country{USA}                    %% \country is recommended
-}
-%\email{musab.alturki@runtimeverification.com}          %% \email is recommended
-\affiliation{
-  %\position{Position1}
-  %\department{Department1}              %% \department is recommended
-  \institution{King Fahd University of Petroleum and Minerals}            %% \institution is required
-  %\streetaddress{Street1 Address1}
-  %\city{City1}
-  %\state{State1}
-  %\postcode{Post-Code1}
-  %\country{USA}                    %% \country is recommended
-}
-\email{musab@kfupm.edu.sa}          %% \email is recommended
 
 \author{Grigore Ro{\c s}u}
 \affiliation{
@@ -278,13 +278,13 @@ Therefore, consensus protocols need to maintain a consistent global view of the 
 
 A class of consensus protocols, pioneered by Bitcoin and referred to as Proof-of-Work (PoW), achieves consensus primarily through a process called mining, in which all participating nodes in the network compete on solving complex cryptographic puzzles to produce and record blocks. Although it provided workable solutions to the decentralized consensus challenge, PoW is now widely known to suffer from efficiency, scalability and security problems. The mining process is inherently computationally expensive, slow and wasteful, resulting in wasting significant amounts of energy [add example] while costing high transaction fees. Furthermore, PoW tends in practice to result in centralized systems, in which the bulk of the mining power (and hence the power of deciding the fate of the blockchain) falls in the hands of a small subset of users: those who can afford to invest in very powerful computing resources, or who can simply join forces in mining pools. Centralization defeats the purpose of the protocol and poses a major security concern: those who control the majority of the mining power need to be trusted, and even if they are, they make the system a much easier target for attacks. 
 
-An alternative mechanism that promises to alleviate these problems is Proof-of-Stake (PoS), in which the burden of producing blocks and selecting the next block to augment the blockchain is placed on a suitably selected subset of nodes (typically much smaller than the entire set of participating nodes), called a committee. In some variations of PoS, called delegated PoS, the committee is trusted and is usually fixed. In other variations, generally referred to as bonded PoS, participation in a committee requires staking some of the blockchain's underlying cryptographic assets (such as cryptocurrencies or tokens), which is the process of locking up these assets for an extended period of time so that they cannot be expended or moved. The stake of a committee member (relative to the total stake in the system) determines the member’s voting power when deciding the next block for a given round in the protocol. Furthermore, a node’s stake can also be used as collateral to be (fully or partially) reclaimed by the system if a node is found to misbehave. 
+An alternative mechanism that promises to alleviate these problems is Proof-of-Stake (PoS), in which the burden of producing blocks and selecting the next block to augment the blockchain is placed on a suitably selected subset of nodes (typically much smaller than the entire set of participating nodes), called a committee. In some variations of PoS, called delegated PoS, the committee is trusted and is usually fixed. In other variations, generally referred to as bonded PoS, participation in a committee requires staking some of the blockchain's underlying cryptographic assets (such as cryptocurrencies or tokens), which is the process of locking up these assets for an extended period of time so that they cannot be expended or moved. The stake of a committee member (relative to the total stake in the system) determines the member's voting power when deciding the next block for a given round in the protocol. Furthermore, a node's stake can also be used as collateral to be (fully or partially) reclaimed by the system if a node is found to misbehave.
 
 However, many important questions arise when designing a PoS protocol. How is the committee selected? One would want to have a selection process that is fair and representative, and hard to manipulate by a malicious user. Moreover, a committee that is fixed for a prolonged period of time can be easily attacked and presents a potential single point-of-failure for the system. But how often should the committee be changed? What is a suitable size of the committee in relation to the total population of nodes in the network? How should the voting process be designed? These and other design choices can significantly affect the efficiency, scalability and security of a PoS blockchain system. 
 
 \subsection{Overview of Algorand}
 
-We highlight below some of Algorand’s unique features. More detailed descriptions of these features and others can be found in~[CITE].
+We highlight below some of Algorand's unique features. More detailed descriptions of these features and others can be found in~[CITE].
 
 Algorand almost never forks. Forking happens when consensus on a single block for a round is not reached and multiple different blocks are added for that round. This is a notorious problem in PoW, but is also possible in PoS systems. Having different subsets of nodes decide on appending different blocks to the chain means that transactions appearing in these conflicting blocks are not finalized since only one of these blocks will eventually belong to the canonical chain, the chain that is deemed most accepted by the nodes (there are different methods for deciding the canonical chain, e.g. the longest chain in Bitcoin). Algorand avoids this problem by design: at most one block can receive the majority of votes in a round.
 
