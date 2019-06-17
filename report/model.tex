@@ -1,0 +1,226 @@
+\section{Modeling and Verification Approach}
+\label{sec:approach}
+
+[TODO: Karl]
+We developed a model of the Algorand consensus protocol in Coq, and proved a slew of its properties that we then used to ultimately show the asynchronous safety property. In total, our Coq development contains around 2000 lines of Gallina code for the specification of the model and its properties, and around 4000 lines of proof scripts that build the formal proofs. The source files also contain almost 1000 lines of comments that motivate and explain the specifications and lemmas.
+
+The modeling effort involved primarily:
+\begin{itemize}
+\item Defining all the needed data types and structures, such as message types and records, using the inductive constructions facilitated by the logic underlying Coq. Definitions were designed to utilize various existing infrastructure components, provided as Coq libraries, including most prominently the Mathematical Components (MathComp) library. These definitions specify the structure of the protocol’s state.
+\item Defining both: (1) utility functions, such as computing the number of soft-votes seen by a user so far or identifying the proposal with the least credential, and (2) logical propositions asserting, for example, the preconditions for a cert-voting action or whether some event (like cert-voting) had taken place along an execution path. Functions and propositions constitute the basic building blocks using which other more complex (inductive) definitions and statements are formed.
+\item Stating and proving basic structural properties about these definitions to ensure their correctness with respect to their intended behavior, for example, showing that a defined relation is a complete order or that a function that updates user timers preserves the set of users in the system. These properties are crucial for building up other proofs of more elaborate statements. We note that definitions imported from external libraries, such as MathComp, come equipped with many useful properties already proved, which are also heavily used in our model.
+\item Formalizing the argument for safety and proving the safety theorem, which in turn required designing a proof plan and identifying the intermediate results that will need to be shown as proof obligations. This process is iterative, since many intermediate results were deep enough that they required breaking them down into smaller, more manageable pieces. The whole process was guided by the informal proof arguments documented in the protocol description by Algorand[add pointers]. We highlight some of the details of this proof later in the report.
+\end{itemize}
+
+\subsection{The State Transition Relation}
+At the heart of the model is the global state transition relation (GTransition defined here[add link] and denoted \lstinline{g ~~> g'}, where $g$ and $g'$ are global states of the protocol). This relation defines inductively how the protocol's global state transitions into another state in one step. For example, the global state may transition into another by advancing time, having one of its users make an internal transition or by having the adversary partition the network, and so on. Each transition is guarded by certain preconditions that need to be satisfied for the transition to be enabled. Therefore, the statement that \lstinline{g ~~> g'} tells us that the preconditions for one of these global transition cases were enabled and that transition was taken to transform $g$ into $g'$.
+
+Most statements asserting that some kind of event has taken place are specified as propositions on traces, possibly satisfying certain conditions. A trace is a non-empty sequence of global states that is built up using the global transition relation, i.e. if state $g_i$ is the $i$th state in the sequence and $g_{i+1}$ is the $(i+1)$th state, then the ordered pair $g_i$ and $g_{i+1}$ belongs to the global transition relation. 
+
+[add diagram]
+
+By specifying path properties as propositions on traces, we are able to define generically what the property is without having to assume a concrete initial state (or a set of initial states). Any conditions required for the property to hold can be specified as constraints on the states of the trace being considered.
+
+For example, the property that a block was certified in a period is captured by the proposition:
+
+\begin{lstlisting}[language=Coq]
+Definition certified_in_period trace r p v :=
+  exists (certvote_quorum:{fset UserId}),
+     certvote_quorum `<=` committee r p 3
+  /\ #|` certvote_quorum | >= tau_c
+  /\ forall (voter:UserId), voter \in certvote_quorum ->
+       certvoted_in_path trace voter r p v.
+\end{lstlisting}
+
+It states that the proposition holds for a trace if there exists a large-enough quorum of users selected for cert-voting who actually published cert-votes along that trace for the given period (the proposition \lstinline{certvoted_in_path}).
+
+\subsection{Assumptions}
+
+Most formalizations of programs and protocols are parameterized in specific ways, to be valid across a wide range of configuration choices and scenarios that may occur in practice. Our Algorand model is parameterized on a finite set of users (e.g., network nodes), and on a finite set of values used in message payloads (representing blocks and block hashes). 
+
+\begin{lstlisting}[language=Coq]
+Parameter UserId : finType.
+Parameter Value : finType.
+\end{lstlisting}
+
+Values are assumed to be checkable for validity. We also consider an arbitrary, but totally ordered, datatype of credentials owned by users, and assume there is some way, given a credential, to say whether its owner is a committee member. Finally, we parameterize on delays and Algorand-specific configuration parameters such as number of votes required to move between periods. For example, this parameter represents the message delivery delay:
+
+\begin{lstlisting}[language=Coq]
+Parameter lambda : R.
+\end{lstlisting}
+
+Besides these and other parameters (16 in total), we also express assumptions, most related to our parameters, in the form of axioms. We use four kinds of axioms: 
+\begin{enumerate}
+\item Standard axioms from classical logic. We use these axioms (three in total) to facilitate simpler use of and reasoning about real numbers.
+
+\item Axioms about credentials (two in total), such as about their uniqueness across different users (the symbol <> means “not equal”, and the arrow “->” denotes logical implication): 
+
+\begin{lstlisting}[language=Coq]
+Axiom credentials_different :
+  forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
+  u <> u' -> credential u r p s <> credential u' r' p' s'.
+\end{lstlisting}
+
+This axiom states that any two distinct user identifiers u and u’ will have distinct credentials no matter what the round, period and step values are.
+
+\item Axioms on limits of message delays (two in total), such as the axiom specifying how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period L are all related:
+
+\begin{lstlisting}[language=Coq]
+Axiom delays_order : (3 * lambda <= big_lambda < L)%R.
+Axiom delays_positive : (lambda > 0)%R.
+\end{lstlisting}
+
+\item Axioms on the composition of groups (quorums) of users satisfying certain conditions. For example, the assumption that “any two large-enough cert-voting committees for a given round-period-step triple must share at least one honest user“, which captures the honest supermajority assumption in Algorand for the cert-voting case, is specified as:
+
+\begin{lstlisting}[language=Coq]
+Axiom quorums_c_honest_overlap : quorum_honest_overlap_statement tau_c.
+\end{lstlisting}
+
+where \lstinline{quorum_honest_overlap_statement} is a definition parameterized by the committee size threshold value tau:
+
+\begin{lstlisting}[language=Coq]
+Definition quorum_honest_overlap_statement (tau : nat) : Prop :=
+  forall (trace : seq GState) (r p s : nat) (quorum1 quorum2 : {fset UserId}),
+    quorum1 `<=` committee r p s ->		
+    // quorum1 is a subset of the committee of r-p-s
+    #|` quorum1 | >= tau ->					
+    // quorum1 is at least as large as the threshold tau
+    quorum2 `<=` committee r p s ->		
+    // quorum2 is a subset of the same committee 
+    #|` quorum2 | >= tau ->					
+    // quorum2 is at least as large as the threshold tau
+    exists honest_voter,
+      honest_voter \in quorum1
+      /\ honest_voter \in quorum2
+      /\ honest_during_step (r,p,s) honest_voter trace.
+\end{lstlisting}
+
+\lstinline{quorum_honest_overlap_statement} defines a proposition that holds if for any two quorums of users, each of size at least tau, and who are all committee members for the given r-p-s triple, there is an honest user for the step r-p-s who belongs to both quorums. In total, there are six axioms of this kind.
+\end{enumerate}
+
+Our axioms either capture statements accepted by most mathematicians (1 above) or assumptions made by Algorand designers on the runtime environment (2-4 above).
+
+%This section outlines our approach to modeling and verifying Casper in Coq.
+%
+%We decided to translate Hirai's Casper definitions and theorems~\cite{pos} from
+%Isabelle/HOL to Coq, and connect the resulting Casper definitions with key
+%definitions from Toychain.
+%At the same time, we leveraged the Toychain definitions and results to capture
+%the behavior of nodes as found in the Casper-based beacon chain for
+%Ethereum~\cite{Beacon}.
+%For tractability, we focused on translating and adapting Hirai's formal models
+%with a \emph{static} validator set, which are simpler (but less realistic) than
+%the corresponding models with churn among validators.
+%
+%We used concepts from the Mathematical Components library as far as possible.
+%In particular, validators are identified by fixed-size keys so
+%we represent validators as members of a \emph{finite type}
+%(having a finite number of members that can be enumerated), written
+%\lstinline{Validator : finType}.
+%Using the library's \lstinline{finType} simplifies forming and reasoning about sets of
+%validators.
+%
+%%\subsection{From Isabelle/HOL to Coq}
+%Since the formal model for establishing safety by Hirai mostly uses first-order
+%reasoning, we were able to successfully leverage the CoqHammer
+%extension~\cite{Czajka2018,CoqHammer} to perform proofs in Coq that closely
+%followed Isabelle/HOL proofs.
+%At the same time, we reformulated Isabelle locale variables to Coq section variables.
+%
+%In particular, the assumption on abstract set membership becomes:
+%\begin{lstlisting}[language=Coq]
+%Variables quorum_1 quorum_2 : {set {set Validator}}.
+%Hypothesis qs : forall q1 q2, q1 \in quorum_1 -> q2 \in quorum_1 ->
+% exists q3, q3 \in quorum_2 /\ q3 \subset q1 /\ q3 \subset q2.
+%\end{lstlisting}
+%\lstinline{quorum_1} abstracts the collection of sets of validators with
+%combined deposits (``weight'') of at least $\frac{2}{3}$ of the total.
+%A link will be justified if every validator in some set in \lstinline{quorum_1}
+%has voted for the link.
+%\lstinline{quorum_2} abstracts the collection of sets of validators with
+%combined deposits of at least $\frac{1}{3}$ of the total.
+%Casper safety proofs generally show that an attack cannot succeed without
+%a set of attacking validators of at least this size being slashed for it.
+%
+%To abstract a block forest, we assume a parent relationship on a type
+%\lstinline{Hash} (with member \lstinline{genesis}).
+%\begin{lstlisting}[language=Coq]
+%Variable hash_parent : rel Hash.
+%Hypothesis hash_at_most_one_parent : forall h1 h2 h3,
+% hash_parent h2 h1 -> hash_parent h3 h1 -> h2 = h3.
+%\end{lstlisting}
+%Given the block forest we define the global state as a function which represents
+%votes cast by validators:
+%\begin{lstlisting}[language=Coq]
+%Record State :=
+% mkSt { vote_msg : Validator -> Hash -> nat -> nat -> bool }.
+%\end{lstlisting}
+%The arguments are the validator making the vote, the hash and height of the
+%target block, and the height of the source block.
+%Blocks have at most one parent so the source hash of any valid vote can be
+%computed.
+%
+%With votes defined we can then define the slashing conditions of Casper (shown
+%in Figure~\ref{fig:slashing-conditions}) in terms of conflicting votes, and define
+%a predicate saying a validator is slashed in a given global state.
+%\begin{figure}
+%\textsc{An individual validator $v$ must not publish two distinct votes},
+%\[\langle v,s_1,t_1,h(s_1),h(t_1)\rangle \qquad \textsc{and} \qquad \langle v,s_2,t_2,h(s_2),h(t_2) \rangle,\]
+%\textsc{such that either}:
+%\begin{description}
+%\item[\phantom{I}I.] $h(t_1) = h(t_2).\quad$
+%  Equivalently, a validator must not publish two distinct votes for the same
+%  target height.
+%\item[II.] $h(s_1)<h(s_2)<h(t_2)<h(t_1).$
+%  Equivalently, a validator must not vote within the span of its other votes
+%\end{description}
+%\caption{Slashing Conditions of Casper}\label{fig:slashing-conditions}
+%\end{figure}
+%\begin{lstlisting}
+%Definition slashed_dbl_vote s n :=
+% exists h1 h2, h1 <> h2 /\ exists v s1 s2,
+%   vote_msg s n h1 v s1 /\ vote_msg s n h2 v s2.
+%\end{lstlisting}
+%Condition I is violated if validator \lstinline{n} has voted for two edges
+%targeting different blocks \lstinline{h1} and \lstinline{h2} at height \lstinline{v}.
+%\begin{lstlisting}
+%Definition slashed_surround s n :=
+%  exists h1 h2 v1 v2 s1 s2, v1 > v2 /\ s2 > s1
+%    vote_msg s n h1 v1 s1 /\ vote_msg s n h2 v2 s2.
+%\end{lstlisting}
+%Condition 2 is violated if validator \lstinline{n} has made two votes so the
+%source height \lstinline{s1} and target height \lstinline{v1} of one strictly
+%surround the source height \lstinline{s2} to target height \lstinline{v2}
+%range of the other vote.
+%\begin{lstlisting}
+%Definition slashed s n : Prop :=
+% slashed_dbl_vote s n \/ slashed_surround s n.
+%\end{lstlisting}
+%A validator is slashed if it has violated either slashing condition.
+%
+%We can also define justified links between blocks based on the votes in a state:
+%\begin{lstlisting}[language=Coq]
+%Definition justified_link s q parent pre new now :=
+%  q \in quorum_1 /\ (forall n, n \in q -> vote_msg s n new now pre) /\
+%  now > pre /\ nth_ancestor (now - pre) parent new.
+%\end{lstlisting}
+%The conjuncts respectively require that set \lstinline{q} is large enough to
+%justify a link, that every validator in \lstinline{q} has voted for this link,
+%that the claimed height \lstinline{now} of the target is greater than the
+%claimed height \lstinline{pre} of the source, and that \lstinline{parent} is
+%actually the ancestor the appropriate number of levels above \lstinline{new}.
+%
+%This allows us to define justified blocks, starting from the genesis block, and
+%furthermore finalized blocks, as in the Casper paper.
+%\begin{lstlisting}
+%Inductive justified : State -> Hash -> nat -> Prop :=
+%| orig : forall s, justified s genesis 0
+%| follow : forall s parent pre q new now,
+%    justified s parent pre ->
+%    justified_link s q parent pre new now ->
+%    justified s new now.
+%\end{lstlisting}
+%\begin{lstlisting}
+%Definition finalized s q h v child := justified s h v
+%  /\ h <~ child /\ justified_link s q h v child v.+1.
+%\end{lstlisting}

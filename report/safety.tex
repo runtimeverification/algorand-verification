@@ -1,0 +1,59 @@
+\section{The Safety Theorem}
+\label{sec:safety}
+
+[TODO: Brandon] 
+The safety theorem says that only one block may be certified in a round, which means the blockchain will not fork. The key assumptions of the proof are some properties of cryptographic self-selection. We have not formalized the cryptographic reasoning, or the notion of negligible probability, and instead simply assume that it's impossible to have a quorum of committee members without enough honest members.
+
+The statement of the theorem says that any two certificates from the same round must be for the same block:
+
+\begin{lstlisting}[language=Coq]
+Theorem safety : forall (g0:GState) (trace:seq GState) (r:nat),
+  state_before_round r g0 ->
+  is_trace g0 trace ->
+  forall (p1:nat) (v1:Value), certified_in_period trace r p1 v1 ->
+  forall (p2:nat) (v2:Value), certified_in_period trace r p2 v2 ->
+  v1 = v2.
+\end{lstlisting}
+
+
+Note the preconditions \lstinline{state_before_round r g0}, which states that the trace goes back long enough in history when no user has yet entered round r, and \lstinline{is_trace g0 trace}, which states that the trace is a valid trace beginning at g0, obtained by the transitive closure of the global transition relation.
+
+When there is a "network partition" allowing the adversary to delay messages, it's possible to end up with certificates from multiple periods if cert-vote messages are delayed enough for some nodes to advance to the next period, but these certificates will still all be for the same block.
+
+The proof of the main safety theorem above[LINK safety] first considers two cases, for whether the two certificates are from the same period or different periods.
+
+The case when the certificates are in the same period is handled in the lemma \lstinline{one_certificate_per_period}. This proof uses the quorum hypothesis to conclude that there is an honest node that contributed a cert-vote to both quorums, and the lemma \lstinline{no_two_certvotes_in_p} shows that an honest node cert-votes at most once in a period, by analyzing all the steps of the protocol.
+
+The case of different periods is proved using an invariant, which holds for the period that produces the first certificate and for all later periods in the same round. The invariant is defined in \lstinline{period_nextvoted_exclusively_for}, and says that no step of these periods produce a quorum of open next-votes, and any quorum of next-votes is for the same value that the first
+certificate was for.
+
+Lemma \lstinline{certificate_is_start_of_next_period} shows that this is true of next votes from the period that produced the first certificate,
+Lemma \lstinline{excl_enter_excl_next} shows that if this is true for one period, it is true for the next.
+Lemma \lstinline{prev_period_nextvotes_limits_cert_vote} shows that if the invariant holds for one period then any certificate produced in the next period can only be for the same value.
+
+The lemma \lstinline{certificate_is_start_of_next_period} is the only place we need to use a more complicated quorum hypothesis. Intuitively, if committee members are selected approximately randomly from the full population of users, so if some property (unrelated to committee
+membership) is true for all honest members of one quorum, then it's almost
+certainly true of most honest users overall, and even for a later step there
+cannot be another quorum where none of the honest members have that property.
+
+The specific property we consider is that the user had seen a quorum of soft-votes
+for value v by the end of the cert-voting step of the period where the first
+certificate was produced.
+This is a precondition for making an honest cert-vote, so this property is
+true for all honest users whose vote is part of the certificate.
+Then by the interquorum assumption we have that most honest users will have
+seen a quorum of soft-votes for v, and any quorum of next-voters from this period
+has at least one honest user that saw a quorum of soft-votes for v.
+By the preconditions for next-voting this honest user could only have next-voted for v,
+so the invariant is established.
+
+To prove the latter two lemmas \lstinline{excl_enter_excl_next} and
+\lstinline{prev_period_nextvotes_limits_cert_vote}
+we consider that any quorum of next-votes or cert-votes contains an honest voter, and looking at the preconditions for an honest node to make a cert-vote or next-vote.
+In both cases the vote can only be for v because we know from
+the invariant that any quorum of soft-votes in the new period are votes for v by \lstinline{prev_period_nextvotes_limits_honest_soft_vote},
+and that our honest node hasn't received a quorum of open next-votes from
+the previous period by lemma
+\lstinline{no_bottom_quorums_during_from_nextvoted_excl}.
+\lstinline{prev_period_nextvotes_limits_honest_soft_vote} is proven in turn by
+looking at the rules for an honest node to advance to a new period to establish than the node got "starting value" v, and with that starting value it cannot soft-vote anything but v unless it has also seen a quorum of open next-votes.
