@@ -17,21 +17,17 @@ At the heart of the model is the global state transition relation (GTransition d
 
 Most statements asserting that some kind of event has taken place are specified as propositions on traces, possibly satisfying certain conditions. A trace is a non-empty sequence of global states that is built up using the global transition relation, i.e. if state $g_i$ is the $i$th state in the sequence and $g_{i+1}$ is the $(i+1)$th state, then the ordered pair $g_i$ and $g_{i+1}$ belongs to the global transition relation. 
 
-[add diagram]
-
 By specifying path properties as propositions on traces, we are able to define generically what the property is without having to assume a concrete initial state (or a set of initial states). Any conditions required for the property to hold can be specified as constraints on the states of the trace being considered.
 
-For example, the property that a block was certified in a period is captured by the proposition:
-
+For example, the property that a block was certified in a period is captured by the following proposition:
 \begin{lstlisting}[language=Coq]
-Definition certified_in_period trace r p v :=
-  exists (certvote_quorum:{fset UserId}),
-     certvote_quorum `<=` committee r p 3
-  /\ #|` certvote_quorum | >= tau_c
-  /\ forall (voter:UserId), voter \in certvote_quorum ->
-       certvoted_in_path trace voter r p v.
+Definition certified_in_period trace (r p:nat) (v:Value) :=
+  exists (certvote_quorum : {fset UserId}),
+  certvote_quorum `<=` committee r p 3 /\
+  #|` certvote_quorum | >= tau_c /\
+  forall (voter : UserId), voter \in certvote_quorum ->
+   certvoted_in_path trace voter r p v.
 \end{lstlisting}
-
 It states that the proposition holds for a trace if there exists a large-enough quorum of users selected for cert-voting who actually published cert-votes along that trace for the given period (the proposition \lstinline{certvoted_in_path}).
 
 \subsection{Assumptions}
@@ -39,64 +35,49 @@ It states that the proposition holds for a trace if there exists a large-enough 
 Most formalizations of programs and protocols are parameterized in specific ways, to be valid across a wide range of configuration choices and scenarios that may occur in practice. Our Algorand model is parameterized on a finite set of users (e.g., network nodes), and on a finite set of values used in message payloads (representing blocks and block hashes). 
 
 \begin{lstlisting}[language=Coq]
-Parameter UserId : finType.
-Parameter Value : finType.
+Parameters (UserId : finType) (Value : finType).
 \end{lstlisting}
 
-Values are assumed to be checkable for validity. We also consider an arbitrary, but totally ordered, datatype of credentials owned by users, and assume there is some way, given a credential, to say whether its owner is a committee member. Finally, we parameterize on delays and Algorand-specific configuration parameters such as number of votes required to move between periods. For example, this parameter represents the message delivery delay:
+Values are assumed to be checkable for validity. We also consider an arbitrary, but totally ordered, datatype of credentials owned by users, and assume there is some way, given a credential, to say whether its owner is a committee member. Finally, we parameterize on delays and Algorand-specific configuration parameters such as number of votes required to move between periods. For example, these real-number parameters represent the message delivery delays and recovery time:
 
 \begin{lstlisting}[language=Coq]
-Parameter lambda : R.
+Parameters (lambda : R) (big_lambda : R) (L : R).
 \end{lstlisting}
 
-Besides these and other parameters (16 in total), we also express assumptions, most related to our parameters, in the form of axioms. We use four kinds of axioms: 
-\begin{enumerate}
-\item Standard axioms from classical logic. We use these axioms (three in total) to facilitate simpler use of and reasoning about real numbers.
+Besides these and other parameters (16 in total), we also express assumptions, most related to our parameters, in the form of axioms. We use four kinds of axioms:
+(1) standard axioms from classical logic, (2) axioms about credentials, (3) axioms on limits of message delays, (4) axioms on the composition of groups (quorums) of users satisfying certain conditions.
 
-\item Axioms about credentials (two in total), such as about their uniqueness across different users (the symbol <> means “not equal”, and the arrow “->” denotes logical implication): 
-
+We use the first kind of axiom (three in total) to facilitate simpler use of and reasoning about real numbers.
+One example of the second kind of axiom (out of two in total), is the following that expresses uniqueness of credentials
+across different users:
 \begin{lstlisting}[language=Coq]
 Axiom credentials_different :
-  forall (u u' : UserId) (r r' : nat) (p p' : nat) (s s' : nat),
-  u <> u' -> credential u r p s <> credential u' r' p' s'.
+ forall (u u' : UserId) (r r' p p' s s' : nat), u <> u' ->
+ credential u r p s <> credential u' r' p' s'.
 \end{lstlisting}
-
-This axiom states that any two distinct user identifiers u and u’ will have distinct credentials no matter what the round, period and step values are.
-
-\item Axioms on limits of message delays (two in total), such as the axiom specifying how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period L are all related:
-
+In other words, any two distinct user identifiers \lstinline{u} and \lstinline{u'} will have distinct credentials no matter what the round, period and step values are.
+The third kind of axioms specify how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period \lstinline{L} are all related:
 \begin{lstlisting}[language=Coq]
 Axiom delays_order : (3 * lambda <= big_lambda < L)%R.
 Axiom delays_positive : (lambda > 0)%R.
 \end{lstlisting}
 
-\item Axioms on the composition of groups (quorums) of users satisfying certain conditions. For example, the assumption that “any two large-enough cert-voting committees for a given round-period-step triple must share at least one honest user“, which captures the honest supermajority assumption in Algorand for the cert-voting case, is specified as:
-
+As one example of the fourth kind of axiom, the assumption that ``any two large-enough cert-voting committees for a given round-period-step triple must share at least one honest user'', which captures the honest supermajority assumption in Algorand for the cert-voting case, is specified as:
 \begin{lstlisting}[language=Coq]
-Axiom quorums_c_honest_overlap : quorum_honest_overlap_statement tau_c.
+Axiom quorums_c_honest_overlap :
+ quorum_honest_overlap_statement tau_c.
 \end{lstlisting}
-
 where \lstinline{quorum_honest_overlap_statement} is a definition parameterized by the committee size threshold value tau:
-
 \begin{lstlisting}[language=Coq]
-Definition quorum_honest_overlap_statement (tau : nat) : Prop :=
-  forall (trace : seq GState) (r p s : nat) (quorum1 quorum2 : {fset UserId}),
-    quorum1 `<=` committee r p s ->		
-    // quorum1 is a subset of the committee of r-p-s
-    #|` quorum1 | >= tau ->					
-    // quorum1 is at least as large as the threshold tau
-    quorum2 `<=` committee r p s ->		
-    // quorum2 is a subset of the same committee 
-    #|` quorum2 | >= tau ->					
-    // quorum2 is at least as large as the threshold tau
-    exists honest_voter,
-      honest_voter \in quorum1
-      /\ honest_voter \in quorum2
-      /\ honest_during_step (r,p,s) honest_voter trace.
+Definition quorum_honest_overlap_statement (tau : nat) :=
+ forall (trace : seq GState) (r p s : nat) (q1 q2:{fset UserId}),
+  q1 `<=` committee r p s -> #|` q1 | >= tau ->					
+  q2 `<=` committee r p s -> #|` q2 | >= tau ->					
+  exists (honest_voter : UserId),
+   honest_voter \in q1 /\ honest_voter \in q2 /\
+   honest_during_step (r,p,s) honest_voter trace.
 \end{lstlisting}
-
-\lstinline{quorum_honest_overlap_statement} defines a proposition that holds if for any two quorums of users, each of size at least tau, and who are all committee members for the given r-p-s triple, there is an honest user for the step r-p-s who belongs to both quorums. In total, there are six axioms of this kind.
-\end{enumerate}
+In other words, if for any two quorums of users, each of size at least \lstinline{tau}, and who are all committee members for the given \lstinline{(r,p,s)} triple, there is an honest user for the step \lstinline{(r,p,s)} who belongs to both quorums. In total, there are six axioms of this kind.
 
 Our axioms either capture statements accepted by most mathematicians (1 above) or assumptions made by Algorand designers on the runtime environment (2-4 above).
 
