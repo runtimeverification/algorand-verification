@@ -16,7 +16,7 @@ As outlined below, our protocol model, properties, and proofs rely heavily data 
 %\item Formalizing the argument for safety and proving the safety theorem, which in turn required designing a proof plan and identifying the intermediate results that will need to be shown as proof obligations. This process is iterative, since many intermediate results were deep enough that they required breaking them down into smaller, more manageable pieces. The whole process was guided by the informal proof arguments documented in the protocol description by Algorand[add pointers]. We highlight some of the details of this proof later in the report.
 %\end{itemize}
 
-\subsection{Local and Global State}
+%\subsection{Local and Global State}
 
 \subsection{The Global Transition Relation}
 The global state transition relation is denoted \lstinline{g ~~> g'}, where $g$ and $g'$ are global states of the protocol. This relation defines inductively how the protocol's global state transitions into another state in one step. For example, the global state may transition into another by advancing time, having one of its users make an internal transition or by having the adversary partition the network, and so on. Each transition is guarded by certain preconditions that need to be satisfied for the transition to be enabled. Therefore, the statement that \lstinline{g ~~> g'} tells us that the preconditions for one of these global transition cases were enabled and that transition was taken to transform $g$ into $g'$.
@@ -44,8 +44,7 @@ Most formalizations of programs and protocols are parameterized in specific ways
 Parameters (UserId : finType) (Value : finType).
 \end{lstlisting}
 
-Values are assumed to be checkable for validity. We also consider an arbitrary, but totally ordered, datatype of credentials owned by users, and assume there is some way, given a credential, to say whether its owner is a committee member. Finally, we parameterize on delays and Algorand-specific configuration parameters such as number of votes required to move between periods. For example, these real-number parameters represent the message delivery delays and recovery time:
-
+Values are assumed to be checkable for validity. We also consider an arbitrary, but totally ordered, datatype of credentials owned by users, and assume there is some way, given a credential, to say whether its owner is a committee member. Finally, we parameterize on delays and Algorand-specific configuration parameters such as number of votes required to move between periods. For example, these real-number parameters represent, respectively, the non-block message delivery delay, the block message delivery day, and the recovery time:
 \begin{lstlisting}[language=Coq]
 Parameters (lambda : R) (big_lambda : R) (L : R).
 \end{lstlisting}
@@ -62,7 +61,7 @@ Axiom credentials_different :
  credential u r p s <> credential u' r' p' s'.
 \end{lstlisting}
 In other words, any two distinct user identifiers \lstinline{u} and \lstinline{u'} will have distinct credentials no matter what the round, period and step values are.
-The third kind of axioms specify how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period \lstinline{L} are all related:
+The two axioms of the third kind specify how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period \lstinline{L} are all related:
 \begin{lstlisting}[language=Coq]
 Axiom delays_order : (3 * lambda <= big_lambda < L)%R.
 Axiom delays_positive : (lambda > 0)%R.

@@ -24,7 +24,7 @@ However, many important questions arise when designing a PoS protocol. How is th
 
 \subsection{Overview of Algorand}
 
-We highlight below some of Algorand's unique features. More detailed descriptions of these features and others are available elsewhere~\cite{Chen2018}.
+We highlight below some of Algorand's unique features. More detailed descriptions of these features and others are available elsewhere~\cite{Chen2018,Chen2019}.
 
 Algorand almost never forks. Forking happens when consensus on a single block for a round is not reached and multiple different blocks are added for that round. This is a notorious problem in PoW, but is also possible in PoS systems. Having different subsets of nodes decide on appending different blocks to the chain means that transactions appearing in these conflicting blocks are not finalized since only one of these blocks will eventually belong to the canonical chain, the chain that is deemed most accepted by the nodes (there are different methods for deciding the canonical chain, e.g. the longest chain in Bitcoin). Algorand avoids this problem by design: at most one block can receive the majority of votes in a round.
 
@@ -71,15 +71,16 @@ One emerging approach to the challenge of designing and implementing correct and
 
 The benefits of applying formal methods early in the design process of complex systems are well documented~\cite{Yang2011,Fonseca2017}. Most directly, formal methods can uncover fundamental errors that would otherwise go undetected, and which are costly to correct in a later phase. Moreover, obtaining formal guarantees about a protocol's design significantly increases the confidence in not just the implementation of the protocol, but also in the systems built on top of it, and ultimately increases trust in whole platforms among developers and users, facilitating wider adoption and support.
 
-Researchers have developed a large spectrum of techniques and tools for applying formal methods to model, specify, and verify general software systems and distributed protocols. The techniques vary across dimensions such as expressive power, automation, and tool support. Perhaps most importantly, they differ in the mathematical guarantees they provide and therefore in trustworthiness. Generally, to obtain stronger guarantees, more effort is required by formal verification engineers during both modeling and verification, and less automation is available (see the chart in Figure~\ref{fig:verification}).
+Researchers have developed a large spectrum of techniques and tools for applying formal methods to model, specify, and verify general software systems and distributed protocols. The techniques vary across dimensions such as expressive power, automation, and tool support. Perhaps most importantly, they differ in the mathematical guarantees they provide and therefore in trustworthiness. Generally, to obtain stronger guarantees, more effort is required by formal verification engineers during both modeling and verification, and less extensive automation is available.
 
-\begin{figure}
-  \includegraphics[width=\linewidth]{assets/verification.png}
-  \caption{Different verification methods and how they generally compare with respect to the confidence-effort trade off.}
-  \label{fig:verification}
-\end{figure}
+%(see the chart in Figure~\ref{fig:verification}).
+%\begin{figure}
+%  \includegraphics[width=\linewidth]{assets/verification.png}
+%  \caption{Different verification methods and how they generally compare with respect to the confidence-effort trade off.}
+%  \label{fig:verification}
+%\end{figure}
 
-As the diagram indicates, the strongest guarantees, and thus the highest degree of trustworthiness, are obtained through deductive verification and theorem proving. In deductive verification, systems are modeled and specified inside expressive formal logical systems, and verified in a similar way to how mathematicians prove theorems - in principle by elaborating proofs of statements step-by-step. Among tools for deductive verification, \emph{proof assistants}~\cite{Geuvers2009,Harrison2014} offer the smallest trusted computing base necessary to trust verified statements, realized in modestly-sized trusted checkers that only assume a small set of axioms accepted by most mathematicians. Although they provide such strong guarantees, proof assistants can offer extensive automation and user support. Nevertheless, the process of figuring out what properties are relevant, how these properties are specified and building up their proofs normally requires a great deal of human ingenuity and experience. However, once everything is specified, proofs developed in proof assistants can be machine-checked, and persisted to serve as independently verifiable evidence that the properties hold for the given system~\cite{Pollack1998}.
+The strongest guarantees, and thus the highest degree of trustworthiness, are obtained through deductive verification and theorem proving. In deductive verification, systems are modeled and specified inside expressive formal logical systems, and verified in a similar way to how mathematicians prove theorems - in principle by elaborating proofs of statements step-by-step. Among tools for deductive verification, \emph{proof assistants}~\cite{Geuvers2009,Harrison2014} offer the smallest trusted computing base necessary to trust verified statements, realized in modestly-sized trusted checkers that only assume a small set of axioms accepted by most mathematicians. Although they provide such strong guarantees, proof assistants can offer extensive automation and user support. Nevertheless, the process of figuring out what properties are relevant, how these properties are specified and building up their proofs normally requires a great deal of human ingenuity and experience. However, once everything is specified, proofs developed in proof assistants can be machine-checked, and persisted to serve as independently verifiable evidence that the properties hold for the given system~\cite{Pollack1998}.
 
 \subsection{Coq and the Mathematical Components Library}
 
