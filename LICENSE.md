@@ -2,8 +2,8 @@ Copyright (c) 2019 Algorand verification team. All Rights Reserved.
 
 Developed by:
 
-    The University of Texas at Austin
     Runtime Verification, Inc.
+    The University of Texas at Austin
 
 University of Illinois/NCSA
 Open Source License
