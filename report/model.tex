@@ -73,8 +73,12 @@ We model local (user) state as an inductive datatype that holds information such
 \begin{lstlisting}[language=Coq]
 Record UState := mkUState {
   corrupt : bool;
-  round : nat; period : nat; step : nat;
-  timer : R; deadline : R; p_start : R;
+  round : nat;
+  period : nat;
+  step : nat;
+  timer : R;
+  deadline : R;
+  p_start : R;
   proposals     : nat -> nat -> seq PropRecord;
   stv           : nat -> option Value;
   blocks        : nat -> seq Value;
