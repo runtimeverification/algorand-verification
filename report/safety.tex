@@ -4,9 +4,9 @@
 The safety theorem says that only one block may be certified in a round,
 which means the blockchain will not fork.
 The key assumptions of the Coq proof are some properties of cryptographic self-selection.
-The cryptographic argument for the correctness of cryptographic self-selection
-is given in \cite{}, but we have not formalized cryptographic reasoning so
-our development takes these properties as unproved assumptions.
+The cryptographic arguments for the correctness of cryptographic self-selection
+are given by Chen~et~al.~\cite{Chen2019,Chen2018}, but we have not formalized cryptographic
+primitives and results, so our development takes these properties as unproven assumptions.
 
 The statement of the theorem says that any two certificates from the same round
 must be for the same block:
@@ -20,11 +20,10 @@ Theorem safety : forall (g0:GState) (trace:seq GState) (r:nat),
   v1 = v2.
 \end{lstlisting}
 
-
 Note the preconditions \lstinline{state_before_round r g0}, which states that
 that initial state \lstinline{g0} is far enough back in history that no user
-had yet taken any actions in round r, and \lstinline[breaklines=true]{is_trace g0 trace},
-which states that the trace is a valid execution trace beginning at g0,
+had yet taken any actions in round \lstinline{r}, and \lstinline[breaklines=true]{is_trace g0 trace},
+which states that the trace is a valid execution trace beginning at \lstinline{g0},
 with all steps taken according to the global transition relation.
 
 It is possible to end up with certificates from multiple periods of a round,
