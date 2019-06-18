@@ -46,7 +46,7 @@ All Coq vernacular files can be found under the `theories` directory, and their 
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
 - `quorums.v`: definitions and hypotheses about quorums of nodes
 - `safety.v`: statement and complete formal proof of safety for the transition system
-- `liveness.v`: an initial attempt at specifying liveness properties for the transition system; this part is work-in-progress and thus the file contains incomplete (admitted) proofs
+- `liveness.v`: an initial attempt at specifying liveness properties for the transition system. This part is work-in-progress and thus the file contains incomplete (admitted) proofs.
 
 Getting Help
 ------------
