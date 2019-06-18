@@ -39,7 +39,7 @@ Unset Printing Implicit Defensive.
 (* NOTE: This is only an initial attempt at specifying liveness 
    properties for the transition system. This part is still 
    work-in-progress and thus the file contains incomplete 
-   (admitted) proofs                                            *)
+   (admitted) proofs.                                            *)
 (* ------------------------------------------------------------ *)
 
 Definition users_at ix path : {fmap UserId -> UState} :=
