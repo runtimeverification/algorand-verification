@@ -1,9 +1,9 @@
-\section{Modeling and Verification Approach}
+\section{Formal Model and Verification Approach}
 \label{sec:approach}
 
-We model the Algorand consensus protocol in Coq as an inductive binary relation on global protocol states, and then express key properties as \emph{invariants} that hold for all protocol states that are (transitively) reachable, according to the relation, from some initial state. Ultimately, we define and prove the \emph{asynchronous safety} property of our protocol model in this way.
+We model the Algorand consensus protocol in Coq as an inductive binary relation on global protocol states, and then express key properties as \emph{invariants} that hold for all protocol states that are (transitively) reachable, according to the relation, from some initial state. Ultimately, we state and prove the \emph{asynchronous safety} property of our model in this way.
 
-Our verification approach is similar to that used for the Raft consensus protocol~\cite{Woos2016}, but is different from, for example, the approach based on reasoning on Lamport's happens-before relation used to verify the PBFT protocol~\cite{Rahli2018}. We also elide distributed separation logic, which has also been used recently for consensus protocol verification~\cite{Sergey2018}.
+Our verification approach is similar to that used for the Raft consensus protocol~\cite{Woos2016}, but is different from, for example, the approach based on reasoning on Lamport's happens-before relation used to verify the PBFT protocol~\cite{Rahli2018}. We also elide distributed separation logic, which has been used recently for consensus protocol verification in Coq~\cite{Sergey2018}.
 
 As outlined below, our protocol model, properties, and proofs rely heavily data structures and results from the Mathematical Components project~\cite{MathComp}, and in particular its libraries for finite sets and finite maps~\cite{Cohen2019}. In total, our Coq development contains around 2000 lines of Gallina code for the specification of the model and its properties, and around 4000 lines of proof scripts that build the formal proofs.
 %The source files also contain almost 1000 lines of comments that motivate and explain the specifications and lemmas.
@@ -85,7 +85,7 @@ Record UState := mkUState {
 }.
 \end{lstlisting}
 
-We model the global state as an inductive datatype that holds the current time, whether the network is partitioned, current state for all users, messages in transit, and received messages.
+We model the global state as an inductive datatype that holds the current time, whether the network is partitioned, current state for all users, messages in transit, and received messages. In particular, user state is represented as a finite map from user identifier to state, and messages in transit as a finite map from user identifier to multisets of pairs of message deadlines and messages.
 
 \begin{lstlisting}[language=Coq]
 Record GState := mkGState {
@@ -98,11 +98,11 @@ Record GState := mkGState {
 \end{lstlisting}
 
 \subsection{The Global Transition Relation}
-The global state transition relation is defined over the \lstinline{GState} type.
+The global state transition relation is defined over the \lstinline{GState} type. We distinguish three kinds of transitions: (a) node-internal transitions, (b) node message delivery transitions, and (c) network transitions.
 
 %The global state transition relation is denoted \lstinline{g ~~> g'}, where $g$ and $g'$ are global states of the protocol. This relation defines inductively how the protocol's global state transitions into another state in one step. For example, the global state may transition into another by advancing time, having one of its users make an internal transition or by having the adversary partition the network, and so on. Each transition is guarded by certain preconditions that need to be satisfied for the transition to be enabled. Therefore, the statement that \lstinline{g ~~> g'} tells us that the preconditions for one of these global transition cases were enabled and that transition was taken to transform $g$ into $g'$.
 
-Most statements asserting that some kind of event has taken place are specified as propositions on traces, possibly satisfying certain conditions. A trace is a non-empty sequence of global states that is built up using the global transition relation, i.e. if state $g_i$ is the $i$th state in the sequence and $g_{i+1}$ is the $(i+1)$th state, then the ordered pair $g_i$ and $g_{i+1}$ belongs to the global transition relation. 
+We define a \emph{trace} as a non-empty sequence of global states, where each adjacent pair belongs to the global transition relation, i.e. if state \lstinline{g$_i$} is the $i$th state in the sequence and \lstinline{g$_{i+1}$} is the $(i+1)$th state, then the pair \lstinline{g$_i$} and \lstinline{g$_{i+1}$} belongs to the global transition relation. 
 
 By specifying path properties as propositions on traces, we are able to define generically what the property is without having to assume a concrete initial state (or a set of initial states). Any conditions required for the property to hold can be specified as constraints on the states of the trace being considered.
 
