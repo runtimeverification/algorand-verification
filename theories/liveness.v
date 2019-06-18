@@ -35,7 +35,12 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(** LIVENESS **)
+(* ------------------------------------------------------------ *)
+(* NOTE: This is only an initial attempt at specifying liveness 
+   properties for the transition system. this part is still 
+   work-in-progress and thus the file contains incomplete 
+   (admitted) proofs                                            *)
+(* ------------------------------------------------------------ *)
 
 Definition users_at ix path : {fmap UserId -> UState} :=
   match drop ix path with
