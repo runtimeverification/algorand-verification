@@ -26,13 +26,13 @@ had yet taken any actions in round \lstinline{r}, and \lstinline[breaklines=true
 which states that the trace is a valid execution trace beginning at \lstinline{g0},
 with all steps taken according to the global transition relation.
 
-It is possible to end up with certificates from multiple periods of a round,
-during a "network partition" which allowing the adversary to delay messages,
+It is possible to end up with certificates from multiple periods of a round.
+Specifically, during a network partition which allows the adversary to delay messages,
 if cert-vote messages are delayed enough for some nodes to advance past the
 period where the first certificate was produced, but these multiple certificates
 will still be for the same block.
 
-The proof of the main safety theorem[LINK safety] stated above first considers two
+The proof of the main safety theorem stated above first considers two
 cases, for whether the two certificates are from the same period or different
 periods.
 
