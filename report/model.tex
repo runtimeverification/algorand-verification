@@ -30,10 +30,10 @@ Parameters (lambda : R) (big_lambda : R) (L : R).
 \end{lstlisting}
 
 Besides these and other parameters (16 in total), we also express assumptions, most related to our parameters, in the form of axioms. We use four kinds of axioms:
-(1) standard axioms from classical logic, (2) axioms about credentials, (3) axioms on limits of message delays, (4) axioms on the composition of groups (quorums) of users satisfying certain conditions.
+(1) standard axioms from classical logic, (2) axioms about credentials, (3) axioms on limits of message delays, and (4) axioms on the composition of groups (quorums) of users satisfying certain conditions.
 
 We use the first kind of axiom (three in total) to facilitate simpler use of and reasoning about real numbers.
-One example of the second kind of axiom (out of two in total), is the following that expresses uniqueness of credentials
+One example of the second kind of axiom (out of two in total), expresses the uniqueness of credentials
 across different users:
 \begin{lstlisting}[language=Coq]
 Axiom credentials_different :
@@ -41,7 +41,7 @@ Axiom credentials_different :
  credential u r p s <> credential u' r' p' s'.
 \end{lstlisting}
 In other words, any two distinct user identifiers \lstinline{u} and \lstinline{u'} will have distinct credentials no matter what the round, period and step values are.
-The two axioms of the third kind specify how the small message delivery delay lambda, block message delivery delay \lstinline{big_lambda} and the recovery time period \lstinline{L} are all related:
+The two axioms of the third kind specify how the small message delivery delay \lstinline{lambda}, block message delivery delay \lstinline{big_lambda}, and the recovery time period \lstinline{L} are all related:
 \begin{lstlisting}[language=Coq]
 Axiom delays_order : (3 * lambda <= big_lambda < L)%R.
 Axiom delays_positive : (lambda > 0)%R.
@@ -64,7 +64,7 @@ Definition quorum_honest_overlap_statement (tau : nat) :=
 \end{lstlisting}
 In other words, if for any two quorums of users, each of size at least \lstinline{tau}, and who are all committee members for the given \lstinline{(r,p,s)} triple, there is an honest user for the step \lstinline{(r,p,s)} who belongs to both quorums. In total, there are six axioms of this kind.
 
-Our axioms either capture statements accepted by most mathematicians (1 above) or assumptions made by Algorand designers on the runtime environment (2-4 above).
+Our axioms either capture statements accepted by mathematicians (1 above) or assumptions made by Algorand designers on the runtime environment (2-4 above).
 
 \subsection{Local and Global State}
 
@@ -85,7 +85,7 @@ Record UState := mkUState {
 }.
 \end{lstlisting}
 
-We model the global state as an inductive datatype that holds the current time, whether the network is partitioned, current state for all users, messages in transit, and received messages. In particular, user state is represented as a finite map from user identifier to state, and messages in transit as a finite map from user identifier to multisets of pairs of message deadlines and messages.
+We model the global state as an inductive datatype that holds the current time, whether the network is partitioned, current state for all users, messages in transit, and received messages. In particular, the state of users in the global state is represented as a finite map from user identifier to state, and messages in transit as a finite map from user identifier to multisets of pairs of message deadlines and messages.
 
 \begin{lstlisting}[language=Coq]
 Record GState := mkGState {
@@ -100,9 +100,11 @@ Record GState := mkGState {
 \subsection{The Global Transition Relation}
 The global state transition relation is defined over the \lstinline{GState} type, and denoted \lstinline{g ~~> g'} in Coq when it holds for \lstinline{g} and \lstinline{g'}. We distinguish three kinds of transitions: (a) node-internal transitions, (b) node message delivery transitions, and (c) network transitions.
 
+Examples of the first transition (12 total) include a user proposing a block or a user certifying a block. There are eight transitions of the second form, such as a user delivering a next-vote for a block and advancing its period. The six network transitions include advancing the users' timers, entering and exiting a partition, and adversarial actions such as replaying a message.
+
 %The global state transition relation is denoted \lstinline{g ~~> g'}, where $g$ and $g'$ are global states of the protocol. This relation defines inductively how the protocol's global state transitions into another state in one step. For example, the global state may transition into another by advancing time, having one of its users make an internal transition or by having the adversary partition the network, and so on. Each transition is guarded by certain preconditions that need to be satisfied for the transition to be enabled. Therefore, the statement that \lstinline{g ~~> g'} tells us that the preconditions for one of these global transition cases were enabled and that transition was taken to transform $g$ into $g'$.
 
-We define a \emph{trace} as a non-empty sequence of global states, where each adjacent pair belongs to the global transition relation, i.e. if state \lstinline{g$_i$} is the $i$th state in the sequence and \lstinline{g$_{i+1}$} is the $(i+1)$th state, then the pair \lstinline{g$_i$} and \lstinline{g$_{i+1}$} belongs to the global transition relation. 
+To chain global states together, we define a \emph{trace} as a non-empty sequence of global states, where each adjacent pair belongs to the global transition relation, i.e. if state \lstinline{g$_i$} is the $i$th state in the sequence and \lstinline{g$_{i+1}$} is the $(i+1)$th state, then the pair \lstinline{g$_i$} and \lstinline{g$_{i+1}$} belongs to the global transition relation. 
 
 By specifying path properties as propositions on traces, we are able to define generically what the property is without having to assume a fully concrete initial state. Any conditions required for the property to hold can be specified as constraints on the states of the trace being considered.
 
