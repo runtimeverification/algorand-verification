@@ -5,7 +5,7 @@ We model the Algorand consensus protocol in Coq as an inductive binary relation 
 
 Our verification approach is similar to that used for the Raft consensus protocol~\cite{Woos2016} and the Toychain blockchain formalization~\cite{Pirlea2018}, but is different from, for example, the approach based on reasoning on Lamport's happens-before relation used to verify the PBFT protocol~\cite{Rahli2018}. We also elide distributed separation logic, which has been used recently for consensus protocol verification in Coq~\cite{Sergey2018}.
 
-As outlined below, our protocol model, properties, and proofs rely heavily data structures and results from the Mathematical Components project~\cite{MathComp}, and in particular its libraries for finite sets and finite maps~\cite{Cohen2019}. In total, our Coq development contains around 2000 lines of Gallina code for the specification of the model and its properties, and around 4000 lines of proof scripts that build the formal proofs.
+As outlined below, our protocol model, properties, and proofs rely heavily on data structures and results from the Mathematical Components project~\cite{MathComp}, and in particular its libraries for finite sets and finite maps~\cite{Cohen2019}. In total, our Coq development contains around 2000 lines of Gallina code for the specification of the model and its properties, and around 4000 lines of proof scripts that build the formal proofs.
 %The source files also contain almost 1000 lines of comments that motivate and explain the specifications and lemmas.
 
 %The modeling effort involved primarily:
@@ -41,7 +41,7 @@ Axiom credentials_different :
  credential u r p s <> credential u' r' p' s'.
 \end{lstlisting}
 In other words, any two distinct user identifiers \lstinline{u} and \lstinline{u'} will have distinct credentials no matter what the round, period and step values are.
-The two axioms of the third kind specify how the small message delivery delay \lstinline{lambda}, block message delivery delay \lstinline{big_lambda}, and the recovery time period \lstinline{L} are all related:
+The two axioms of the third kind specify how the small message delivery delay, the block message delivery delay, and the recovery time period are all related:
 \begin{lstlisting}[language=Coq]
 Axiom delays_order : (3 * lambda <= big_lambda < L)%R.
 Axiom delays_positive : (lambda > 0)%R.
