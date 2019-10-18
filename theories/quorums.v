@@ -129,12 +129,12 @@ Definition quorum_v_has_honest : quorum_has_honest_statement tau_v
 
 Definition saw_v trace r p v := fun uid =>
   has (fun g =>
-         match g.(users).[? uid] with
+         match (g.(users)).[? uid] with
          | None => false
          | Some u =>
-           (v \in u.(certvals) r p)
-             && has (fun b => `[< valid_block_and_hash b v>]) (u.(blocks) r)
-             && step_leb (step_of_ustate u) (r,p,4)
+           [&& v \in certvals u r p,
+               has (fun b => `[< valid_block_and_hash b v>]) (u.(blocks) r) &
+               step_leb (step_of_ustate u) (r,p,4)]
          end) trace.
 
 Axiom interquorum_c_v_certinfo:

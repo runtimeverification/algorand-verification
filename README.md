@@ -9,32 +9,29 @@ The project provides:
 
 Statements of some _liveness_ properties for the transition system are also provided, but these are work-in-progress and their proofs are currently **incomplete**.
 
-Requirements
-------------
+## Requirements
 
-- [`Coq 8.9`](https://coq.inria.fr/download)
-- [`MathComp ssreflect 1.8.0`](https://math-comp.github.io)
-- [`MathComp algebra 1.8.0`](https://math-comp.github.io)
-- [`MathComp finmap 1.2.1`](https://github.com/math-comp/finmap)
-- [`Interval 3.4.0`](http://coq-interval.gforge.inria.fr)
-- [`Ppsimpl 8.9.0`](https://gforge.inria.fr/scm/?group_id=5430)
+- [`Coq 8.9 or 8.10`](https://coq.inria.fr/download)
+- [`MathComp ssreflect 1.8 or 1.9`](https://math-comp.github.io)
+- [`MathComp algebra`](https://math-comp.github.io)
+- [`MathComp finmap`](https://github.com/math-comp/finmap)
+- [`Interval 3.4`](http://coq-interval.gforge.inria.fr)
+- [`Ppsimpl`](https://gforge.inria.fr/scm/?group_id=5430)
 
-Building
---------
+## Building
 
 We recommend installing the dependencies of the project via
-[OPAM](http://opam.ocaml.org/doc/Install.html):
+[OPAM](http://opam.ocaml.org/doc/Install.html), for example:
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq.8.9.1 coq-mathcomp-ssreflect.1.8.0 \
-  coq-mathcomp-algebra.1.8.0 coq-mathcomp-finmap.1.2.1 \
-  coq-interval.3.4.0 coq-ppsimpl.8.9.0
+opam install coq.8.10.0 coq-mathcomp-ssreflect.1.9.0 \
+  coq-mathcomp-algebra coq-mathcomp-finmap \
+  coq-interval coq-ppsimpl
 ```
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
 
-Files
------
+## Files
 
 All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
 
@@ -48,6 +45,6 @@ All Coq vernacular files can be found under the `theories` directory, and their 
 - `safety.v`: statement and complete formal proof of safety for the transition system
 - `liveness.v`: an initial attempt at specifying liveness properties for the transition system. This part is work-in-progress and thus the file contains incomplete (admitted) proofs.
 
-Getting Help
-------------
+## Help and Feedback
+
 Feel free to report GitHub issues or to contact us at: contact@runtimeverification.com

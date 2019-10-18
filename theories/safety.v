@@ -2220,8 +2220,7 @@ Proof using.
   move: H_saw => /(@hasP _ _ trace)=> -[g_mid H_g_mid].
   case:fndP => // key_mid.
   set u_mid: UState := g_mid.(users)[`key_mid].
-  move => /andP [/andP[H_v_certval_mid H_blocks_mid] /step_leP H_mid_step_le].
-
+  move => /andP[H_v_certval_mid /andP[H_blocks_mid] /step_leP H_mid_step_le].
   set H_g1 := step_in_path_onth_pre H_step.
   set key1 := user_sent_in_pre H_send.
   rewrite (in_fnd key1) in H_u.
@@ -2316,7 +2315,7 @@ Proof.
     pose proof (step_in_path_onth_post H_step').
     eapply onth_in; eassumption.
     rewrite (in_fnd (user_sent_in_post H_send')).
-    apply/andP;split;[apply/andP;split|].
+    apply/andP;split;[|apply/andP;split].
     assumption.
       by apply/hasP;exists b';[|apply/asboolP].
     unfold step_of_ustate;move: H_g2'_step => [-> [-> ->]].
