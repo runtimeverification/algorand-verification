@@ -4,12 +4,8 @@ Require Import all_ssreflect.
 From mathcomp.finmap
 Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
 From Coq
-Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators Lra Lia.
+Require Import Reals Relation_Definitions Relation_Operators Lra.
 
 From Interval
 Require Import Tactic.
@@ -26,6 +22,10 @@ Require Import algorand_model safety_helpers quorums safety.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* ------------------------------------------------------------ *)
 (* NOTE: This is only an initial attempt at specifying liveness 

@@ -5,7 +5,7 @@ From mathcomp.finmap
 Require Import finmap multiset.
 
 From Coq
-Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators Lia.
+Require Import Reals Relation_Definitions Relation_Operators.
 
 From Interval
 Require Import Tactic.
@@ -16,13 +16,13 @@ Require Import boolp Rstruct.
 From Algorand
 Require Import R_util fmap_ext local_state global_state algorand_model zify.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* The user's state structure *)
 (* Note that the user state structure and supporting functions and notations

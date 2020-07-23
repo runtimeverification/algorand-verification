@@ -9,8 +9,11 @@ Require Import all_ssreflect.
 From mathcomp.finmap
 Require Import finmap multiset.
 
-From Coq Require Import Reals.Reals.
-From mathcomp.analysis Require Import Rstruct.
+From Coq
+Require Import Reals.
+
+From mathcomp.analysis
+Require Import Rstruct.
 
 Section GlobalState.
 

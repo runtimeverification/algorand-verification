@@ -1,7 +1,8 @@
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
-From Coq Require Import Reals.Reals.
+From Coq
+Require Import Reals.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

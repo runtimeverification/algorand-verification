@@ -4,12 +4,8 @@ Require Import all_ssreflect.
 From mathcomp.finmap
 Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
 From Coq
-Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators.
+Require Import Reals Relation_Definitions Relation_Operators.
 
 From mathcomp.analysis
 Require Import boolp Rstruct.
@@ -20,6 +16,10 @@ Require Import R_util fmap_ext local_state global_state.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* ------------------------ *)
 (* UserId, Value Parameters *)

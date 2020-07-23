@@ -4,7 +4,8 @@ Require Import all_ssreflect.
 From mathcomp.finmap
 Require Import finmap multiset.
 
-From Coq Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators Lia.
+From Coq Require Import
+Reals Relation_Definitions Relation_Operators.
 
 From mathcomp.analysis
 Require Import boolp Rstruct.
@@ -15,13 +16,13 @@ Require Import R_util fmap_ext local_state global_state zify.
 From Algorand
 Require Import algorand_model safety_helpers quorums.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* ----------------------------- *)
 (* Round does not contain a fork *)

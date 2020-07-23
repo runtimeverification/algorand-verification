@@ -5,7 +5,7 @@ From mathcomp.finmap
 Require Import finmap multiset.
 
 From Coq
-Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators.
+Require Import Reals Relation_Definitions Relation_Operators.
 
 From mathcomp.analysis
 Require Import boolp Rstruct.
@@ -13,13 +13,13 @@ Require Import boolp Rstruct.
 From Algorand
 Require Import R_util fmap_ext local_state global_state algorand_model safety_helpers.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
-
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* --------------------------------- *)
 (* Quorum definitions and hypotheses *)
