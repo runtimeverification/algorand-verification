@@ -20,12 +20,12 @@ build: [make "-j%{jobs}%"]
 install: [make "install"]
 depends: [
   "ocaml"
-  "coq" {>= "8.9" & < "8.11~"}
-  "coq-mathcomp-ssreflect" {>= "1.8" & < "1.10~"}
+  "coq" {>= "8.11" & < "8.12~"}
+  "coq-mathcomp-ssreflect" {>= "1.11" & < "1.12~"}
   "coq-mathcomp-algebra"
-  "coq-mathcomp-finmap" {>= "1.2" & < "1.4~"}
+  "coq-mathcomp-finmap" {>= "1.5"}
+  "coq-mathcomp-analysis" {>= "0.3.1"}
   "coq-interval"
-  "coq-ppsimpl"
 ]
 
 tags: [
@@ -36,6 +36,8 @@ tags: [
 ]
 authors: [
   "Musab Alturki"
+  "Jing Chen"
+  "Victor Luchangco"
   "Brandon Moore"
   "Karl Palmskog"
   "Lucas Peña"

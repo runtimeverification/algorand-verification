@@ -1,34 +1,24 @@
-Require Import Lia.
-Require Import PP.Ppsimplmathcomp.
-
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
+
+From Coq
+Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators Lia.
+
+From Interval
+Require Import Tactic.
+
+From mathcomp.analysis
+Require Import boolp Rstruct.
+
+From Algorand
+Require Import R_util fmap_ext local_state global_state algorand_model zify.
 
 Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
-
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
-Require Interval.Interval_tactic.
-
-Require Import Relation_Operators.
-
-From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
-
-From Algorand
-Require Import algorand_model.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -187,7 +177,7 @@ Qed.
 Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
   (x \in seq_mset s) = (x \in s).
 Proof using.
-  apply perm_eq_mem, perm_eq_seq_mset.
+  apply perm_mem, perm_eq_seq_mset.
 Qed.
 
 (* the number of elements in the preimage of f w.r.t. b and multiset m is the same as applying map_mset on f and m and then b *)
@@ -206,14 +196,14 @@ Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
 Proof using.
   move => b.
   rewrite -has_map.
-  apply eq_has_r, perm_eq_mem, perm_eq_seq_mset.
+  by apply eq_has_r, perm_mem, perm_eq_seq_mset.
 Qed.
 
 (* the support of the multiset is unique when viewed as a sequence *)
 Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
   uniq (finsupp A).
 Proof using.
-  by rewrite -(perm_eq_uniq (perm_undup_mset A));apply undup_uniq.
+  by rewrite -(perm_uniq (perm_undup_mset A));apply undup_uniq.
 Qed.
 
 (* the sequence of a subset of a multiset is equal to the subset's finite support modulo reordering *)
@@ -222,7 +212,7 @@ Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
   perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
 Proof using.
   move=>H_sub.
-  apply uniq_perm_eq.
+  apply uniq_perm.
     by apply finsupp_mset_uniq.
     by apply filter_uniq;apply finsupp_mset_uniq.
   move=>x.
@@ -239,7 +229,7 @@ Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
 Proof using.
   move=>H_sub.
   rewrite (bigID (fun i => i \in A)) /= -big_filter.
-  rewrite -(eq_big_perm _ (msubset_finsupp H_sub)) -size_mset big1.
+  rewrite -(perm_big _ (msubset_finsupp H_sub)) -size_mset big1.
     by rewrite addn0.
     by move=>i /mset_eq0P.
 Qed.
@@ -277,9 +267,9 @@ Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
   A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
 Proof using.
   move/(f_equal (msetB^~A)); rewrite !msetDKB => H_seq_eq.
-  apply/(perm_eq_trans _ (perm_eq_seq_mset l')).
-  rewrite perm_eq_sym -H_seq_eq.
-  apply perm_eq_seq_mset.
+  apply/(perm_trans _ (perm_eq_seq_mset l')).
+  rewrite perm_sym -H_seq_eq.
+  by apply perm_eq_seq_mset.
 Qed.
 
 (* ----------------------- *)
@@ -299,12 +289,12 @@ case: s => [|y s].
     move: Ht.
     case Hax: (a == x) => //.
     by move/eqP: Hax =>->.
-  by move =>->; apply perm_eq_refl.
+  by move =>->; apply perm_refl.
 apply: (iffP idP) => //.
 set s1 := [:: _ & _].
 set s2 := [:: _].
 move => Hpr.
-by have Hs: size s1 = size s2 by apply perm_eq_size.
+by have Hs: size s1 = size s2 by apply perm_size.
 Qed.
 
 (* ----------------------------- *)
@@ -341,7 +331,7 @@ Lemma imfset_filter_size_lem (A B : choiceType) (f : A -> B) (sq : seq A) (P : A
 Proof.
   clear -f sq P.
   rewrite Imfset.imfsetE !size_seq_fset.
-  apply perm_eq_size, uniq_perm_eq;[apply undup_uniq..|].
+  apply perm_size, uniq_perm;[apply undup_uniq..|].
 
   intro fx. rewrite !mem_undup map_id /= filter_undup mem_undup.
   apply Bool.eq_true_iff_eq;rewrite -!/(is_true _).
@@ -548,7 +538,7 @@ Lemma in_merge_msgs : forall d (msg:Msg) now msgs mailbox,
 Proof.
   move=> d msg now msgs mb.
   move=> /msetDP [|];[|right;done].
-  by rewrite (perm_eq_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
+  by rewrite (perm_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
 Qed.
 
 (* send_broadcasts definition *)
@@ -1357,7 +1347,7 @@ rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets
   move/eqP.
   case: (ms (r, m)) => //.
   move => n _.
-  by ppsimpl; lia.
+  by lia.
 - rewrite in_fsetE /=.
   apply/negP.
   case/andP => Hf.
@@ -1383,7 +1373,7 @@ move => Htr Htr' Hpq.
 case Hs: (size l') => [|n].
   move: Hs Hpq.
   move/size0nil =>->.
-  by move/perm_eq_nilP.
+  by move/perm_nilP.
 case Hn: n => [|n'].
   move: Hs.
   rewrite Hn.
@@ -1394,7 +1384,7 @@ case Hn: n => [|n'].
   by move/perm_eq_cons1P.
 move: Hs.
 rewrite Hn => Hl'.
-have Heq: size l = size l' by apply perm_eq_size.
+have Heq: size l = size l' by apply perm_size.
 move: Heq.
 rewrite Hl' => Hl.
 have Hll': size l' >= 2 by rewrite Hl'.
@@ -1408,10 +1398,10 @@ set s1 :=  [:: _; _].
 set s2 :=  [:: _; _].
 move => Hpm.
 have Hm1: m1 \in s2.
-  rewrite -(perm_eq_mem Hpm) /= inE.
+  rewrite -(perm_mem Hpm) /= inE.
   by apply/orP; left.
 have Hm2: m2 \in s2.
-  rewrite -(perm_eq_mem Hpm) /= inE.
+  rewrite -(perm_mem Hpm) /= inE.
   apply/orP; right.
   by rewrite inE.
 move: Hm1 Hm2.
@@ -2390,7 +2380,7 @@ Proof using.
     rewrite nth_take //.
     rewrite (onth_nth H_g1) //.
     rewrite size_take.
-    destruct (ix2.+1 < size states); by ppsimpl; lia.
+    destruct (ix2.+1 < size states); by lia.
   }
   {
     simpl.

@@ -13,6 +13,8 @@
 *.o
 *.vio
 *.vo
+*.vos
+*.vok
 build/
 .coq-native/
 .csdp.cache

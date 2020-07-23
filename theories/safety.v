@@ -1,33 +1,23 @@
-Require Import Lia.
-Require Import PP.Ppsimplmathcomp.
-
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
+
+From Coq Require Import Reals.Reals Relations.Relation_Definitions Relation_Operators Lia.
+
+From mathcomp.analysis
+Require Import boolp Rstruct.
+
+From Algorand
+Require Import R_util fmap_ext local_state global_state zify.
+
+From Algorand
+Require Import algorand_model safety_helpers quorums.
 
 Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
-
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
-
-Require Import Relation_Operators.
-
-From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
-
-From Algorand
-Require Import algorand_model safety_helpers quorums.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -1134,14 +1124,14 @@ Proof using.
   move /eqP in H_add.
   have H_onth' := onth_size H_onth.
   rewrite size_rcons in H_onth'.
-  assert (H_ix : ix < size trace) by (ppsimpl; lia; done).
+  assert (H_ix : ix < size trace) by lia.
   clear H_onth' H_add.
 
   assert (H_onth_trace : (onth trace ix) = Some g). {
   unfold onth; unfold onth in H_onth; rewrite drop_rcons in H_onth.
   apply drop_nth with (x0:=g0) in H_ix; rewrite H_ix in H_onth.
   rewrite H_ix. trivial.
-  ppsimpl; lia.
+  by lia.
   }
 
   assert (H_trace: is_trace g0 trace).
@@ -1473,7 +1463,7 @@ Proof using.
         rewrite take_oversize; assumption.
       *)
 
-      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by lia.
       rewrite H_addsub.
       assert (H_r0r1 : r0 <= r1).
         by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
@@ -1520,7 +1510,7 @@ Proof using.
       apply step_in_path_onth_post in H_step.
       match goal with [H : onth trace n.+1 = Some ?x |- _] => rename H into H_onth;remember x as dr end.
 
-      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by lia.
       rewrite H_addsub.
       assert (H_r0r1 : r0 <= r1).
         by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
@@ -1563,7 +1553,7 @@ Proof using.
     cbn -[step_lt addn] in H_lt. rewrite H_r0 in H_lt.
     destruct H1 as [H_adv _]. unfold advancing_rp in H_adv.
     rewrite H_round in H_adv. clear -H_adv.
-    by simpl in H_adv; ppsimpl; lia.
+    by simpl in H_adv; lia.
 
     exfalso. subst.
     unfold deliver_nonvote_msg_result in *.
@@ -1596,13 +1586,13 @@ Proof using.
 
     destruct H0; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps;
       try (destruct H0 as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]];
-           clear -H4 H_s; by ppsimpl; lia).
+           clear -H4 H_s; by lia).
 
     subst; try apply step_lt_irrefl in H_lt; try contradiction.
 
     destruct H0 as [H_nv_stv H_stv].
     destruct H_nv_stv as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]].
-    clear -H4 H_s. by ppsimpl; lia.
+    clear -H4 H_s. by lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
     move:H_lt_0;rewrite H_g1_key_ustate -Hequ /step_of_ustate H2 H3.

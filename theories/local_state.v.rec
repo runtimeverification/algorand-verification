@@ -6,7 +6,7 @@
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
-Require Import Coq.Reals.Reals.
+From Coq Require Import Reals.Reals.
 
 Section LocalState.
 
