@@ -26,6 +26,7 @@ depends: [
   "coq-mathcomp-finmap" {>= "1.5"}
   "coq-mathcomp-analysis" {>= "0.3.1"}
   "coq-interval"
+  "coq-record-update"
 ]
 
 tags: [

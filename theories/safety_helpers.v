@@ -14,7 +14,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext local_state global_state algorand_model zify.
+Require Import R_util fmap_ext global_state algorand_model zify.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -23,27 +23,6 @@ Unset Printing Implicit Defensive.
 Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
-
-(* The user's state structure *)
-(* Note that the user state structure and supporting functions and notations
-   are all defined in local_state.v
- *)
-Definition UState := algorand_model.UState.
-
-Notation corrupt        := (local_state.corrupt UserId Value PropRecord Vote).
-Notation round          := (local_state.round UserId Value PropRecord Vote).
-Notation period         := (local_state.period UserId Value PropRecord Vote).
-Notation step           := (local_state.step UserId Value PropRecord Vote).
-Notation timer          := (local_state.timer UserId Value PropRecord Vote).
-Notation deadline       := (local_state.deadline UserId Value PropRecord Vote).
-Notation p_start        := (local_state.p_start UserId Value PropRecord Vote).
-Notation stv            := (local_state.stv UserId Value PropRecord Vote).
-Notation proposals      := (local_state.proposals UserId Value PropRecord Vote).
-Notation blocks         := (local_state.blocks UserId Value PropRecord Vote).
-Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
-Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
-Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
-Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
 
 (* The global state *)
 (* Note that the global state structure and supporting functions and notations
@@ -897,17 +876,23 @@ Definition user_sent_at ix path uid msg :=
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
   sender \in pre.(users).
 Proof using.
-  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]];
-    simpl in H_step; decompose record H_step;clear H_step;assumption.
+  by case: H => [msgs [H_mem [[d [recv H_step]] | H_step]]];
+    case: H_step => [key_ustate [ustate_post H_step]].
 Qed.
 
 Lemma user_sent_in_post {sender m pre post} (H : user_sent sender m pre post):
   sender \in post.(users).
 Proof using.
-  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]];
-    simpl in H_step; decompose record H_step;subst post;clear;
-      unfold delivery_result, step_result;destruct pre;simpl;clear;
-  change (sender \in domf (users.[sender <- x0])); rewrite dom_setf; apply fset1U1.
+  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]]; simpl in H_step.
+  - by destruct H_step as [key_ustate [ustate_post [H_sender [H_corrupt H_step]]]];
+      destruct H_step as [key_mailbox [H_recv H_post]];
+      subst post; unfold delivery_result, step_result;destruct pre;simpl;clear;
+        change (sender \in domf (users.[sender <- ustate_post]));
+        rewrite dom_setf; apply fset1U1.
+  - by destruct H_step as [key_ustate [ustate_post [H_corrupt [H_sender H_post]]]];
+    subst post; unfold delivery_result, step_result;destruct pre;simpl;clear;
+        change (sender \in domf (users.[sender <- ustate_post]));
+        rewrite dom_setf; apply fset1U1.
 Qed.
 
 (* step of user in pre-state who sends message is same as message step *)
@@ -1062,17 +1047,22 @@ Proof using.
     exists (lbl_replay_msg uid);finish_case.
     exists (lbl_forge_msg sender r p mtype mval);finish_case.
   + (* reverse - find transition from label *)
-    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;clear Hrel;subst g2;
-      [eapply step_tick
-      |eapply step_deliver_msg
-      |eapply step_internal
-      |eapply step_exit_partition
-      |eapply step_enter_partition
-      |eapply step_corrupt_user
-      |eapply step_replay_msg
-      |eapply step_forge_msg];eassumption.
-    (* econstructor takes a very long time being confused between
-       different steps that build the result with send_broadcasts *)
+    destruct 1 as [[] Hrel];simpl in Hrel; case: Hrel.
+    * by move => Htick ->; eapply step_tick; eassumption.
+    * move => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+      by subst g2; eapply step_deliver_msg; eassumption.
+    * move => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+      by subst g2; eapply step_internal; eassumption.
+    * move => H_part H_g2.
+      by subst g2; eapply step_exit_partition; eassumption.
+    * move => H_part H_g2.
+      by subst g2; eapply step_enter_partition; eassumption.
+    * move => H_in [H_corrupt H_g2].
+      by subst g2; eapply step_corrupt_user; eassumption.
+    * move => H_in [msg [H_corrupt [H_msg H_g2]]].
+      by subst g2; eapply step_replay_msg; eassumption.
+    * move => H_in [s0 [H_keys [H_comm [H_match H_g2]]]].
+      by subst g2; eapply step_forge_msg; eassumption.
 Qed.
 
 (* internal transition changes state - used in transition_label_unique *)
@@ -1593,14 +1583,14 @@ Lemma user_sent_honest_pre uid msg g1 g2
       (H_send: user_sent uid msg g1 g2):
       (g1.(users)[` user_sent_in_pre H_send]).(corrupt) = false.
 Proof.
-  set H_in := user_sent_in_pre H_send.
-  clearbody H_in.
-  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]];
-      simpl in H_ustep;decompose record H_ustep;clear H_ustep.
-  apply/negP;contradict H0;move: H0.
-    by rewrite (bool_irrelevance H_in x).
-  apply/negP;contradict H;move: H.
-    by rewrite (bool_irrelevance H_in x).
+  move: (user_sent_in_pre H_send) => H_in.
+  case:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]].
+  - case: H_ustep => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    apply/negP. contradict H_corrupt; move: H_corrupt.
+    by rewrite (bool_irrelevance H_in H_uid).
+  - case: H_ustep => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    apply/negP;contradict H_corrupt;move: H_corrupt.
+    by rewrite (bool_irrelevance H_in H_uid).
 Qed.
 
 (* sender of message is honest in post-state *)
@@ -1611,20 +1601,21 @@ Proof.
   set H_in := user_sent_in_post H_send.
   clearbody H_in.
   suff: user_honest uid g2 by rewrite /user_honest in_fnd => /negbTE.
-  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]];
-      simpl in H_ustep;decompose record H_ustep;clear H_ustep;subst g2.
-  - unfold user_honest, delivery_result;simpl.
+  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]]; simpl in H_ustep.
+  - case: H_ustep => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    subst g2; unfold user_honest, delivery_result;simpl.
     rewrite fnd_set eq_refl.
-    move: H H0. clear.
+    move: H_ustep H_corrupt. clear.
     move/utransition_msg_preserves_corrupt =>->.
     move => Hcorrupt.
     by apply/negP.
-- unfold user_honest, step_result;simpl.
-  rewrite fnd_set eq_refl.
-  move: H0 H. clear.
-  move/utransition_internal_preserves_corrupt =>->.
-  move => Hcorrupt.
-  by apply/negP.
+  - case: H_ustep => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    subst g2; unfold user_honest, step_result;simpl.
+    rewrite fnd_set eq_refl.
+    move: H_ustep H_corrupt. clear.
+    move/utransition_internal_preserves_corrupt =>->.
+    move => Hcorrupt.
+    by apply/negP.
 Qed.
 
 (* sender of message is honest in period of message *)
