@@ -1,6 +1,6 @@
 # Algorand verification
 
-A formalization of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq](https://coq.inria.fr) proof assistant.
+A formalization of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq proof assistant](https://coq.inria.fr).
 The project provides: 
 - an abstract and timed specification of the protocol as a transition system, including node-level behavior, asynchronous messaging and a model of the adversary,
 - a **complete** formal proof of _asynchronous safety_ for the transition system.
@@ -11,12 +11,12 @@ Statements of some _liveness_ properties for the transition system are also prov
 
 ## Requirements
 
-- [`Coq 8.9 or 8.10`](https://coq.inria.fr/download)
-- [`MathComp ssreflect 1.8 or 1.9`](https://math-comp.github.io)
+- [`Coq 8.11`](https://github.com/coq/coq/releases/tag/V8.11.2)
+- [`MathComp ssreflect 1.11`](https://math-comp.github.io)
 - [`MathComp algebra`](https://math-comp.github.io)
-- [`MathComp finmap`](https://github.com/math-comp/finmap)
-- [`Interval 3.4`](http://coq-interval.gforge.inria.fr)
-- [`Ppsimpl`](https://gforge.inria.fr/scm/?group_id=5430)
+- [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
+- [`MathComp analysis 0.3.1`](https://github.com/math-comp/analysis)
+- [`Interval 4.0`](http://coq-interval.gforge.inria.fr)
 
 ## Building
 
@@ -24,9 +24,9 @@ We recommend installing the dependencies of the project via
 [OPAM](http://opam.ocaml.org/doc/Install.html), for example:
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq.8.10.0 coq-mathcomp-ssreflect.1.9.0 \
-  coq-mathcomp-algebra coq-mathcomp-finmap \
-  coq-interval coq-ppsimpl
+opam install coq.8.11.2 coq-mathcomp-ssreflect.1.11.0 \
+  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
+  coq-mathcomp-analysis.0.3.1 coq-interval.4.0.0
 ```
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
@@ -35,8 +35,9 @@ Then, run `make` in the project root directory. This will check all the definiti
 
 All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
 
-- `boolp.v`, `reals.v`, `Rstruct.v`, `R_util.v`: definitions and lemmas for using real numbers via MathComp and SSReflect, adapted from the [MathComp analysis project](https://github.com/math-comp/analysis)
-- `fmap_ext.v`: some useful auxiliary definitions and lemmas about finite maps
+- `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
+- `R_util.v`: auxiliary lemmas on real numbers
+- `fmap_ext.v`: auxiliary definitions and results on finite maps
 - `local_state.v`: definition of Algorand local node state
 - `global_state.v`: definition of Algorand global system state
 - `algorand_model.v`: definition of the Algorand transition system, along with helper functions and facts
