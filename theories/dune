@@ -1,0 +1,5 @@
+(coq.theory
+ (name Algorand)
+ (package coq-algorand)
+ (synopsis "A verified model of Algorand in Coq")
+ (flags -w -notation-overridden -w -projection-no-head-constant -w -redundant-canonical-projection -w -duplicate-clear -w -ambiguous-paths))
