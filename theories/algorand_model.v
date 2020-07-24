@@ -2,30 +2,28 @@ From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
+From Coq
+Require Import Reals Relation_Definitions Relation_Operators.
 
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
+From mathcomp.analysis
+Require Import boolp Rstruct.
 
-Require Import Relation_Operators.
+From RecordUpdate
+Require Import RecordSet.
+Import RecordSetNotations.
 
 From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
+Require Import R_util fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* ------------------------ *)
 (* UserId, Value Parameters *)
@@ -220,25 +218,42 @@ Definition PropRecord := (UserId * credType * Value * bool)%type.
 Definition Vote := (UserId * Value)%type.
 
 (* The user's state structure *)
-(* Note that the user state structure and supporting functions and notations
-   are all defined in local_state.v
- *)
-Definition UState := local_state.UState UserId Value PropRecord Vote.
 
-Notation corrupt        := (local_state.corrupt UserId Value PropRecord Vote).
-Notation round          := (local_state.round UserId Value PropRecord Vote).
-Notation period         := (local_state.period UserId Value PropRecord Vote).
-Notation step           := (local_state.step UserId Value PropRecord Vote).
-Notation timer          := (local_state.timer UserId Value PropRecord Vote).
-Notation deadline       := (local_state.deadline UserId Value PropRecord Vote).
-Notation p_start        := (local_state.p_start UserId Value PropRecord Vote).
-Notation stv            := (local_state.stv UserId Value PropRecord Vote).
-Notation proposals      := (local_state.proposals UserId Value PropRecord Vote).
-Notation blocks         := (local_state.blocks UserId Value PropRecord Vote).
-Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
-Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
-Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
-Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
+Record UState :=
+  mkUState {
+    (* A flag indicating whether the user is corrupt *)
+    corrupt       : bool;
+    (* The user's current round (starts at 1) *)
+    round         : nat;
+    (* The user's current period (starts at 1) *)
+    period        : nat;
+    (* The user's current step counter (starts at 1) *)
+    step          : nat;
+    (* The user's current timer value (since the beginning of the current period) *)
+    timer         : R;
+    (* The user's next deadline time value (since the beginning of the current period) *)
+    deadline      : R;
+    (* The (local) time at which the user's current period started (i.e. local clock = p_start + timer *)
+    p_start       : R;
+    (* A sequence of proposal/reproposal records for the given round/period *)
+    proposals     : nat -> nat -> seq PropRecord;
+    (* Starting value *)
+    stv           : nat -> option Value;
+    (* A sequence of values seen for the given round *)
+    blocks        : nat -> seq Value;
+    (* A sequence of softvotes seen for the given round/period *)
+    softvotes     : nat -> nat -> seq Vote;
+    (* A sequence of certvotes seen for the given round/period *)
+    certvotes     : nat -> nat -> seq Vote;
+    (* A sequence of bottom-nextvotes seen for the given round/period/step *)
+    nextvotes_open: nat -> nat -> nat -> seq UserId;
+    (* A sequence of value-nextvotes seen for the given round/period/step *)
+    nextvotes_val : nat -> nat -> nat -> seq Vote
+   }.
+
+Instance UState_Settable : Settable _ :=
+  settable! mkUState <corrupt;round;period;step;timer;deadline;p_start;
+   proposals;stv;blocks;softvotes;certvotes;nextvotes_open;nextvotes_val>.
 
 (* ------------------- *)
 (* Updating User State *)
@@ -246,71 +261,78 @@ Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vo
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
- {[ u with proposals := fun r p => if (r, p) == (r', p')
+  u <| proposals := fun r p => if (r, p) == (r', p')
                                  then undup (prop :: u.(proposals) r p)
-                                 else u.(proposals) r p ]}.
+                                 else u.(proposals) r p |>.
 
 Definition set_blocks (u : UState) r' block : UState :=
- {[ u with blocks := fun r => if r == r'
-                                 then undup (block :: u.(blocks) r)
-                                 else u.(blocks) r]}.
+  u <| blocks := fun r => if r == r'
+                      then undup (block :: u.(blocks) r)
+                      else u.(blocks) r |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  {[ u with softvotes := fun r p => if (r, p) == (r', p')
-                                 then undup (sv :: u.(softvotes) r p)
-                                 else u.(softvotes) r p ]}.
+  u <| softvotes := fun r p => if (r, p) == (r', p')
+                           then undup (sv :: u.(softvotes) r p)
+                           else u.(softvotes) r p |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
-  {[ u with certvotes := fun r p => if (r, p) == (r', p')
-                                 then undup (sv :: u.(certvotes) r p)
-                                 else u.(certvotes) r p ]}.
+  u <| certvotes := fun r p => if (r, p) == (r', p')
+                           then undup (sv :: u.(certvotes) r p)
+                           else u.(certvotes) r p |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  {[ u with nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
-                                   then undup (nvo :: u.(nextvotes_open) r p s)
-                                   else u.(nextvotes_open) r p s ]}.
+  u <| nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
+                                  then undup (nvo :: u.(nextvotes_open) r p s)
+                                  else u.(nextvotes_open) r p s |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  {[ u with nextvotes_val := fun r p s => if (r, p, s) == (r', p', s')
-                                   then undup (nvv :: u.(nextvotes_val) r p s)
-                                   else u.(nextvotes_val) r p s ]}.
+  u <| nextvotes_val := fun r p s => if (r, p, s) == (r', p', s')
+                                 then undup (nvv :: u.(nextvotes_val) r p s)
+                                 else u.(nextvotes_val) r p s |>.
 
 (* Update function for advancing the period of a user state *)
 Definition advance_period (u : UState) : UState :=
-  {[ {[ {[ {[ {[ u with period := u.(period) + 1 ]}
-                with step := 1 ]}
-             with timer := 0%R ]}
-          with deadline := 0%R ]}
-       with p_start := u.(p_start) + u.(timer) ]}.
+  u <| period := (u.(period) + 1)%nat |>
+    <| step := 1%nat |>
+    <| timer := 0%R |>
+    <| deadline := 0%R |>
+    <| p_start := (u.(p_start) + u.(timer))%R |>.
 
 (* Update function for advancing the round of a user state *)
 Definition advance_round (u : UState) : UState :=
-  {[ {[ {[ {[ {[ {[ {[ u with round := u.(round) + 1 ]}
-                      with period := 1 ]}
-                   with step := 1 ]}
-                with stv := fun x => None ]}
-             with timer := 0%R ]}
-           with deadline := 0%R ]}
-        with p_start := u.(p_start) + u.(timer) ]}.
+  u <| round := (u.(round) + 1)%nat |>
+    <| period := 1%nat |>
+    <| step := 1%nat |>
+    <| stv := fun x => None |>
+    <| timer := 0%R |>
+    <| deadline := 0%R |>
+    <| p_start := (u.(p_start) + u.(timer))%R |>.
 
 (* ------------ *)
 (* Global State *)
 (* ------------ *)
 
-(* The global state *)
-(* Note that the global state structure and supporting functions and notations
-   are all defined in global_state.v
- *)
-Definition GState := global_state.GState UserId UState [choiceType of Msg].
+(* The global state structure *)
 
-Notation now               := (global_state.now UserId UState [choiceType of Msg]).
-Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
-Notation users             := (global_state.users UserId UState [choiceType of Msg]).
-Notation msg_in_transit    := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
-Notation msg_history       := (global_state.msg_history UserId UState [choiceType of Msg]).
+Record GState :=
+  mkGState {
+    (* The current global time value *)
+    now : R ;
+    (* A flag indicating whether the network is currently partitioned *)
+    network_partition : bool ;
+    (* The global set of users as a finite map of user ids to user states *)
+    users : {fmap UserId -> UState} ;
+    (* Messages in transit as a finite map from user ids (targets) to multisets of messages *)
+    msg_in_transit : {fmap UserId -> {mset R * Msg}} ;
+    (* The history of all messages broadcast as a multiset of messages *)
+    msg_history : {mset Msg}
+  }.
+
+Instance GState_Settable : Settable _ :=
+  settable! mkGState <now;network_partition;users;msg_in_transit;msg_history>.
 
 (* State with empty maps, unpartitioned, at global time 0 *)
-Definition null_state : GState := mkGState _ _ _ 0%R false [fmap] [fmap] mset0.
+Definition null_state : GState := mkGState 0%R false [fmap] [fmap] mset0.
 
 (* Equality of global states *)
 
@@ -327,7 +349,7 @@ Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
 
 (* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
-  {[ g with network_partition := ~~ g.(network_partition) ]}.
+  g <| network_partition := ~~ g.(network_partition) |>.
 
 (* ------------------------------- *)
 (* Parameters/axioms of the system *)
@@ -593,8 +615,8 @@ Definition no_propose_ok (pre : UState) uid r p : Prop :=
 (* The proposing step (propose, repropose and nopropose) post-state *)
 (* Move on to Softvoting and set the new deadline to 2*lambda *)
 Definition propose_result (pre : UState) : UState :=
-  {[ {[ pre with deadline := (2 * lambda)%R ]}
-            with step := 2 ]}.
+  pre <| deadline := (2 * lambda)%R |>
+      <| step := 2%nat |>.
 
 (* ----------------------------------------------------- *)
 (* Step 2: Softvoting propositions and user state update *)
@@ -651,8 +673,8 @@ Definition no_softvote_ok (pre : UState) uid r p : Prop :=
          enabled) *)
 (* NOTE: This assumes it is ok to certvote at time 2 * lambda *)
 Definition softvote_result (pre : UState) : UState :=
-  {[ {[ pre with step := 3 ]}
-            with deadline := (lambda + big_lambda)%R ]}.
+  pre <| step := 3 |>
+      <| deadline := (lambda + big_lambda)%R |>.
 
 (* ----------------------------------------------------- *)
 (* Step 3: Certvoting propositions and user state update *)
@@ -691,7 +713,7 @@ Definition certvote_timeout_ok (pre : UState) uid r p : Prop :=
 (* The state update for all certvoting cases: move on to the next step
    (the deadline does not need updating) *)
 Definition certvote_result (pre : UState) : UState :=
-  {[ pre with step := 4 ]}.
+  pre <| step := 4 |>.
 
 (* --------------------------------------------------------- *)
 (* Steps >= 4: Nextvoting propositions and user state update *)
@@ -753,8 +775,8 @@ Definition no_nextvote_ok (pre : UState) uid r p s : Prop :=
 
 (* Nextvoting step state update for steps s >= 4 (all cases) *)
 Definition nextvote_result (pre : UState) s : UState :=
-  {[ {[ pre with step := (s + 1) ]}
-            with deadline := next_deadline s ]}.
+  pre <| step :=  (s + 1)%nat |>
+      <| deadline := next_deadline s |>.
 
 (** Advancing period propositions and user state update **)
 
@@ -772,15 +794,11 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
 
 (* State update -- The bottom-value case *)
 Definition adv_period_open_result (pre : UState) : UState :=
-  let prev_p := pre.(period) in
-   {[ (advance_period pre)
-      with stv := fun p => if p == prev_p.+1 then None else (pre.(stv) p) ]}.
+  (advance_period pre) <| stv := fun p => if p == pre.(period).+1 then None else (pre.(stv) p) |>.
 
 (* State update -- The proper value case *)
 Definition adv_period_val_result (pre : UState) v : UState :=
-  let prev_p := pre.(period) in
-   {[ (advance_period pre)
-      with stv := fun p => if p == prev_p.+1 then Some v else (pre.(stv) p) ]}.
+  (advance_period pre) <| stv := fun p => if p == pre.(period).+1 then Some v else (pre.(stv) p) |>.
 
 (** Advancing round propositions and user state update **)
 (* Preconditions *)
@@ -796,7 +814,8 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   #|[seq x <- pre.(certvotes) r p | matchValue x v]| >= tau_c .
 
 (* State update *)
-Definition certify_result r (pre : UState) : UState := advance_round {[pre with round := r]}.
+Definition certify_result r (pre : UState) : UState :=
+  advance_round (pre <| round := r |>).
 
 (* The post state of delivering a non-vote message *)
 Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState :=
@@ -993,7 +1012,7 @@ Definition user_can_advance_timer (increment : posreal) : pred UState :=
 (* Advance the timer of an honest user (timers of corrupt users are irrelevant) *)
 Definition user_advance_timer (increment : posreal) (u : UState) : UState :=
   if ~~ u.(corrupt)
-    then {[ u with timer := (u.(timer) + pos increment)%R ]}
+    then u <| timer := (u.(timer) + pos increment)%R |>
     else u.
 
 (* Is it ok to advance timers of all (honest) users by the given increment? *)
@@ -1022,8 +1041,8 @@ Definition tick_users increment pre : {fmap UserId -> UState} :=
 
 (* Computes the global state after advancing time with the given increment *)
 Definition tick_update increment pre : GState :=
-  {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
-       with users := tick_users increment pre ]}.
+  pre <| now := (pre.(now) + pos increment)%R |>
+      <| users := tick_users increment pre |>.
 
 (* Computes the standard deadline of a message based on its type *)
 Definition msg_deadline (msg : Msg) now : R :=
@@ -1080,9 +1099,10 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
   let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  {[ {[ {[ pre with users          := users' ]}
-               with msg_in_transit := msgs' ]}
-               with msg_history    := msgh' ]}.
+  pre <| users          := users' |>
+      <| msg_in_transit := msgs'  |>
+      <| msg_history    := msgh'  |>.
+
 Arguments delivery_result : clear implicits.
 
 (* Computes the global state after an internal user-level transition
@@ -1092,9 +1112,9 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
   let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  {[ {[ {[ pre with users          := users' ]}
-               with msg_in_transit := msgs' ]}
-               with msg_history    := msgh' ]}.
+  pre <| users          := users' |>
+      <| msg_in_transit := msgs'  |>
+      <| msg_history    := msgh'  |>.
 
 Definition new_deadline now cur_deadline msg : R :=
   let max_deadline := msg_deadline msg now in
@@ -1129,11 +1149,11 @@ Definition make_partitioned (pre:GState) : GState :=
 (* Computes the state resulting from recovering from a partition *)
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
-  {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
+  (flip_partition_flag pre) <| msg_in_transit := msgpool' |>.
 
 (* Marks a user state corrupted by setting the corrupt flag *)
 Definition make_corrupt ustate : UState :=
-  {[ ustate with corrupt := true ]}.
+  ustate <| corrupt := true |>.
 
 (* Drop the set of messages targeted for a specific user from the given
    message map *)
@@ -1148,8 +1168,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
   let ustate' := make_corrupt pre.(users).[ustate_key] in
   let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
   let users' := pre.(users).[uid <- ustate'] in
-    {[ {[ pre with users := users'         ]}
-              with msg_in_transit := msgs' ]}.
+  pre <| users := users' |> <| msg_in_transit := msgs' |>.
 
 (* Computes the state resulting from replaying a message to a user *)
 (* The message is replayed to the given target user and added to his mailbox *)
@@ -1157,7 +1176,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
 Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) [fset uid] (* (domf (honest_users pre.(users))) *)
                  pre.(msg_in_transit) [:: msg] in
-  {[ pre with msg_in_transit := msgs' ]}.
+  pre <| msg_in_transit := msgs' |>.
 
 (* Does the adversary have the keys of the user for the given r-p-s? *)
 (* The adversary will have the keys if the user is corrupt and the given
@@ -1181,7 +1200,7 @@ Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval : GStat
   let msg := (mtype, mval, r, p, uid) in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)))
                  pre.(msg_in_transit) [:: msg] in
-  {[ pre with msg_in_transit := msgs' ]}.
+  pre <| msg_in_transit := msgs' |>.
 
 (* ---------------------- *)
 (* Global transition type *)

@@ -2,33 +2,24 @@ From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
+From Coq
+Require Import Reals Relation_Definitions Relation_Operators.
 
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
-
-Require Import Relation_Operators.
+From mathcomp.analysis
+Require Import boolp Rstruct.
 
 From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
-
-From Algorand
-Require Import algorand_model safety_helpers.
+Require Import R_util fmap_ext algorand_model safety_helpers.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* --------------------------------- *)
 (* Quorum definitions and hypotheses *)

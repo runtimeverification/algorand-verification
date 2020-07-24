@@ -1,75 +1,28 @@
-Require Import Lia.
-Require Import PP.Ppsimplmathcomp.
-
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
+From Coq
+Require Import Reals Relation_Definitions Relation_Operators.
 
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
-Require Interval.Interval_tactic.
+From Interval
+Require Import Tactic.
 
-Require Import Relation_Operators.
+From mathcomp.analysis
+Require Import boolp Rstruct.
 
 From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
-
-From Algorand
-Require Import algorand_model.
+Require Import R_util fmap_ext algorand_model zify.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(* The user's state structure *)
-(* Note that the user state structure and supporting functions and notations
-   are all defined in local_state.v
- *)
-Definition UState := algorand_model.UState.
-
-Notation corrupt        := (local_state.corrupt UserId Value PropRecord Vote).
-Notation round          := (local_state.round UserId Value PropRecord Vote).
-Notation period         := (local_state.period UserId Value PropRecord Vote).
-Notation step           := (local_state.step UserId Value PropRecord Vote).
-Notation timer          := (local_state.timer UserId Value PropRecord Vote).
-Notation deadline       := (local_state.deadline UserId Value PropRecord Vote).
-Notation p_start        := (local_state.p_start UserId Value PropRecord Vote).
-Notation stv            := (local_state.stv UserId Value PropRecord Vote).
-Notation proposals      := (local_state.proposals UserId Value PropRecord Vote).
-Notation blocks         := (local_state.blocks UserId Value PropRecord Vote).
-Notation softvotes      := (local_state.softvotes UserId Value PropRecord Vote).
-Notation certvotes      := (local_state.certvotes UserId Value PropRecord Vote).
-Notation nextvotes_open := (local_state.nextvotes_open UserId Value PropRecord Vote).
-Notation nextvotes_val  := (local_state.nextvotes_val UserId Value PropRecord Vote).
-
-(* The global state *)
-(* Note that the global state structure and supporting functions and notations
-   are all defined in global_state.v
- *)
-Definition GState := algorand_model.GState.
-
-Notation now               := (global_state.now UserId algorand_model.UState [choiceType of Msg]).
-Notation network_partition := (global_state.network_partition UserId algorand_model.UState [choiceType of Msg]).
-Notation users             := (global_state.users UserId algorand_model.UState [choiceType of Msg]).
-Notation msg_in_transit    := (global_state.msg_in_transit UserId algorand_model.UState [choiceType of Msg]).
-Notation msg_history       := (global_state.msg_history UserId algorand_model.UState [choiceType of Msg]).
-
-Notation "x # y ~> z" := (algorand_model.UTransitionInternal x y z) (at level 70) : type_scope.
-Notation "a # b ; c ~> d" := (algorand_model.UTransitionMsg a b c d) (at level 70) : type_scope.
-Notation "x ~~> y" := (algorand_model.GTransition x y) (at level 90) : type_scope.
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexists]].
 
@@ -187,7 +140,7 @@ Qed.
 Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
   (x \in seq_mset s) = (x \in s).
 Proof using.
-  apply perm_eq_mem, perm_eq_seq_mset.
+  apply perm_mem, perm_eq_seq_mset.
 Qed.
 
 (* the number of elements in the preimage of f w.r.t. b and multiset m is the same as applying map_mset on f and m and then b *)
@@ -206,14 +159,14 @@ Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
 Proof using.
   move => b.
   rewrite -has_map.
-  apply eq_has_r, perm_eq_mem, perm_eq_seq_mset.
+  by apply eq_has_r, perm_mem, perm_eq_seq_mset.
 Qed.
 
 (* the support of the multiset is unique when viewed as a sequence *)
 Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
   uniq (finsupp A).
 Proof using.
-  by rewrite -(perm_eq_uniq (perm_undup_mset A));apply undup_uniq.
+  by rewrite -(perm_uniq (perm_undup_mset A));apply undup_uniq.
 Qed.
 
 (* the sequence of a subset of a multiset is equal to the subset's finite support modulo reordering *)
@@ -222,7 +175,7 @@ Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
   perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
 Proof using.
   move=>H_sub.
-  apply uniq_perm_eq.
+  apply uniq_perm.
     by apply finsupp_mset_uniq.
     by apply filter_uniq;apply finsupp_mset_uniq.
   move=>x.
@@ -239,7 +192,7 @@ Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
 Proof using.
   move=>H_sub.
   rewrite (bigID (fun i => i \in A)) /= -big_filter.
-  rewrite -(eq_big_perm _ (msubset_finsupp H_sub)) -size_mset big1.
+  rewrite -(perm_big _ (msubset_finsupp H_sub)) -size_mset big1.
     by rewrite addn0.
     by move=>i /mset_eq0P.
 Qed.
@@ -277,9 +230,9 @@ Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
   A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
 Proof using.
   move/(f_equal (msetB^~A)); rewrite !msetDKB => H_seq_eq.
-  apply/(perm_eq_trans _ (perm_eq_seq_mset l')).
-  rewrite perm_eq_sym -H_seq_eq.
-  apply perm_eq_seq_mset.
+  apply/(perm_trans _ (perm_eq_seq_mset l')).
+  rewrite perm_sym -H_seq_eq.
+  by apply perm_eq_seq_mset.
 Qed.
 
 (* ----------------------- *)
@@ -299,12 +252,12 @@ case: s => [|y s].
     move: Ht.
     case Hax: (a == x) => //.
     by move/eqP: Hax =>->.
-  by move =>->; apply perm_eq_refl.
+  by move =>->; apply perm_refl.
 apply: (iffP idP) => //.
 set s1 := [:: _ & _].
 set s2 := [:: _].
 move => Hpr.
-by have Hs: size s1 = size s2 by apply perm_eq_size.
+by have Hs: size s1 = size s2 by apply perm_size.
 Qed.
 
 (* ----------------------------- *)
@@ -341,7 +294,7 @@ Lemma imfset_filter_size_lem (A B : choiceType) (f : A -> B) (sq : seq A) (P : A
 Proof.
   clear -f sq P.
   rewrite Imfset.imfsetE !size_seq_fset.
-  apply perm_eq_size, uniq_perm_eq;[apply undup_uniq..|].
+  apply perm_size, uniq_perm;[apply undup_uniq..|].
 
   intro fx. rewrite !mem_undup map_id /= filter_undup mem_undup.
   apply Bool.eq_true_iff_eq;rewrite -!/(is_true _).
@@ -548,7 +501,7 @@ Lemma in_merge_msgs : forall d (msg:Msg) now msgs mailbox,
 Proof.
   move=> d msg now msgs mb.
   move=> /msetDP [|];[|right;done].
-  by rewrite (perm_eq_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
+  by rewrite (perm_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
 Qed.
 
 (* send_broadcasts definition *)
@@ -716,7 +669,8 @@ Lemma at_step_onth n (path : seq GState) (P : pred GState):
   P g.
 Proof using.
   unfold at_step, onth.
-  destruct (drop n path) eqn:Hdrop;rewrite Hdrop;simpl;congruence.
+  case Hdrop: (drop n path) => [|a l] //=.
+  by move => HP g; case =><-.
 Qed.
 
 (* nth element is g and P g holds, then at_step holds for n and P *)
@@ -725,7 +679,8 @@ Lemma onth_at_step n (path : seq GState) g:
   forall (P : pred GState), P g -> at_step n path P.
 Proof using.
   unfold at_step, onth.
-  destruct (drop n path) eqn:Hdrop;rewrite Hdrop;simpl;congruence.
+  case Hdrop: (drop n path) => [|a l] //=.
+  by case =><-.
 Qed.
 
 (* onth true at ix implies onth true at truncated trace for size of new trace - 1 *)
@@ -907,17 +862,23 @@ Definition user_sent_at ix path uid msg :=
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
   sender \in pre.(users).
 Proof using.
-  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]];
-    simpl in H_step; decompose record H_step;clear H_step;assumption.
+  by case: H => [msgs [H_mem [[d [recv H_step]] | H_step]]];
+    case: H_step => [key_ustate [ustate_post H_step]].
 Qed.
 
 Lemma user_sent_in_post {sender m pre post} (H : user_sent sender m pre post):
   sender \in post.(users).
 Proof using.
-  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]];
-    simpl in H_step; decompose record H_step;subst post;clear;
-      unfold delivery_result, step_result;destruct pre;simpl;clear;
-  change (sender \in domf (users.[sender <- x0])); rewrite dom_setf; apply fset1U1.
+  destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]]; simpl in H_step.
+  - by destruct H_step as [key_ustate [ustate_post [H_sender [H_corrupt H_step]]]];
+      destruct H_step as [key_mailbox [H_recv H_post]];
+      subst post; unfold delivery_result, step_result;destruct pre;simpl;clear;
+        change (sender \in domf (users.[sender <- ustate_post]));
+        rewrite dom_setf; apply fset1U1.
+  - by destruct H_step as [key_ustate [ustate_post [H_corrupt [H_sender H_post]]]];
+    subst post; unfold delivery_result, step_result;destruct pre;simpl;clear;
+        change (sender \in domf (users.[sender <- ustate_post]));
+        rewrite dom_setf; apply fset1U1.
 Qed.
 
 (* step of user in pre-state who sends message is same as message step *)
@@ -1072,17 +1033,22 @@ Proof using.
     exists (lbl_replay_msg uid);finish_case.
     exists (lbl_forge_msg sender r p mtype mval);finish_case.
   + (* reverse - find transition from label *)
-    destruct 1 as [[] Hrel];simpl in Hrel;decompose record Hrel;clear Hrel;subst g2;
-      [eapply step_tick
-      |eapply step_deliver_msg
-      |eapply step_internal
-      |eapply step_exit_partition
-      |eapply step_enter_partition
-      |eapply step_corrupt_user
-      |eapply step_replay_msg
-      |eapply step_forge_msg];eassumption.
-    (* econstructor takes a very long time being confused between
-       different steps that build the result with send_broadcasts *)
+    destruct 1 as [[] Hrel];simpl in Hrel; case: Hrel.
+    * by move => Htick ->; eapply step_tick; eassumption.
+    * move => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+      by subst g2; eapply step_deliver_msg; eassumption.
+    * move => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+      by subst g2; eapply step_internal; eassumption.
+    * move => H_part H_g2.
+      by subst g2; eapply step_exit_partition; eassumption.
+    * move => H_part H_g2.
+      by subst g2; eapply step_enter_partition; eassumption.
+    * move => H_in [H_corrupt H_g2].
+      by subst g2; eapply step_corrupt_user; eassumption.
+    * move => H_in [msg [H_corrupt [H_msg H_g2]]].
+      by subst g2; eapply step_replay_msg; eassumption.
+    * move => H_in [s0 [H_keys [H_comm [H_match H_g2]]]].
+      by subst g2; eapply step_forge_msg; eassumption.
 Qed.
 
 (* internal transition changes state - used in transition_label_unique *)
@@ -1145,10 +1111,7 @@ Proof using.
 
   subst g2.
   unfold delivery_result in *.
-  cbn [global_state.msg_in_transit
-         set_GState_users
-         set_GState_msg_history
-         set_GState_msg_in_transit] in *.
+  simpl in *.
 
   clear mb1 mb2 H_singleton.
   remember ((g.(msg_in_transit)).[uid <- ((g.(msg_in_transit)).[key_mbox] `\ (r, m))%mset]) as mailboxes'.
@@ -1302,7 +1265,7 @@ Proof using.
 clear.
 move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
 move => H_honest H_msg H_step H_honest' H_step'.
-rewrite/delivery_result /= /step_result /=.
+rewrite/delivery_result /= /step_result /= /RecordSet.set /=.
 set us1 := _.[uid <- _].
 set us2 := _.[uid' <- _].
 set sb1 := send_broadcasts _ _ _ _.
@@ -1319,7 +1282,7 @@ case Hueq: (uid' == uid); last first.
   case: ifP; case: ifP.
   - by move/eqP.
   - move => _ _ Hpost.
-    suff Hsuff: (global_state.users UserId UState [choiceType of Msg] g) [` key_state'] = upost'.
+    suff Hsuff: (users g) [` key_state'] = upost'.
       move: H_step'.
       by move/internal_not_noop.
     apply sym_eq in Hpost.
@@ -1345,7 +1308,7 @@ rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets
   move => _.
   rewrite in_fnd; case.
   move: H_msg.
-  set ms := (global_state.msg_in_transit _ _ _ _ _).
+  set ms := (msg_in_transit _ _).
   move => H_msg.
   move/msetP => Hms.
   move: (Hms (r, m)).
@@ -1357,7 +1320,7 @@ rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets
   move/eqP.
   case: (ms (r, m)) => //.
   move => n _.
-  by ppsimpl; lia.
+  by lia.
 - rewrite in_fsetE /=.
   apply/negP.
   case/andP => Hf.
@@ -1383,7 +1346,7 @@ move => Htr Htr' Hpq.
 case Hs: (size l') => [|n].
   move: Hs Hpq.
   move/size0nil =>->.
-  by move/perm_eq_nilP.
+  by move/perm_nilP.
 case Hn: n => [|n'].
   move: Hs.
   rewrite Hn.
@@ -1394,7 +1357,7 @@ case Hn: n => [|n'].
   by move/perm_eq_cons1P.
 move: Hs.
 rewrite Hn => Hl'.
-have Heq: size l = size l' by apply perm_eq_size.
+have Heq: size l = size l' by apply perm_size.
 move: Heq.
 rewrite Hl' => Hl.
 have Hll': size l' >= 2 by rewrite Hl'.
@@ -1408,10 +1371,10 @@ set s1 :=  [:: _; _].
 set s2 :=  [:: _; _].
 move => Hpm.
 have Hm1: m1 \in s2.
-  rewrite -(perm_eq_mem Hpm) /= inE.
+  rewrite -(perm_mem Hpm) /= inE.
   by apply/orP; left.
 have Hm2: m2 \in s2.
-  rewrite -(perm_eq_mem Hpm) /= inE.
+  rewrite -(perm_mem Hpm) /= inE.
   apply/orP; right.
   by rewrite inE.
 move: Hm1 Hm2.
@@ -1603,14 +1566,14 @@ Lemma user_sent_honest_pre uid msg g1 g2
       (H_send: user_sent uid msg g1 g2):
       (g1.(users)[` user_sent_in_pre H_send]).(corrupt) = false.
 Proof.
-  set H_in := user_sent_in_pre H_send.
-  clearbody H_in.
-  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]];
-      simpl in H_ustep;decompose record H_ustep;clear H_ustep.
-  apply/negP;contradict H0;move: H0.
-    by rewrite (bool_irrelevance H_in x).
-  apply/negP;contradict H;move: H.
-    by rewrite (bool_irrelevance H_in x).
+  move: (user_sent_in_pre H_send) => H_in.
+  case:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]].
+  - case: H_ustep => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    apply/negP. contradict H_corrupt; move: H_corrupt.
+    by rewrite (bool_irrelevance H_in H_uid).
+  - case: H_ustep => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    apply/negP;contradict H_corrupt;move: H_corrupt.
+    by rewrite (bool_irrelevance H_in H_uid).
 Qed.
 
 (* sender of message is honest in post-state *)
@@ -1621,20 +1584,21 @@ Proof.
   set H_in := user_sent_in_post H_send.
   clearbody H_in.
   suff: user_honest uid g2 by rewrite /user_honest in_fnd => /negbTE.
-  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]];
-      simpl in H_ustep;decompose record H_ustep;clear H_ustep;subst g2.
-  - unfold user_honest, delivery_result;simpl.
+  move:H_send => [ms [H_in_ms [[d [inc H_ustep]]|H_ustep]]]; simpl in H_ustep.
+  - case: H_ustep => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    subst g2; unfold user_honest, delivery_result;simpl.
     rewrite fnd_set eq_refl.
-    move: H H0. clear.
+    move: H_ustep H_corrupt. clear.
     move/utransition_msg_preserves_corrupt =>->.
     move => Hcorrupt.
     by apply/negP.
-- unfold user_honest, step_result;simpl.
-  rewrite fnd_set eq_refl.
-  move: H0 H. clear.
-  move/utransition_internal_preserves_corrupt =>->.
-  move => Hcorrupt.
-  by apply/negP.
+  - case: H_ustep => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    subst g2; unfold user_honest, step_result;simpl.
+    rewrite fnd_set eq_refl.
+    move: H_ustep H_corrupt. clear.
+    move/utransition_internal_preserves_corrupt =>->.
+    move => Hcorrupt.
+    by apply/negP.
 Qed.
 
 (* sender of message is honest in period of message *)
@@ -1684,7 +1648,7 @@ Lemma honest_backwards_gstep : forall (g1 g2 : GState),
 Proof using.
   move => g1 g2 Hstep uid.
   destruct Hstep;unfold user_honest;destruct pre;
-    unfold tick_update,tick_users;simpl global_state.users in * |- *;try done.
+    unfold tick_update,tick_users; simpl algorand_model.users in * |- *; try done.
   + (* step_tick *)
     destruct (fndP users uid).
     by rewrite updf_update //;destruct (users.[kf]), corrupt.
@@ -1967,7 +1931,6 @@ Proof using.
 move => g1 g2 uid us1 us2.
 elim => //.
 - move => increment pre Htick.
-  set users : GState -> _ := global_state.users _ _ _.
   move => Hu.
   case Hd: (uid \in domf (users pre)); last first.
     by move/negP/negP: Hd => Hd; move: Hu; rewrite not_fnd.
@@ -1976,9 +1939,7 @@ elim => //.
   rewrite in_fnd; case =>->.
   rewrite /user_advance_timer /= /ustate_after /=.
   by case: ifP => //=; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => msg_key [r m] Hpend key_ustate ustate_post sent Hloc.
   move/utr_rps_non_decreasing_msg => Hst.
   case Huid_eq: (uid == uid0).
@@ -1990,9 +1951,7 @@ elim => //.
   move => Hus.
   rewrite fnd_set /= Huid_eq Hus.
   by case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => ustate_key Hloc ustate_post sent.
   move/utr_rps_non_decreasing_internal => Hst.
   case Huid_eq: (uid == uid0).
@@ -2003,19 +1962,13 @@ elim => //.
   move => Hus.
   rewrite fnd_set /= Huid_eq Hus.
   by case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre Hpre.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre Hpre.
   rewrite /= -/users => Hus1.
   by rewrite Hus1; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre Hpre.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre Hpre.
   rewrite /= -/users => Hus1.
   by rewrite Hus1; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0 ustate_key.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0 ustate_key.
   move => Hcorrupt Hst; move: Hst Hcorrupt.
   case Huid_eq: (uid == uid0).
     move/eqP: Huid_eq =>->.
@@ -2026,15 +1979,11 @@ elim => //.
     by case =>-> => Hcorrupt; case =><-; right; right.
   rewrite fnd_set /= Huid_eq -/(users pre).
   by move =>-> => Hcorrupt; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => ustate_key m Hc Hm.
   rewrite /= =>->; case =>->.
   by right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre sender.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre sender.
   move => sender_key r p s mtype mval Hhave Hcomm Hmatch.
   rewrite /= =>->; case =>->.
   by right; right.
@@ -2050,8 +1999,6 @@ move => g1 g2 uid us1 us2.
 case => gtrace Hpath Hlast.
 destruct gtrace. inversion Hpath.
 destruct Hpath as [H_g0 Hpath]; subst g.
-set GS := global_state.GState UserId UState [choiceType of Msg].
-set users : GS -> _ := global_state.users _ _ _.
 elim: gtrace g1 g2 uid us1 us2 Hpath Hlast => //=.
   move => g1 g2 uid us1 us2 Htr ->->; case =>->.
   by right; right.
@@ -2390,7 +2337,7 @@ Proof using.
     rewrite nth_take //.
     rewrite (onth_nth H_g1) //.
     rewrite size_take.
-    destruct (ix2.+1 < size states); by ppsimpl; lia.
+    destruct (ix2.+1 < size states); by lia.
   }
   {
     simpl.

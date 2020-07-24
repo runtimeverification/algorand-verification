@@ -1,30 +1,17 @@
-Require Import Lia.
-Require Import PP.Ppsimplmathcomp.
-
 From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From mathcomp.finmap
-Require Import finmap.
-From mathcomp.finmap
-Require Import multiset.
-From mathcomp.finmap Require Import order.
-Import Order.Theory Order.Syntax Order.Def.
+Require Import finmap multiset.
 
-Open Scope mset_scope.
-Open Scope fmap_scope.
-Open Scope fset_scope.
+From Coq Require Import
+Reals Relation_Definitions Relation_Operators.
 
-Require Import Coq.Reals.Reals.
-Require Import Coq.Relations.Relation_Definitions.
-
-Require Import Relation_Operators.
+From mathcomp.analysis
+Require Import boolp Rstruct.
 
 From Algorand
-Require Import boolp Rstruct R_util fmap_ext.
-
-From Algorand
-Require Import local_state global_state.
+Require Import R_util fmap_ext zify.
 
 From Algorand
 Require Import algorand_model safety_helpers quorums.
@@ -32,6 +19,10 @@ Require Import algorand_model safety_helpers quorums.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope mset_scope.
+Open Scope fmap_scope.
+Open Scope fset_scope.
 
 (* ----------------------------- *)
 (* Round does not contain a fork *)
@@ -105,26 +96,32 @@ Proof using.
     suff: s = msg_sender msg /\ msg \in l.
     move => [<- H_l].
     exists l;split;[|left;exists r, m];assumption.
-    simpl in H_rel;decompose record H_rel;clear H_rel.
+    simpl in H_rel.
+    case: H_rel => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
     move: H_post H_pre;subst g2.
     rewrite in_msetD.
     move=> /orP []; [by move => Hp Hn;exfalso;apply/negP: Hp|].
     rewrite in_seq_mset.
     move => H_l. split;[|assumption].
-    by apply (utransition_msg_sender_good H H_l).
+    by apply (utransition_msg_sender_good H_ustep H_l).
   * (* internal *)
     unfold user_sent.
     suff: s = msg_sender msg /\ msg \in l.
     move => [<- H_l].
     exists l;split;[|right];assumption.
-    simpl in H_rel;decompose record H_rel;clear H_rel.
+    simpl in H_rel.
+    case: H_rel => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
     move: H_post H_pre;subst g2.
     rewrite in_msetD.
     move=> /orP [];
       [by move => Hp Hn;exfalso;apply/negP: Hp|].
     rewrite in_seq_mset.
     move => H_l. split;[|assumption].
-    by apply (utransition_internal_sender_good H0 H_l).
+    by apply (utransition_internal_sender_good H_ustep H_l).
+  * exfalso;apply /negP: H_post.
+    simpl in H_rel.
+    case: H_rel => [ustate_key [msg' [H_corrupt [H_msg H_g2]]]].
+    by subst g2; simpl.
 Qed.
 
 (* Pending message was sent or forged earlier in trace *)
@@ -177,22 +174,22 @@ Proof using.
     (* deliver *)
     exists n,g1,g2;split;[assumption|].
     left. unfold user_sent.
-    suff: s = msg_sender msg /\ msg \in l
-      by move => [<- H_l];exists l;split;[|left;exists r0, m];assumption.
+    suff: s = msg_sender msg /\ msg \in l by move => [<- H_l];exists l;split;[|left;exists r0, m];assumption.
 
-    simpl in H_rel;decompose record H_rel;clear H_rel.
-    suff: msg \in l by split;[apply (utransition_msg_sender_good H)|];assumption.
+    simpl in H_rel.
+    case: H_rel => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    suff: msg \in l by split;[apply (utransition_msg_sender_good H_ustep)|];assumption.
     move: H_post H_pre;subst g2;apply broadcasts_prop;
     by rewrite fnd_set;case:ifP => [/eqP ->|_];
                                      [rewrite in_fnd;exact:msubD1set|exact:msubset_refl].
     (* internal *)
     exists n,g1,g2;split;[assumption|].
     left. unfold user_sent.
-    suff: s = msg_sender msg /\ msg \in l by
-        move => [<- H_l];exists l;split;[|right];assumption.
+    suff: s = msg_sender msg /\ msg \in l by move => [<- H_l];exists l;split;[|right];assumption.
 
-    simpl in H_rel;decompose record H_rel;clear H_rel.
-    suff: msg \in l by split;[apply (utransition_internal_sender_good H0)|];assumption.
+    simpl in H_rel.
+    case: H_rel => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    suff: msg \in l by split;[apply (utransition_internal_sender_good H_ustep)|];assumption.
     move: H_post H_pre;subst g2;apply broadcasts_prop;
     by apply msubset_refl.
     (* exit partition *)
@@ -324,12 +321,14 @@ Proof using.
   destruct H_sent2 as [ms2 [H_msg2 [[d2 [in2 H_step2]]|H_step2]]];
   pose proof (transition_label_unique H_step H_step2) as H;
   try (discriminate H);[injection H as -> -> ->|injection H as ->];clear H_step2;
-    revert H_msg H_msg2;simpl in H_step;decompose record H_step;
+    revert H_msg H_msg2;simpl in H_step;
+  [case: H_step => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]] |
+   case: H_step => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]] ];
     let H:=  match goal with
     | [H : _ # _ ; _ ~> _ |- _] => H
     | [H : _ # _ ~> _ |- _] => H
     end
-    in clear -H;set result := (x0,ms) in H;change ms with result.2;clearbody result;revert H;
+    in clear -H; set result := (ustate_post,ms) in H;change ms with result.2;clearbody result;revert H;
   destruct 1;simpl;clear;move/Iter.In_mem => H_msg;try (exfalso;exact H_msg);
      move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
@@ -347,12 +346,14 @@ Proof using.
   destruct H_sent2 as [ms2 [H_msg2 [[d2 [in2 H_step2]]|H_step2]]];
   pose proof (transition_label_unique H_step H_step2) as H;
   try (discriminate H);[injection H as -> -> ->|injection H as ->];clear H_step2;
-    revert H_msg H_msg2;simpl in H_step;decompose record H_step;
+    revert H_msg H_msg2;simpl in H_step;
+  [case: H_step => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]] |
+   case: H_step => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]] ];
     let H:=  match goal with
     | [H : _ # _ ; _ ~> _ |- _] => H
     | [H : _ # _ ~> _ |- _] => H
     end
-    in clear -H;set result := (x0,ms) in H;change ms with result.2;clearbody result;revert H;
+    in clear -H;set result := (ustate_post,ms) in H;change ms with result.2;clearbody result;revert H;
   destruct 1;simpl;clear;move/Iter.In_mem => H_msg;try (exfalso;exact H_msg);
      move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
@@ -370,11 +371,13 @@ Lemma softvote_precondition g1 g2 uid v r p
 Proof using.
   clear -H_sent H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
-    simpl in H_step;decompose record H_step;clear H_step;
-    move: H_msg;change ms with (x0,ms).2;
+    simpl in H_step;
+    [case: H_step => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]] |
+   case: H_step => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]] ];
+    move: H_msg;change ms with (ustate_post,ms).2;
       match goal with
-      | [H: _ # _ ~> _ |- _] => move: (x0,ms) H => result
-      | [H: _ # _ ; _ ~> _ |- _] => move: (x0,ms) H => result
+      | [H: _ # _ ~> _ |- _] => move: (ustate_post,ms) H => result
+      | [H: _ # _ ; _ ~> _ |- _] => move: (ustate_post,ms) H => result
       end;subst;
   rewrite in_fnd in H_u;case:H_u => ->;clear.
   * (* no message delivery cases *)
@@ -400,7 +403,7 @@ Proof.
   * { (* message delivery cases *)
       destruct H_step as (key_ustate & ustate_post & H_step & H_honest
                           & key_mailbox & H_msg_in_mailbox & ->).
-      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_ustate] = u).
+      assert ((users g1) [` key_ustate] = u).
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step; clear H.
       remember (ustate_post,ms) as ustep_out in H_step.
@@ -413,7 +416,7 @@ Proof.
   * { (* internal transition cases *)
       destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
-      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_user] = u).
+      assert ((users g1) [` key_user] = u).
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
@@ -487,7 +490,7 @@ Proof using.
   * { (* internal transition cases *)
       destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
-      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_user] = u).
+      assert ((users g1) [` key_user] = u).
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
@@ -518,7 +521,7 @@ Proof.
   * { (* internal transition cases *)
       destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
-      assert ((global_state.users UserId UState [choiceType of Msg] g1) [` key_user] = u).
+      assert ((users g1) [` key_user] = u).
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
@@ -615,7 +618,7 @@ Lemma received_softvote
       r0 (H_start: state_before_round r0 g0)
       ix g (H_last: onth trace ix = Some g) :
   forall uid u,
-    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+    (users g).[? uid] = Some u ->
   forall voter v r p,
     (voter, v) \in u.(softvotes) r p ->
     r0 <= r ->
@@ -664,7 +667,7 @@ Proof using.
   have H_in2: (uid \in g2.(users)) by rewrite -fndSome H_u2.
   have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
 
-  destruct H_step_copy; simpl users; autounfold with gtransition_unfold in * |-;
+  destruct H_step_copy; simpl users; autounfold with gtransition_unfold in * |-; unfold RecordSet.set in *; simpl in *;
     try (exfalso; rewrite H_u1 in H_u2; inversion H_u2; subst;
          rewrite H_pg2 in H_pg1; inversion H_pg1).
 
@@ -704,7 +707,7 @@ Proof using.
     * {
       case: H_result => [? ?]; destruct pre.
       exists pending.1, [::], H_in1, ustate_post.
-      simpl in * |- *.
+      unfold delivery_result; unfold RecordSet.set. simpl in * |- *.
       subst pre0.
       subst ustate_post. subst u0.
       unfold set_softvotes in H_pg2.
@@ -730,7 +733,7 @@ Proof using.
       rewrite in_fnd in H_u1; inversion H_u1. subst.
       split. assumption.
 
-      exists msg_key. rewrite <- H_pending. split. assumption.
+      exists msg_key. rewrite -H_pending. split. assumption.
       trivial.
       }
 
@@ -738,7 +741,7 @@ Proof using.
     * {
       case: H_result => [? ?]; destruct pre.
       exists pending.1, [:: (Certvote, val v0, r1, p0, uid)], H_in1, ustate_post.
-      simpl in * |- *.
+      unfold delivery_result. unfold RecordSet.set. simpl in * |- *.
       subst pre0.
       subst ustate_post. subst u0.
       unfold set_softvotes in H_pg2.
@@ -764,7 +767,7 @@ Proof using.
       rewrite in_fnd in H_u1; inversion H_u1; subst.
       split. assumption.
 
-      exists msg_key. rewrite <- H_pending. split. assumption.
+      exists msg_key. rewrite -H_pending. split. assumption.
       trivial.
       }
 
@@ -820,7 +823,7 @@ Lemma received_nextvote_open
       r0 (H_start: state_before_round r0 g0):
   forall ix g, onth trace ix = Some g ->
   forall uid u,
-    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+    (users g).[? uid] = Some u ->
   forall voter r p s,
     voter \in u.(nextvotes_open) r p s ->
     r0 <= r ->
@@ -944,7 +947,7 @@ Lemma received_nextvote_val
       r0 (H_start: state_before_round r0 g0):
   forall ix g, onth trace ix = Some g ->
   forall uid u,
-    (global_state.users UserId UState [choiceType of Msg] g).[? uid] = Some u ->
+    (users g).[? uid] = Some u ->
   forall voter v r p s,
     (voter, v) \in u.(nextvotes_val) r p s ->
     r0 <= r ->
@@ -1134,14 +1137,14 @@ Proof using.
   move /eqP in H_add.
   have H_onth' := onth_size H_onth.
   rewrite size_rcons in H_onth'.
-  assert (H_ix : ix < size trace) by (ppsimpl; lia; done).
+  assert (H_ix : ix < size trace) by lia.
   clear H_onth' H_add.
 
   assert (H_onth_trace : (onth trace ix) = Some g). {
   unfold onth; unfold onth in H_onth; rewrite drop_rcons in H_onth.
   apply drop_nth with (x0:=g0) in H_ix; rewrite H_ix in H_onth.
   rewrite H_ix. trivial.
-  ppsimpl; lia.
+  by lia.
   }
 
   assert (H_trace: is_trace g0 trace).
@@ -1168,19 +1171,21 @@ Lemma user_sent_credential uid msg g1 g2:
   let:(r,p,s) := msg_step msg in uid \in committee r p s.
 Proof using.
   move => [ms [H_in [[d [pending H_rel]]|H_rel]]];move: H_in;
-            simpl in H_rel;decompose record H_rel.
+           simpl in H_rel;
+  [case: H_rel => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]] |
+   case: H_rel => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]] ].
   * { (* utransition deliver *)
-    move: H. clear. move: {g1 x}(g1.(users)[`x]) => u.
-    remember (x0,ms) as result.
-    destruct 1;case:Heqresult => ? ?;subst x0 ms;move/Iter.In_mem => /= H_in;intuition;
+    move: H_ustep. clear. move: {g1 H_uid}(g1.(users)[`H_uid]) => u.
+    remember (ustate_post,ms) as result.
+    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/Iter.In_mem => /= H_in;intuition;
     subst msg;simpl;
     apply/imfsetP;exists uid;[|reflexivity];apply/asboolP.
     unfold certvote_ok in H;decompose record H;assumption.
     }
   * { (* utransition internal *)
-    move: H0. clear. move: {g1 x}(g1.(users)[`x]) => u.
-    remember (x0,ms) as result.
-    destruct 1;case:Heqresult => ? ?;subst x0 ms;move/Iter.In_mem => /= H_in;intuition;
+    move: H_ustep. clear. move: {g1 H_uid}(g1.(users)[`H_uid]) => u.
+    remember (ustate_post,ms) as result.
+    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/Iter.In_mem => /= H_in;intuition;
     (subst msg;simpl;
      apply/imfsetP;exists uid;[|reflexivity];apply/asboolP);
     autounfold with utransition_unfold in * |-;
@@ -1233,8 +1238,10 @@ Proof.
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
                            /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
-    rewrite /step_at /= in H_deliver;decompose record H_deliver.
-    assert (onth trace n = Some x)
+    rewrite /step_at /= in H_deliver.
+    case: H_deliver => [g1 [g2 [H_step_at [key_ustate [ustate_post [H_step [H_corrupt H_deliver]]]]]]].
+    move: H_deliver => [key_mailbox [H_in H_g2]].
+    assert (onth trace n = Some g1)
       by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
     eapply pending_sent_or_forged;try eassumption.
   }
@@ -1274,8 +1281,10 @@ Proof.
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
                            /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
-    rewrite /step_at /= in H_deliver;decompose record H_deliver.
-    assert (onth trace n = Some x)
+    rewrite /step_at /= in H_deliver.
+    case: H_deliver => [g1 [g2 [H_step_at [key_ustate [ustate_post [H_step [H_corrupt H_deliver]]]]]]].
+    move: H_deliver => [key_mailbox [H_in H_g2]].
+    assert (onth trace n = Some g1)
       by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
     eapply pending_sent_or_forged;try eassumption.
   }
@@ -1314,8 +1323,10 @@ Proof.
     (exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
                            /\ (user_sent voter msg g1 g2 \/ user_forged msg g1 g2))
     as H_source. {
-    rewrite /step_at /= in H_deliver;decompose record H_deliver.
-    assert (onth trace n = Some x)
+    rewrite /step_at /= in H_deliver.
+    case: H_deliver => [g1 [g2 [H_step_at [key_ustate [ustate_post [H_step [H_corrupt H_deliver]]]]]]].
+    move: H_deliver => [key_mailbox [H_in H_g2]].
+    assert (onth trace n = Some g1)
       by (refine (onth_from_prefix (step_in_path_onth_pre _));eassumption).
     eapply pending_sent_or_forged;try eassumption.
   }
@@ -1411,8 +1422,8 @@ Proof using.
             (tick_users increment pre) [` H_g2] =
             user_advance_timer
               increment
-              ((global_state.users UserId UState [choiceType of Msg] pre) [` H_g1])).
-    by inversion H_tick; simpl; assumption.
+              ((users pre) [` H_g1])).
+    by injection H_tick.
 
   clear H_tick.
   unfold tick_update in H_rps.
@@ -1420,8 +1431,7 @@ Proof using.
 
   rewrite H_tick_adv in H_rps.
   unfold user_advance_timer in H_rps.
-  destruct (local_state.corrupt UserId Value PropRecord Vote
-                                ((global_state.users UserId UState [choiceType of Msg] pre)
+  destruct (corrupt ((users pre)
                                    [` H_g1]));
     rewrite <- H_rps in H_lt; apply step_lt_irrefl in H_lt; assumption.
 
@@ -1473,7 +1483,7 @@ Proof using.
         rewrite take_oversize; assumption.
       *)
 
-      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by lia.
       rewrite H_addsub.
       assert (H_r0r1 : r0 <= r1).
         by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
@@ -1520,7 +1530,7 @@ Proof using.
       apply step_in_path_onth_post in H_step.
       match goal with [H : onth trace n.+1 = Some ?x |- _] => rename H into H_onth;remember x as dr end.
 
-      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by clear; ppsimpl; lia.
+      assert (H_addsub : (p0 + 1)%Nrec.-1 = p0). by lia.
       rewrite H_addsub.
       assert (H_r0r1 : r0 <= r1).
         by simpl in H_r1; rewrite H_r1 in H_r'; subst r; eassumption.
@@ -1563,7 +1573,7 @@ Proof using.
     cbn -[step_lt addn] in H_lt. rewrite H_r0 in H_lt.
     destruct H1 as [H_adv _]. unfold advancing_rp in H_adv.
     rewrite H_round in H_adv. clear -H_adv.
-    by simpl in H_adv; ppsimpl; lia.
+    by simpl in H_adv; lia.
 
     exfalso. subst.
     unfold deliver_nonvote_msg_result in *.
@@ -1596,13 +1606,13 @@ Proof using.
 
     destruct H0; injection Hequstep_out; clear Hequstep_out; intros <- <-; inversion H_rps;
       try (destruct H0 as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]];
-           clear -H4 H_s; by ppsimpl; lia).
+           clear -H4 H_s; by lia).
 
     subst; try apply step_lt_irrefl in H_lt; try contradiction.
 
     destruct H0 as [H_nv_stv H_stv].
     destruct H_nv_stv as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]].
-    clear -H4 H_s. by ppsimpl; lia.
+    clear -H4 H_s. by lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
     move:H_lt_0;rewrite H_g1_key_ustate -Hequ /step_of_ustate H2 H3.
@@ -1688,8 +1698,8 @@ Lemma honest_in_period_entered
 Proof using.
   clear -H_path H_start.
   move => p H_p_gt uid [ix H_in_period].
-  destruct (onth trace ix) as [g|] eqn:H_g;rewrite H_g in H_in_period;
-    [|exfalso;assumption].
+  move: H_in_period.
+  case H_g: (onth trace ix) => [g|] // H_in_period.
   destruct (g.(users).[?uid]) as [u|] eqn:H_u;[|exfalso;assumption].
   move: H_in_period => [H_honest [H_r H_p]].
   set P := upred uid (fun u => (u.(round) == r) && (u.(period) == p)).

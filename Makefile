@@ -10,12 +10,6 @@ clean: Makefile.coq
 Makefile.coq: _CoqProject
 	$(COQBIN)coq_makefile -f _CoqProject -o Makefile.coq
 
-theories/global_state.v: theories/global_state.v.rec
-	$(PYTHON) scripts/extract_record_notation.py theories/global_state.v.rec GState > theories/global_state.v
-
-theories/local_state.v: theories/local_state.v.rec
-	$(PYTHON) scripts/extract_record_notation.py theories/local_state.v.rec UState > theories/local_state.v
-
 _CoqProject Makefile: ;
 
 %: Makefile.coq

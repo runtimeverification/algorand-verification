@@ -1,7 +1,8 @@
-From mathcomp Require Import all_ssreflect.
-From mathcomp Require Import finmap.
+From mathcomp.ssreflect
+Require Import all_ssreflect.
 
-From mathcomp.finmap Require Import order.
+From mathcomp.finmap
+Require Import finmap.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

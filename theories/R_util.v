@@ -2,10 +2,7 @@ From mathcomp.ssreflect
 Require Import all_ssreflect.
 
 From Coq
-Require Import Reals.Reals.
-
-From Algorand
-Require Import boolp Rstruct fmap_ext.
+Require Import Reals.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
