@@ -9,7 +9,6 @@
 theories/zify.v
 theories/R_util.v
 theories/fmap_ext.v
-theories/global_state.v
 theories/algorand_model.v
 theories/safety_helpers.v
 theories/quorums.v

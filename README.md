@@ -16,7 +16,8 @@ Statements of some _liveness_ properties for the transition system are also prov
 - [`MathComp algebra`](https://math-comp.github.io)
 - [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
 - [`MathComp analysis 0.3.1`](https://github.com/math-comp/analysis)
-- [`Interval 4.0`](http://coq-interval.gforge.inria.fr)
+- [`Interval 4.0.0`](http://coq-interval.gforge.inria.fr)
+- [`Coq record update`](https://github.com/tchajed/coq-record-update)
 
 ## Building
 
@@ -25,7 +26,7 @@ We recommend installing the dependencies of the project via
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
 opam install coq.8.11.2 coq-mathcomp-ssreflect.1.11.0 \
-  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
+  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 coq-record-update \
   coq-mathcomp-analysis.0.3.1 coq-interval.4.0.0
 ```
 
@@ -38,9 +39,7 @@ All Coq vernacular files can be found under the `theories` directory, and their 
 - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
 - `R_util.v`: auxiliary lemmas on real numbers
 - `fmap_ext.v`: auxiliary definitions and results on finite maps
-- `local_state.v`: definition of Algorand local node state
-- `global_state.v`: definition of Algorand global system state
-- `algorand_model.v`: definition of the Algorand transition system, along with helper functions and facts
+- `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
 - `quorums.v`: definitions and hypotheses about quorums of nodes
 - `safety.v`: statement and complete formal proof of safety for the transition system

@@ -15,7 +15,7 @@ Require Import RecordSet.
 Import RecordSetNotations.
 
 From Algorand
-Require Import R_util fmap_ext global_state.
+Require Import R_util fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -312,20 +312,27 @@ Definition advance_round (u : UState) : UState :=
 (* Global State *)
 (* ------------ *)
 
-(* The global state *)
-(* Note that the global state structure and supporting functions and notations
-   are all defined in global_state.v
- *)
-Definition GState := global_state.GState UserId UState [choiceType of Msg].
+(* The global state structure *)
 
-Notation now               := (global_state.now UserId UState [choiceType of Msg]).
-Notation network_partition := (global_state.network_partition UserId UState [choiceType of Msg]).
-Notation users             := (global_state.users UserId UState [choiceType of Msg]).
-Notation msg_in_transit    := (global_state.msg_in_transit UserId UState [choiceType of Msg]).
-Notation msg_history       := (global_state.msg_history UserId UState [choiceType of Msg]).
+Record GState :=
+  mkGState {
+    (* The current global time value *)
+    now : R ;
+    (* A flag indicating whether the network is currently partitioned *)
+    network_partition : bool ;
+    (* The global set of users as a finite map of user ids to user states *)
+    users : {fmap UserId -> UState} ;
+    (* Messages in transit as a finite map from user ids (targets) to multisets of messages *)
+    msg_in_transit : {fmap UserId -> {mset R * Msg}} ;
+    (* The history of all messages broadcast as a multiset of messages *)
+    msg_history : {mset Msg}
+  }.
+
+Instance GState_Settable : Settable _ :=
+  settable! mkGState <now;network_partition;users;msg_in_transit;msg_history>.
 
 (* State with empty maps, unpartitioned, at global time 0 *)
-Definition null_state : GState := mkGState _ _ _ 0%R false [fmap] [fmap] mset0.
+Definition null_state : GState := mkGState 0%R false [fmap] [fmap] mset0.
 
 (* Equality of global states *)
 
@@ -342,7 +349,7 @@ Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
 
 (* Flip the network_partition flag *)
 Definition flip_partition_flag (g : GState) : GState :=
-  {[ g with network_partition := ~~ g.(network_partition) ]}.
+  g <| network_partition := ~~ g.(network_partition) |>.
 
 (* ------------------------------- *)
 (* Parameters/axioms of the system *)
@@ -1034,8 +1041,8 @@ Definition tick_users increment pre : {fmap UserId -> UState} :=
 
 (* Computes the global state after advancing time with the given increment *)
 Definition tick_update increment pre : GState :=
-  {[ {[ pre with now := (pre.(now) + pos increment)%R ]}
-       with users := tick_users increment pre ]}.
+  pre <| now := (pre.(now) + pos increment)%R |>
+      <| users := tick_users increment pre |>.
 
 (* Computes the standard deadline of a message based on its type *)
 Definition msg_deadline (msg : Msg) now : R :=
@@ -1092,9 +1099,10 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                               pre.(msg_in_transit).[uid <- user_msgs'] sent in
   let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  {[ {[ {[ pre with users          := users' ]}
-               with msg_in_transit := msgs' ]}
-               with msg_history    := msgh' ]}.
+  pre <| users          := users' |>
+      <| msg_in_transit := msgs'  |>
+      <| msg_history    := msgh'  |>.
+
 Arguments delivery_result : clear implicits.
 
 (* Computes the global state after an internal user-level transition
@@ -1104,9 +1112,9 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
   let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  {[ {[ {[ pre with users          := users' ]}
-               with msg_in_transit := msgs' ]}
-               with msg_history    := msgh' ]}.
+  pre <| users          := users' |>
+      <| msg_in_transit := msgs'  |>
+      <| msg_history    := msgh'  |>.
 
 Definition new_deadline now cur_deadline msg : R :=
   let max_deadline := msg_deadline msg now in
@@ -1141,7 +1149,7 @@ Definition make_partitioned (pre:GState) : GState :=
 (* Computes the state resulting from recovering from a partition *)
 Definition recover_from_partitioned pre : GState :=
   let msgpool' := reset_msg_delays pre.(msg_in_transit) pre.(now) in
-  {[ (flip_partition_flag pre) with msg_in_transit := msgpool' ]}.
+  (flip_partition_flag pre) <| msg_in_transit := msgpool' |>.
 
 (* Marks a user state corrupted by setting the corrupt flag *)
 Definition make_corrupt ustate : UState :=
@@ -1160,8 +1168,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
   let ustate' := make_corrupt pre.(users).[ustate_key] in
   let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
   let users' := pre.(users).[uid <- ustate'] in
-    {[ {[ pre with users := users'         ]}
-              with msg_in_transit := msgs' ]}.
+  pre <| users := users' |> <| msg_in_transit := msgs' |>.
 
 (* Computes the state resulting from replaying a message to a user *)
 (* The message is replayed to the given target user and added to his mailbox *)
@@ -1169,7 +1176,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
 Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) [fset uid] (* (domf (honest_users pre.(users))) *)
                  pre.(msg_in_transit) [:: msg] in
-  {[ pre with msg_in_transit := msgs' ]}.
+  pre <| msg_in_transit := msgs' |>.
 
 (* Does the adversary have the keys of the user for the given r-p-s? *)
 (* The adversary will have the keys if the user is corrupt and the given
@@ -1193,7 +1200,7 @@ Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval : GStat
   let msg := (mtype, mval, r, p, uid) in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)))
                  pre.(msg_in_transit) [:: msg] in
-  {[ pre with msg_in_transit := msgs' ]}.
+  pre <| msg_in_transit := msgs' |>.
 
 (* ---------------------- *)
 (* Global transition type *)

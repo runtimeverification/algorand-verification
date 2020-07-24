@@ -14,7 +14,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext global_state algorand_model zify.
+Require Import R_util fmap_ext algorand_model zify.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -23,22 +23,6 @@ Unset Printing Implicit Defensive.
 Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
-
-(* The global state *)
-(* Note that the global state structure and supporting functions and notations
-   are all defined in global_state.v
- *)
-Definition GState := algorand_model.GState.
-
-Notation now               := (global_state.now UserId algorand_model.UState [choiceType of Msg]).
-Notation network_partition := (global_state.network_partition UserId algorand_model.UState [choiceType of Msg]).
-Notation users             := (global_state.users UserId algorand_model.UState [choiceType of Msg]).
-Notation msg_in_transit    := (global_state.msg_in_transit UserId algorand_model.UState [choiceType of Msg]).
-Notation msg_history       := (global_state.msg_history UserId algorand_model.UState [choiceType of Msg]).
-
-Notation "x # y ~> z" := (algorand_model.UTransitionInternal x y z) (at level 70) : type_scope.
-Notation "a # b ; c ~> d" := (algorand_model.UTransitionMsg a b c d) (at level 70) : type_scope.
-Notation "x ~~> y" := (algorand_model.GTransition x y) (at level 90) : type_scope.
 
 Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexists]].
 
@@ -685,7 +669,8 @@ Lemma at_step_onth n (path : seq GState) (P : pred GState):
   P g.
 Proof using.
   unfold at_step, onth.
-  destruct (drop n path) eqn:Hdrop;rewrite Hdrop;simpl;congruence.
+  case Hdrop: (drop n path) => [|a l] //=.
+  by move => HP g; case =><-.
 Qed.
 
 (* nth element is g and P g holds, then at_step holds for n and P *)
@@ -694,7 +679,8 @@ Lemma onth_at_step n (path : seq GState) g:
   forall (P : pred GState), P g -> at_step n path P.
 Proof using.
   unfold at_step, onth.
-  destruct (drop n path) eqn:Hdrop;rewrite Hdrop;simpl;congruence.
+  case Hdrop: (drop n path) => [|a l] //=.
+  by case =><-.
 Qed.
 
 (* onth true at ix implies onth true at truncated trace for size of new trace - 1 *)
@@ -1125,10 +1111,7 @@ Proof using.
 
   subst g2.
   unfold delivery_result in *.
-  cbn [global_state.msg_in_transit
-         set_GState_users
-         set_GState_msg_history
-         set_GState_msg_in_transit] in *.
+  simpl in *.
 
   clear mb1 mb2 H_singleton.
   remember ((g.(msg_in_transit)).[uid <- ((g.(msg_in_transit)).[key_mbox] `\ (r, m))%mset]) as mailboxes'.
@@ -1282,7 +1265,7 @@ Proof using.
 clear.
 move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
 move => H_honest H_msg H_step H_honest' H_step'.
-rewrite/delivery_result /= /step_result /=.
+rewrite/delivery_result /= /step_result /= /RecordSet.set /=.
 set us1 := _.[uid <- _].
 set us2 := _.[uid' <- _].
 set sb1 := send_broadcasts _ _ _ _.
@@ -1299,7 +1282,7 @@ case Hueq: (uid' == uid); last first.
   case: ifP; case: ifP.
   - by move/eqP.
   - move => _ _ Hpost.
-    suff Hsuff: (global_state.users UserId UState [choiceType of Msg] g) [` key_state'] = upost'.
+    suff Hsuff: (users g) [` key_state'] = upost'.
       move: H_step'.
       by move/internal_not_noop.
     apply sym_eq in Hpost.
@@ -1325,7 +1308,7 @@ rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets
   move => _.
   rewrite in_fnd; case.
   move: H_msg.
-  set ms := (global_state.msg_in_transit _ _ _ _ _).
+  set ms := (msg_in_transit _ _).
   move => H_msg.
   move/msetP => Hms.
   move: (Hms (r, m)).
@@ -1665,7 +1648,7 @@ Lemma honest_backwards_gstep : forall (g1 g2 : GState),
 Proof using.
   move => g1 g2 Hstep uid.
   destruct Hstep;unfold user_honest;destruct pre;
-    unfold tick_update,tick_users;simpl global_state.users in * |- *;try done.
+    unfold tick_update,tick_users; simpl algorand_model.users in * |- *; try done.
   + (* step_tick *)
     destruct (fndP users uid).
     by rewrite updf_update //;destruct (users.[kf]), corrupt.
@@ -1948,7 +1931,6 @@ Proof using.
 move => g1 g2 uid us1 us2.
 elim => //.
 - move => increment pre Htick.
-  set users : GState -> _ := global_state.users _ _ _.
   move => Hu.
   case Hd: (uid \in domf (users pre)); last first.
     by move/negP/negP: Hd => Hd; move: Hu; rewrite not_fnd.
@@ -1957,9 +1939,7 @@ elim => //.
   rewrite in_fnd; case =>->.
   rewrite /user_advance_timer /= /ustate_after /=.
   by case: ifP => //=; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => msg_key [r m] Hpend key_ustate ustate_post sent Hloc.
   move/utr_rps_non_decreasing_msg => Hst.
   case Huid_eq: (uid == uid0).
@@ -1971,9 +1951,7 @@ elim => //.
   move => Hus.
   rewrite fnd_set /= Huid_eq Hus.
   by case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => ustate_key Hloc ustate_post sent.
   move/utr_rps_non_decreasing_internal => Hst.
   case Huid_eq: (uid == uid0).
@@ -1984,19 +1962,13 @@ elim => //.
   move => Hus.
   rewrite fnd_set /= Huid_eq Hus.
   by case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre Hpre.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre Hpre.
   rewrite /= -/users => Hus1.
   by rewrite Hus1; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre Hpre.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre Hpre.
   rewrite /= -/users => Hus1.
   by rewrite Hus1; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0 ustate_key.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0 ustate_key.
   move => Hcorrupt Hst; move: Hst Hcorrupt.
   case Huid_eq: (uid == uid0).
     move/eqP: Huid_eq =>->.
@@ -2007,15 +1979,11 @@ elim => //.
     by case =>-> => Hcorrupt; case =><-; right; right.
   rewrite fnd_set /= Huid_eq -/(users pre).
   by move =>-> => Hcorrupt; case =>->; right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre uid0.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre uid0.
   move => ustate_key m Hc Hm.
   rewrite /= =>->; case =>->.
   by right; right.
-- set GS := global_state.GState UserId UState [choiceType of Msg].
-  move => pre sender.
-  set users : GS -> _ := global_state.users _ _ _.
+- move => pre sender.
   move => sender_key r p s mtype mval Hhave Hcomm Hmatch.
   rewrite /= =>->; case =>->.
   by right; right.
@@ -2031,8 +1999,6 @@ move => g1 g2 uid us1 us2.
 case => gtrace Hpath Hlast.
 destruct gtrace. inversion Hpath.
 destruct Hpath as [H_g0 Hpath]; subst g.
-set GS := global_state.GState UserId UState [choiceType of Msg].
-set users : GS -> _ := global_state.users _ _ _.
 elim: gtrace g1 g2 uid us1 us2 Hpath Hlast => //=.
   move => g1 g2 uid us1 us2 Htr ->->; case =>->.
   by right; right.

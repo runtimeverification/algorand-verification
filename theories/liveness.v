@@ -14,7 +14,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext global_state.
+Require Import R_util fmap_ext.
 
 From Algorand
 Require Import algorand_model safety_helpers quorums safety.
