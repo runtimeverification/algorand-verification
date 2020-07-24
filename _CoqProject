@@ -13,4 +13,3 @@ theories/algorand_model.v
 theories/safety_helpers.v
 theories/quorums.v
 theories/safety.v
-theories/liveness.v

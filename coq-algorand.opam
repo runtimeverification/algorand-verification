@@ -16,9 +16,9 @@ as a transition system over global states in a distributed system.
 Included is a full formal proof of safety for the transition system.
 """
 
-build: [make "-j%{jobs}%"]
-install: [make "install"]
+build: ["dune" "build" "-p" name "-j" jobs]
 depends: [
+  "dune" {>= "2.5"}
   "coq" {>= "8.11" & < "8.12~"}
   "coq-mathcomp-ssreflect" {>= "1.11" & < "1.12~"}
   "coq-mathcomp-algebra"
@@ -31,6 +31,8 @@ depends: [
 tags: [
   "category:Computer Science/Concurrent Systems and Protocols/Theory of concurrent systems"
   "keyword:distributed algorithms"
+  "keyword:blockchain"
+  "keyword:consensus"
   "keyword:algorand"
   "logpath:Algorand"
 ]
