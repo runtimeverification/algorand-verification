@@ -1,4 +1,9 @@
-# Algorand verification
+# Algorand Verification
+
+[![CI][action-shield]][action-link]
+
+[action-shield]: https://github.com/runtimeverification/algorand-verification/workflows/CI/badge.svg?branch=master
+[action-link]: https://github.com/runtimeverification/algorand-verification/actions?query=workflow%3ACI
 
 A formalization of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq proof assistant](https://coq.inria.fr).
 The project provides: 
