@@ -1,31 +1,30 @@
 opam-version: "2.0"
-version: "dev"
 maintainer: "palmskog@gmail.com"
+version: "dev"
 
 homepage: "https://github.com/runtimeverification/algorand-verification"
 dev-repo: "git+https://github.com/runtimeverification/algorand-verification.git"
 bug-reports: "https://github.com/runtimeverification/algorand-verification/issues"
 license: "NCSA"
 
-synopsis: "A verified model of Algorand in Coq"
+synopsis: "A verified model of the Algorand consensus protocol in Coq"
 description: """
-Algorand is a consensus protocol that provides the foundation for a
+The Algorand consensus protocol provides the foundation for a
 decentralized digital currency and transactions platform.
-This is a formal model of Algorand in Coq, expressed
-as a transition system over global states in a distributed system.
-Included is a full formal proof of safety for the transition system.
-"""
+This project provides a model of the protocol in Coq, expressed as a transition
+system over global states in a message-passing distributed system.
+Included is a formal proof of safety for the transition system."""
 
 build: ["dune" "build" "-p" name "-j" jobs]
 depends: [
   "dune" {>= "2.5"}
   "coq" {>= "8.11" & < "8.12~"}
   "coq-mathcomp-ssreflect" {>= "1.11" & < "1.12~"}
-  "coq-mathcomp-algebra"
+  "coq-mathcomp-algebra" 
   "coq-mathcomp-finmap" {>= "1.5"}
   "coq-mathcomp-analysis" {>= "0.3.1"}
   "coq-interval" {>= "4.0.0"}
-  "coq-record-update"
+  "coq-record-update" 
 ]
 
 tags: [
@@ -37,11 +36,11 @@ tags: [
   "logpath:Algorand"
 ]
 authors: [
-  "Musab Alturki"
+  "Musab A. Alturki"
   "Jing Chen"
   "Victor Luchangco"
   "Brandon Moore"
   "Karl Palmskog"
   "Lucas Peña"
-  "Grigore Rosu"
+  "Grigore Roșu"
 ]
