@@ -141,7 +141,7 @@ Axiom interquorum_c_b_certinfo:
 
 (* A user has certvoted at a specifix index along a path *)
 Definition certvoted_in_path_at ix path uid r p v : Prop :=
-  user_sent_at ix path uid (Certvote,val v,r,p,uid).
+  user_sent_at ix path uid (mkMsg Certvote (val v) r p uid).
 
 (* A user has certvoted along a path *)
 Definition certvoted_in_path path uid r p v : Prop :=
@@ -158,7 +158,7 @@ Definition certified_in_period trace r p v :=
 (* A user has softvoted at a specific index along a path *)
 Definition softvoted_in_path_at ix path uid r p v : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path
-   /\ user_sent uid (Softvote,val v,r,p,uid) g1 g2.
+   /\ user_sent uid (mkMsg Softvote (val v) r p uid) g1 g2.
 
 (* A user has softvoted along a path *)
 Definition softvoted_in_path path uid r p v : Prop :=
@@ -175,7 +175,7 @@ Definition enough_softvotes_in_period trace r p v :=
 (* A user has nextvoted bottom at a specific index along a path *)
 Definition nextvoted_bot_in_path_at ix path uid (r p s:nat) : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path
-   /\ user_sent uid (Nextvote_Open, step_val s,r,p,uid) g1 g2.
+   /\ user_sent uid (mkMsg Nextvote_Open (step_val s) r p uid) g1 g2.
 
 (* A user has nextvoted bottom along a path *)
 Definition nextvoted_bot_in_path path uid r p s : Prop :=
@@ -192,7 +192,7 @@ Definition enough_nextvotes_bot_in_step trace r p s :=
 (* A user has nextvoted for a value v at a specific index along a path *)
 Definition nextvoted_val_in_path_at ix path uid r p s v : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path
-   /\ user_sent uid (Nextvote_Val,next_val v s,r,p,uid) g1 g2.
+   /\ user_sent uid (mkMsg Nextvote_Val (next_val v s) r p uid) g1 g2.
 
 (* A user has nextvoted for a value v along a path *)
 Definition nextvoted_val_in_path path uid r p s v : Prop :=

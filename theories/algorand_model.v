@@ -62,7 +62,7 @@ Definition MessageType_eq (a b:MessageType) : bool :=
   end.
 
 Lemma MessageType_eqP: Equality.axiom MessageType_eq.
-Proof using.
+Proof.
   move => a b;apply Bool.iff_reflect;split.
     by move <-;destruct a.
     by move/(ifT (a=b) True) => <-;destruct a, b.
@@ -94,7 +94,7 @@ Definition o2mtype (i:'I_7) : option MessageType :=
   end.
 
 Lemma pcancel_MessageType_7 : pcancel mtype2o o2mtype.
-Proof using. by case;rewrite /o2mtype /= inordK. Qed.
+Proof. by case;rewrite /o2mtype /= inordK. Qed.
 
 (* Register canonical structures on MessageType; needed for using MessageType in fset, mset, etc. *)
 Canonical messageType_eqType     := EqType     MessageType (Equality.Mixin MessageType_eqP).
@@ -132,7 +132,7 @@ Definition decodeExVal (c:Value + nat + (Value * UserId * nat) + (Value * nat)) 
   end.
 
 Lemma cancelExVal : pcancel codeExVal (fun x => Some (decodeExVal x)).
-Proof using. case;reflexivity. Qed.
+Proof. by case. Qed.
 
 (* Register canonical structures on ExValue; needed for using ExValue in fset, mset, etc. *)
 Canonical exValue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
@@ -142,18 +142,36 @@ Canonical exValue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal)
 (* Messages *)
 (* -------- *)
 
-(* A message type as a product type *)
-(* A message is a tuple (type, ev, r, p, id) where:
-    type: message type as an MessageType
-    ev  : message payload as an ExValue
-    r   : round value
-    p   : period value
-    id  : sender's user id
+(*
+A message is represented by a record type for convenience, but
+can abstractly be viewed as a tuple (type, ev, r, p, id) where:
+- type is the message type (MessageType)
+- ev is the message payload (ExValue)
+- r is the round value (nat)
+- p is the period value (nat)
+- id is the sender's identifier (UserId)
  *)
-Definition Msg : Type := MessageType * ExValue * nat * nat * UserId.
-Definition msg_sender (m:Msg): UserId := m.2.
-Definition msg_round (m:Msg): nat := m.1.1.2.
-Definition msg_period (m:Msg): nat := m.1.2.
+
+Record Msg : Type := mkMsg
+ { msg_type : MessageType ;
+   msg_ev : ExValue ;
+   msg_round : nat ;
+   msg_period : nat ;
+   msg_sender : UserId
+ }.
+
+Definition codeMsg (m : Msg) : MessageType * ExValue * nat * nat * UserId :=
+(msg_type m, msg_ev m, msg_round m, msg_period m, msg_sender m).
+
+Definition decodeMsg (c: MessageType * ExValue * nat * nat * UserId) : Msg :=
+mkMsg c.1.1.1.1 c.1.1.1.2 c.1.1.2 c.1.2 c.2.
+
+Lemma cancelMsg : pcancel codeMsg (fun x => Some (decodeMsg x)).
+Proof. by case. Qed.
+
+(* Register canonical structures on Msg; needed for using Msg in fset, mset, etc. *)
+Canonical Msg_eqType     := EqType     Msg (PcanEqMixin     cancelMsg).
+Canonical Msg_choiceType := ChoiceType Msg (PcanChoiceMixin cancelMsg).
 
 (* Messages are grouped by the target user.
    Messages are paired with a delivery deadline.
@@ -260,34 +278,40 @@ Instance UState_Settable : Settable _ :=
 
 (* Update functions for lists maintained in the user state *)
 Definition set_proposals u r' p' prop : UState :=
-  u <| proposals := fun r p => if (r, p) == (r', p')
-                                 then undup (prop :: u.(proposals) r p)
-                                 else u.(proposals) r p |>.
+  u <| proposals := fun r p =>
+        if (r, p) == (r', p')
+        then undup (prop :: u.(proposals) r p)
+        else u.(proposals) r p |>.
 
 Definition set_blocks (u : UState) r' block : UState :=
-  u <| blocks := fun r => if r == r'
-                      then undup (block :: u.(blocks) r)
-                      else u.(blocks) r |>.
+  u <| blocks := fun r =>
+        if r == r'
+        then undup (block :: u.(blocks) r)
+        else u.(blocks) r |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  u <| softvotes := fun r p => if (r, p) == (r', p')
-                           then undup (sv :: u.(softvotes) r p)
-                           else u.(softvotes) r p |>.
+  u <| softvotes := fun r p =>
+        if (r, p) == (r', p')
+        then undup (sv :: u.(softvotes) r p)
+        else u.(softvotes) r p |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
-  u <| certvotes := fun r p => if (r, p) == (r', p')
-                           then undup (sv :: u.(certvotes) r p)
-                           else u.(certvotes) r p |>.
+  u <| certvotes := fun r p =>
+        if (r, p) == (r', p')
+        then undup (sv :: u.(certvotes) r p)
+        else u.(certvotes) r p |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  u <| nextvotes_open := fun r p s => if (r, p, s) == (r', p', s')
-                                  then undup (nvo :: u.(nextvotes_open) r p s)
-                                  else u.(nextvotes_open) r p s |>.
+  u <| nextvotes_open := fun r p s =>
+        if (r, p, s) == (r', p', s')
+        then undup (nvo :: u.(nextvotes_open) r p s)
+        else u.(nextvotes_open) r p s |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  u <| nextvotes_val := fun r p s => if (r, p, s) == (r', p', s')
-                                 then undup (nvv :: u.(nextvotes_val) r p s)
-                                 else u.(nextvotes_val) r p s |>.
+  u <| nextvotes_val := fun r p s =>
+        if (r, p, s) == (r', p', s')
+        then undup (nvv :: u.(nextvotes_val) r p s)
+        else u.(nextvotes_val) r p s |>.
 
 (* Update function for advancing the period of a user state *)
 Definition advance_period (u : UState) : UState :=
@@ -431,8 +455,7 @@ Definition ustate_after us1 us2 : Prop :=
   \/ (us1.(round) = us2.(round) /\ us1.(period) < us2.(period))
   \/ (us1.(round) = us2.(round) /\ us1.(period) = us2.(period) /\ us1.(step) <= us2.(step)).
 
-Definition msg_step_s (mhead: (MessageType * ExValue)): nat :=
-  let (mtype,v) := mhead in
+Definition msg_step_s (mtype : MessageType) (v : ExValue) : nat :=
   match mtype with
   | Block => 1
   | Proposal => 1
@@ -452,18 +475,18 @@ Definition msg_step_s (mhead: (MessageType * ExValue)): nat :=
   end.
 
 Definition msg_step (msg:Msg) : nat * nat * nat :=
-  (msg_round msg,msg_period msg,msg_step_s msg.1.1.1).
+  (msg_round msg, msg_period msg, msg_step_s (msg_type msg) (msg_ev msg)).
 
 (* Is the given message a vote (softvote, certvote or nextvote) message? *)
 Definition vote_msg (msg : Msg) : Prop :=
-  match msg.1.1.1.1 with
+  match msg_type msg with
   | Softvote | Certvote | Nextvote_Open | Nextvote_Val => True
   | _ => False
   end.
 
 (* Does the given round/period/step match the ones stored in the user state? *)
 Definition valid_rps (u : UState) r p s : Prop :=
-  u.(round) = r /\ u.(period) = p /\ u.(step) = s .
+  u.(round) = r /\ u.(period) = p /\ u.(step) = s.
 
 Definition advancing_rp (u : UState) r p : Prop :=
   u.(round) < r \/ u.(round) = r /\ u.(period) <= p.
@@ -818,9 +841,9 @@ Definition certify_result r (pre : UState) : UState :=
 
 (* The post state of delivering a non-vote message *)
 Definition deliver_nonvote_msg_result (pre : UState) (msg : Msg) c r p : UState :=
-  let type := msg.1.1.1.1 in
-  let id := msg.2 in
-  let ev := msg.1.1.1.2 in
+  let type := msg_type msg in
+  let id := msg_sender msg in
+  let ev := msg_ev msg in
   match ev with
   | val v =>
     match type with
@@ -855,12 +878,12 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 1: Block Proposal *)
   | propose : forall uid (pre : UState) v b r p,
       propose_ok pre uid v b r p ->
-      uid # pre ~> (propose_result pre, [:: (Proposal, val v, r, p, uid) ; (Block, val b, r, p, uid)])
+      uid # pre ~> (propose_result pre, [:: mkMsg Proposal (val v) r p uid ; mkMsg Block (val b) r p uid])
 
   (* Step 1: Block Proposal [Reproposal] *)
   | repropose : forall uid (pre : UState) v r p,
       repropose_ok pre uid v r p ->
-      uid # pre ~> (propose_result pre, [:: (Reproposal, repr_val v uid p, r, p, uid)])
+      uid # pre ~> (propose_result pre, [:: mkMsg Reproposal (repr_val v uid p) r p uid])
 
   (* Step 1: Block Proposal [failure] *)
   | no_propose : forall uid (pre : UState) r p,
@@ -870,12 +893,12 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 2: Filtering Step [new value] *)
   | softvote_new : forall uid (pre : UState) v r p,
       softvote_new_ok pre uid v r p ->
-      uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
+      uid # pre ~> (softvote_result pre, [:: mkMsg Softvote (val v) r p uid])
 
   (* Step 2: Filtering Step [old value] *)
   | softvote_repr : forall uid (pre : UState) v r p,
       softvote_repr_ok pre uid v r p ->
-      uid # pre ~> (softvote_result pre, [:: (Softvote, val v, r, p, uid)])
+      uid # pre ~> (softvote_result pre, [:: mkMsg Softvote (val v) r p uid])
 
   (* Step 2: Filtering Step [no value] *)
   | no_softvote : forall uid (pre : UState) r p,
@@ -885,7 +908,7 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Step 3: Certifying Step [success] *)
   | certvote1 : forall uid (pre : UState) v b r p,
       certvote_ok pre uid v b r p ->
-      uid # pre ~> (certvote_result pre, [:: (Certvote, val v, r, p, uid)])
+      uid # pre ~> (certvote_result pre, [:: mkMsg Certvote (val v) r p uid])
 
   (* Step 3: Certifying Step [failure] *)
   | no_certvote : forall uid (pre : UState) r p,
@@ -895,17 +918,17 @@ Inductive UTransitionInternal : u_transition_internal_type :=
   (* Steps >= 4: Finishing Step - i has cert-voted some v *)
   | nextvote_val : forall uid (pre : UState) v b r p s,
       nextvote_val_ok pre uid v b r p s ->
-      uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val v s, r, p, uid)])
+      uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Val (next_val v s) r p uid])
 
   (* Steps >= 4: Finishing Step - i has not cert-voted some v *)
   | nextvote_open : forall uid (pre : UState) r p s,
       nextvote_open_ok pre uid r p s ->
-      uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Open, step_val s, r, p, uid)])
+      uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Open (step_val s) r p uid])
 
   (* Steps >= 4: Finishing Step - special case of using stv *)
   | nextvote_stv : forall uid (pre : UState) v r p s,
       nextvote_stv_ok pre uid r p s /\ pre.(stv) p = Some v ->
-        uid # pre ~> (nextvote_result pre s, [:: (Nextvote_Val, next_val  v s, r, p, uid)])
+        uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Val (next_val v s) r p uid])
 
   (* Steps >= 4: Finishing Step - no next-voting *)
   | no_nextvote : forall uid (pre : UState) r p s,
@@ -937,51 +960,51 @@ Inductive UTransitionMsg : u_transition_msg_type :=
   | deliver_softvote : forall uid (pre : UState) r p i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
         ~ certvote_ok pre' uid v b r p ->
-        uid # pre ; (Softvote, val v, r, p, i) ~> (pre', [::])
+        uid # pre ; mkMsg Softvote (val v) r p i ~> (pre', [::])
 
   (* Deliver a softvote and cert-vote for the value [committee member case] *)
   | deliver_softvote_certvote1 : forall uid (pre : UState) r p i v b,
       let pre' := set_softvotes pre r p (i, v) in
         certvote_ok pre' uid v b r p ->
-        uid # pre ; (Softvote, val v, r, p, i) ~> (certvote_result pre', [:: (Certvote, val v, r, p, uid)])
+        uid # pre ; mkMsg Softvote (val v) r p i ~> (certvote_result pre', [:: mkMsg Certvote (val v) r p uid])
 
   (* Deliver a nextvote for bottom while not triggering any internal action *)
   | deliver_nextvote_open : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
       (* ~ nextvote_open_ok pre' v r p s -> *)
       ~ adv_period_open_ok pre' r p s ->
-      uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (pre', [::])
+      uid # pre ; mkMsg Nextvote_Open (step_val s) r p i ~> (pre', [::])
 
   (* Deliver a nextvote for bottom and advance the period *)
   (* Note: Advancing the period takes precedence over nextvote2_open actions *)
   | deliver_nextvote_open_adv_prd : forall uid (pre : UState) r p s i,
       let pre' := set_nextvotes_open pre r p s i in
         adv_period_open_ok pre' r p s ->
-        uid # pre ; (Nextvote_Open, step_val s, r, p, i) ~> (adv_period_open_result pre', [::])
+        uid # pre ; mkMsg Nextvote_Open (step_val s) r p i ~> (adv_period_open_result pre', [::])
 
   (* Deliver a nextvote for value while not triggering any internal action *)
   | deliver_nextvote_val : forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
         ~ adv_period_val_ok pre' v r p s ->
-        uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (pre', [::])
+        uid # pre ; mkMsg Nextvote_Val (next_val v s) r p i ~> (pre', [::])
 
   (* Deliver a nextvote for value and advance the period *)
   | deliver_nextvote_val_adv_prd : forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
       adv_period_val_ok pre' v r p s ->
-      uid # pre ; (Nextvote_Val, next_val v s, r, p, i) ~> (adv_period_val_result pre' v, [::])
+      uid # pre ; mkMsg Nextvote_Val (next_val v s) r p i ~> (adv_period_val_result pre' v, [::])
 
   (* Deliver a certvote while not triggering any internal action *)
   | deliver_certvote : forall uid (pre : UState) v r p i,
       let pre' := set_certvotes pre r p (i, v) in
       ~ certify_ok pre' v r p ->
-      uid # pre ; (Certvote, val v, r, p, i) ~> (pre', [::])
+      uid # pre ; mkMsg Certvote (val v) r p i ~> (pre', [::])
 
   (* Deliver a certvote for value and advance the round *)
   | deliver_certvote_adv_rnd : forall uid (pre : UState) v r p i,
       let pre' := set_certvotes pre r p (i, v) in
         certify_ok pre' v r p ->
-        uid # pre ; (Certvote, val v, r, p, i) ~> (certify_result r pre', [::])
+        uid # pre ; mkMsg Certvote (val v) r p i ~> (certify_result r pre', [::])
         (* Note: Some algorand documents say this transition may try to
            send anothe Certvote message from this node, but we have been
            informed that the implementation does not do this,
@@ -1045,7 +1068,7 @@ Definition tick_update increment pre : GState :=
 
 (* Computes the standard deadline of a message based on its type *)
 Definition msg_deadline (msg : Msg) now : R :=
-  match msg.1.1.1.1 with
+  match msg_type msg with
   | Block => (now + lambda + big_lambda)%R
   | _ => (now + lambda)%R
   end.
@@ -1055,7 +1078,7 @@ Definition merge_msgs_deadline (now : R) (msgs : seq Msg) (v : {mset R * Msg}) :
 
 Definition send_broadcasts_def (now : R) (targets : {fset UserId}) (prev_msgs : MsgPool) (msgs : seq Msg) : MsgPool :=
   updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
-Fact send_broadcasts_key: unit. Proof using. exact tt. Qed.
+Fact send_broadcasts_key: unit. Proof. exact tt. Qed.
 Definition send_broadcasts
   := locked_with send_broadcasts_key send_broadcasts_def.
 Canonical send_broadcasts_unlockable := [unlockable fun send_broadcasts].
@@ -1196,7 +1219,7 @@ Definition mtype_matches_step mtype mval s : Prop :=
 (* Computes the state resulting from forging a message to a user *)
 (* The message is first created and then queued at the target user's mailbox *)
 Definition forge_msg_result (pre : GState) (uid : UserId) r p mtype mval : GState :=
-  let msg := (mtype, mval, r, p, uid) in
+  let msg := mkMsg mtype mval r p uid in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)))
                  pre.(msg_in_transit) [:: msg] in
   pre <| msg_in_transit := msgs' |>.
@@ -1300,7 +1323,7 @@ Definition GReachable (g0 g : GState) : Prop := clos_refl_trans_1n _ GTransition
 
 (* our definition of reachability implies the classic definition of reachable states *)
 Lemma greachable_GReachable : forall g0 g, greachable g0 g -> GReachable g0 g.
-Proof using.
+Proof.
   move => g0 g; case => x.
   destruct x. inversion 1.
   move => [H_g0 H_path]; subst g1.
@@ -1316,7 +1339,7 @@ Qed.
 
 (* classic definition of rachable states implies our definition of reachable states *)
 Lemma GReachable_greachable : forall g0 g, GReachable g0 g -> greachable g0 g.
-Proof using.
+Proof.
   move => g0 g.
   elim. move => x; exists [:: x]; done.
   move => x y z Hxy Hc.

@@ -851,8 +851,7 @@ Definition user_sent sender (m : Msg) (pre post : GState) : Prop :=
       \/ (related_by (lbl_step_internal sender ms) pre post)).
 
 Definition user_forged (msg:Msg) (g1 g2: GState) :=
-  let: (mty,v,r,p,sender) := msg in
-  related_by (lbl_forge_msg sender r p mty v) g1 g2.
+  related_by (lbl_forge_msg (msg_sender msg) (msg_round msg) (msg_period msg) (msg_type msg) (msg_ev msg)) g1 g2.
 
 Definition user_sent_at ix path uid msg :=
   exists g1 g2, step_in_path_at g1 g2 ix path
@@ -889,7 +888,7 @@ Lemma utransition_label_start uid msg g1 g2 :
 Proof.
   unfold user_sent.
   move => [sent [msg_in H_trans]] u H_u.
-  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: msg msg_in => mtype v r p uid_m msg_in.
   case: H_trans => [[d [body H_recv]]|H_step].
   * { (* message delivery cases *)
   destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
@@ -944,7 +943,7 @@ Proof.
   move => uid msg g1 g2.
   unfold user_sent.
   move => [sent [msg_in H_trans]] u H_u.
-  destruct msg as [[[[mtype v] r] p] uid_m].
+  case: msg msg_in => mtype v r p uid_m /= msg_in.
   case: H_trans => [[d [body H_recv]]|H_step].
   * { (* message delivery cases *)
   destruct H_recv as (key_ustate & ustate_post & H_step & H_honest
@@ -1008,10 +1007,10 @@ Definition msg_received uid msg_deadline msg path : Prop :=
    (lbl_deliver uid msg_deadline msg ms).
 
 Definition received_next_vote u voter round period step value path : Prop :=
-  exists d, msg_received u d ((match value with
-                               | Some v => (Nextvote_Val,next_val v step)
-                               | None => (Nextvote_Open,step_val step)
-                               end),round,period,voter) path.
+  exists d, msg_received u d (match value with
+                               | Some v => mkMsg Nextvote_Val (next_val v step) round period voter
+                               | None => mkMsg Nextvote_Open (step_val step) round period voter
+                         end) path.
 
 (* --------------------- *)
 (* Labelling transitions *)
@@ -1365,8 +1364,8 @@ have Hll: size l >= 2 by rewrite Hl.
 clear n n' Hn Hl' Hl.
 inversion Htr; inversion Htr'; subst; simpl in *; try by [].
 move: Hpq.
-set m1 := (Proposal, _, _, _, _).
-set m2 := (Block, _, _, _, _).
+set m1 := mkMsg Proposal _ _ _ _.
+set m2 := mkMsg Block _ _ _ _.
 set s1 :=  [:: _; _].
 set s2 :=  [:: _; _].
 move => Hpm.
@@ -1557,8 +1556,7 @@ Proof.
   set result:=(post,sent). change post with (result.1). clearbody result.
   destruct 1;try reflexivity.
   + unfold deliver_nonvote_msg_result;simpl.
-    destruct msg as [[[[? ?] ?] ?] ?];simpl.
-    destruct e;[destruct m|..];reflexivity.
+    by destruct msg, msg_ev, msg_type.
 Qed.
 
 (* sender of message is honest in pre-state *)
@@ -1833,8 +1831,8 @@ inversion_clear utrH.
   destruct us1;simpl. rewrite addn1 ltnS.
   unfold advancing_rp. simpl.
   by move => [|[->] _];[apply ltnW|apply leqnn].
-- destruct m.1.1.1.2 eqn:E.
-  destruct m.1.1.1.1 eqn:E'.
+- destruct (msg_ev m) eqn:E.
+  destruct (msg_type m) eqn:E'.
   unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   unfold deliver_nonvote_msg_result. rewrite E. rewrite E'.  unfold ustate_after => /=.
@@ -2237,8 +2235,7 @@ Proof.
     }
   * { clear.
       unfold deliver_nonvote_msg_result.
-      destruct msg as [[[[]]]]. simpl.
-      by destruct e;[destruct m|..].
+      by destruct msg, msg_ev, msg_type.
     }
 Qed.
 
@@ -2488,8 +2485,8 @@ Qed.
 (* user honest during step user sends message *)
 Lemma honest_during_from_sent
   g0 trace (H_path: is_trace g0 trace)
-  ix uid mty mval r p (H_send: user_sent_at ix trace uid (mty,mval,r,p,uid)):
-    honest_during_step (msg_step (mty,mval,r,p,uid)) uid trace.
+  ix uid mty mval r p (H_send: user_sent_at ix trace uid (mkMsg mty mval r p uid)):
+    honest_during_step (msg_step (mkMsg mty mval r p uid)) uid trace.
 Proof.
   move: H_send => [g1 [g2 [H_step H_send]]].
   have H_honest := negbT (user_sent_honest_post H_send).
@@ -2505,8 +2502,8 @@ Lemma honest_in_from_during_and_send: forall r p s uid trace,
   forall ix g1 g2,
     step_in_path_at g1 g2 ix trace ->
   forall mt v,
-    user_sent uid (mt,v,r,p,uid) g1 g2 ->
-  step_le (msg_step (mt,v,r,p,uid)) (r,p,s) ->
+    user_sent uid (mkMsg mt v r p uid) g1 g2 ->
+  step_le (msg_step (mkMsg mt v r p uid)) (r,p,s) ->
     honest_in_period r p uid trace.
 Proof.
   move => r p s uid trace H_honest g0 H_path ix g1 g2 H_step mt v H_sent H_msg_step.
