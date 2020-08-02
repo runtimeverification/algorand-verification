@@ -64,7 +64,7 @@ Lemma path_drop T (R:rel T) x p (H:path R x p) n:
   | List.nil => true
   | List.cons x' p' => path R x' p'
   end.
-Proof using.
+Proof.
   by elim: n x p H=> [|n IHn] x [|a l /andP [] H_path];last apply IHn.
 Qed.
 
@@ -73,7 +73,7 @@ Lemma path_drop' T (R:rel T) x p (H:path R x p) n:
   | [::] => true
   | [:: x' & p'] => path R x' p'
   end.
-Proof using.
+Proof.
   elim: n x p H=> [|n IHn] x p H_path //=.
   move/IHn: {IHn}H_path.
   destruct n;simpl.
@@ -85,7 +85,7 @@ Qed.
 (* path still holds after taking n elements *)
 Lemma path_prefix : forall T R p (x:T) n,
     path R x p -> path R x (take n p).
-Proof using.
+Proof.
   induction p;[done|].
   move => /= x n /andP [Hr Hpath].
   destruct n. done.
@@ -103,7 +103,7 @@ Lemma path_steps : forall {T} (R : rel T) x0 p,
       | x1 :: x2 :: _ => ~~ P x1 && P x2
       | _ => false
       end.
-Proof using.
+Proof.
   clear.
   intros T R x0 p H_path P H_x0.
   revert p H_path. induction p using last_ind.
@@ -139,14 +139,14 @@ Qed.
 (* x in mset of seq iff x is in seq *)
 Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
   (x \in seq_mset s) = (x \in s).
-Proof using.
+Proof.
   apply perm_mem, perm_eq_seq_mset.
 Qed.
 
 (* the number of elements in the preimage of f w.r.t. b and multiset m is the same as applying map_mset on f and m and then b *)
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
-Proof using.
+Proof.
   move => b.
   unfold map_mset.
   move: {m}(EnumMset.f m) => l.
@@ -156,7 +156,7 @@ Qed.
 (* element membership w.r.t. preimage is preserved by map_mset on the multiset m *)
 Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:pred B), has b (map_mset f m) = has (preim f b) m.
-Proof using.
+Proof.
   move => b.
   rewrite -has_map.
   by apply eq_has_r, perm_mem, perm_eq_seq_mset.
@@ -165,7 +165,7 @@ Qed.
 (* the support of the multiset is unique when viewed as a sequence *)
 Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
   uniq (finsupp A).
-Proof using.
+Proof.
   by rewrite -(perm_uniq (perm_undup_mset A));apply undup_uniq.
 Qed.
 
@@ -173,7 +173,7 @@ Qed.
 Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
-Proof using.
+Proof.
   move=>H_sub.
   apply uniq_perm.
     by apply finsupp_mset_uniq.
@@ -189,7 +189,7 @@ Qed.
 Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   \sum_(i <- finsupp B) A i = size A.
-Proof using.
+Proof.
   move=>H_sub.
   rewrite (bigID (fun i => i \in A)) /= -big_filter.
   rewrite -(perm_big _ (msubset_finsupp H_sub)) -size_mset big1.
@@ -200,7 +200,7 @@ Qed.
 (* size of unioned multiset is sum of size of components *)
 Lemma mset_add_size (T:choiceType) (A B : {mset T}):
   size (A `+` B) = (size A + size B)%nat.
-Proof using.
+Proof.
   rewrite size_mset (eq_bigr (fun a => A a + B a)%nat);[|by move => ? _;rewrite msetE2].
   rewrite big_split !msubset_size_sum //.
   rewrite -{1}[B]mset0D. apply msetSD, msub0set.
@@ -210,7 +210,7 @@ Qed.
 (* size of msetn n _ is n *)
 Lemma msetn_size (T:choiceType) n (x:T):
   size (msetn n x) = n.
-Proof using.
+Proof.
   rewrite size_mset finsupp_msetn.
   case:n=>[|n] /=.
   exact: big_nil.
@@ -220,7 +220,7 @@ Qed.
 (* subset of a multiset has smaller size *)
 Lemma msubset_size (T:choiceType) (A B : {mset T}):
   (A `<=` B)%mset -> size A <= size B.
-Proof using.
+Proof.
   move=>H_sub.
   by rewrite -(msetBDK H_sub) mset_add_size leq_addl.
 Qed.
@@ -228,7 +228,7 @@ Qed.
 (* msets equal after adding seqs to mset A implies seqs have same elements *)
 Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
   A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
-Proof using.
+Proof.
   move/(f_equal (msetB^~A)); rewrite !msetDKB => H_seq_eq.
   apply/(perm_trans _ (perm_eq_seq_mset l')).
   rewrite perm_sym -H_seq_eq.
@@ -240,7 +240,7 @@ Qed.
 (* ----------------------- *)
 
 Lemma take_rcons T : forall (s : seq T) (x : T), take (size s) (rcons s x) = s.
-Proof using. elim => //=; last by move => a l IH x; rewrite IH. Qed.
+Proof. elim => //=; last by move => a l IH x; rewrite IH. Qed.
 
 Lemma perm_eq_cons1P (T : eqType) (s : seq T) (a : T) : reflect (s = [:: a]) (perm_eq s [:: a]).
 Proof.
@@ -327,7 +327,7 @@ Definition upred' uid (P : pred UState) : pred GState :=
 
 (* ssreflect: step_le is equivalent to step_leb *)
 Lemma step_leP: forall s1 s2, reflect (step_le s1 s2) (step_leb s1 s2).
-Proof using.
+Proof.
   clear.
   move => [[r1 p1] s1] [[r2 p2] s2].
   case H:(step_leb _ _);constructor;[|move/negP in H];
@@ -336,7 +336,7 @@ Qed.
 
 (* ssreflect: step_lt is equivalent to step_ltb *)
 Lemma step_ltP: forall s1 s2, reflect (step_lt s1 s2) (step_ltb s1 s2).
-Proof using.
+Proof.
   clear.
   move => [[r1 p1] s1] [[r2 p2] s2].
   case H:(step_ltb _ _);constructor;[|move/negP in H];
@@ -346,7 +346,7 @@ Qed.
 (* weaken step: less-than implies less-than-or-equal *)
 Lemma step_ltW a b:
   step_lt a b -> step_le a b.
-Proof using.
+Proof.
   clear.
   destruct a as [[? ?] ?],b as [[? ?]?].
   unfold step_lt,step_le;intuition.
@@ -355,7 +355,7 @@ Qed.
 (* transitivitity of step_le *)
 Lemma step_le_trans a b c:
   step_le a b -> step_le b c -> step_le a c.
-Proof using.
+Proof.
   destruct a as [[? ?] ?],b as [[? ?]?],c as [[? ?]?].
   unfold step_le.
   intros H_ab H_bc.
@@ -371,7 +371,7 @@ Qed.
 (* transitivity of step_lt *)
 Lemma step_lt_trans a b c:
   step_lt a b -> step_lt b c -> step_lt a c.
-Proof using.
+Proof.
   destruct a as [[? ?] ?],b as [[? ?]?],c as [[? ?]?].
   unfold step_lt.
   intros H_ab H_bc.
@@ -387,7 +387,7 @@ Qed.
 (* a < b and b <= c -> a < c *)
 Lemma step_lt_le_trans a b c:
   step_lt a b -> step_le b c -> step_lt a c.
-Proof using.
+Proof.
   destruct a as [[? ?] ?],b as [[? ?]?],c as [[? ?]?].
   unfold step_lt, step_le.
   intros H_ab H_bc.
@@ -403,7 +403,7 @@ Qed.
 (* a <= b and b < c -> a < c *)
 Lemma step_le_lt_trans a b c:
   step_le a b -> step_lt b c -> step_lt a c.
-Proof using.
+Proof.
   destruct a as [[? ?] ?],b as [[? ?]?],c as [[? ?]?].
   unfold step_lt, step_le.
   intros H_ab H_bc.
@@ -418,14 +418,14 @@ Qed.
 
 (* step is not less than itself *)
 Lemma step_lt_irrefl r p s: ~step_lt (r,p,s) (r,p,s).
-Proof using.
+Proof.
   clear.
   unfold step_lt;intuition;by rewrite -> ltnn in * |- .
 Qed.
 
 (* step is less than or equal to itself *)
 Lemma step_le_refl step: step_le step step.
-Proof using.
+Proof.
   clear;unfold step_le;intuition.
 Qed.
 
@@ -433,7 +433,7 @@ Qed.
 Lemma ustate_after_iff_step_le u1 u2:
   step_le (step_of_ustate u1) (step_of_ustate u2)
   <-> ustate_after u1 u2.
-Proof using.
+Proof.
   unfold ustate_after;destruct u1, u2;simpl.
   clear;tauto.
 Qed.
@@ -444,7 +444,7 @@ Lemma ustate_after_transitive :
     ustate_after us1 us2 ->
     ustate_after us2 us3 ->
     ustate_after us1 us3.
-Proof using.
+Proof.
 move => us1 us2 us3.
 rewrite -!ustate_after_iff_step_le.
 apply step_le_trans.
@@ -459,7 +459,7 @@ Lemma tick_ok_usersP : forall increment (g : GState),
   reflect
     (forall (uid : UserId) (h : uid \in domf g.(users)), user_can_advance_timer increment g.(users).[h])
     (tick_ok_users increment g).
-Proof using.
+Proof.
 move => increment g.
 exact: allfP.
 Qed.
@@ -467,7 +467,7 @@ Qed.
 (* Domain of users unchanged after tick *)
 Lemma tick_users_domf : forall increment pre,
   domf pre.(users) = domf (tick_users increment pre).
-Proof using.
+Proof.
 move => increment pre.
 by rewrite -updf_domf.
 Qed.
@@ -475,7 +475,7 @@ Qed.
 (* tick_users at uid results in user_advance_timer *)
 Lemma tick_users_upd : forall increment pre uid (h : uid \in domf pre.(users)),
   (tick_users increment pre).[? uid] = Some (user_advance_timer increment pre.(users).[h]).
-Proof using.
+Proof.
 move => increment pre uid h.
 by rewrite updf_update.
 Qed.
@@ -483,7 +483,7 @@ Qed.
 (* tick_users results in None if user not in domain of pre-state *)
 Lemma tick_users_notin : forall increment pre uid (h : uid \notin domf pre.(users)),
   (tick_users increment pre).[? uid] = None.
-Proof using.
+Proof.
   move => increment pre uid h.
   apply not_fnd.
   change (uid \notin domf (tick_users increment pre)); by rewrite -updf_domf.
@@ -507,7 +507,7 @@ Qed.
 (* send_broadcasts definition *)
 Lemma send_broadcastsE now targets prev_msgs msgs:
   send_broadcasts now targets prev_msgs msgs = updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
-Proof using.
+Proof.
   by rewrite unlock.
 Qed.
 
@@ -515,7 +515,7 @@ Qed.
 Lemma send_broadcasts_in : forall (msgpool : MsgPool) now uid msgs targets
                                   (h : uid \in msgpool) (h' : uid \in targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = Some (merge_msgs_deadline now msgs msgpool.[h]).
-Proof using.
+Proof.
   by move => *;rewrite send_broadcastsE updf_update.
 Qed.
 
@@ -523,7 +523,7 @@ Qed.
 Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msgs targets
                                     (h : uid \notin domf msgpool),
   (send_broadcasts now targets msgpool msgs).[? uid] = None.
-Proof using.
+Proof.
   move => *;apply not_fnd.
   change (?k \notin ?f) with (k \notin domf f).
   by rewrite send_broadcastsE -updf_domf.
@@ -534,7 +534,7 @@ Qed.
 Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs targets
                                             (h : uid \in msgpool) (h' : uid \notin targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = msgpool.[? uid].
-Proof using.
+Proof.
   move => msgpool now uid msg targets h h'.
   by rewrite send_broadcastsE updf_update' // in_fnd.
 Qed.
@@ -553,7 +553,7 @@ Lemma broadcasts_prop
   | Some msg_mset => has (fun p : R * Msg => p.2 == msg) msg_mset
   | None => false
   end -> msg \in l.
-Proof using.
+Proof.
   clear.
   move => H_sub H_pre H_post.
   have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
@@ -590,7 +590,7 @@ Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
 
 (* onth results in Some if index is small *)
 Lemma onth_size : forall T (s:seq T) n x, onth s n = Some x -> n < size s.
-Proof using.
+Proof.
   clear.
   move => T s n x H.
   rewrite ltnNge.
@@ -618,7 +618,7 @@ Qed.
 (* onth is Some x implies nth is x *)
 Lemma onth_nth T (s:seq T) ix x:
   onth s ix = Some x -> (forall x0, nth x0 s ix = x).
-Proof using.
+Proof.
   unfold onth.
   unfold ohead.
   move => H_drop x0.
@@ -629,7 +629,7 @@ Qed.
 (* onth is Some x means x is in the seq *)
 Lemma onth_in (T:eqType) (s:seq T) ix x:
   onth s ix = Some x -> x \in s.
-Proof using.
+Proof.
   clear.
   intro H.
   rewrite -(onth_nth H x).
@@ -640,7 +640,7 @@ Qed.
 Lemma onth_take_last T (s:seq T) n x:
   onth s n = some x ->
   forall x0, last x0 (take n.+1 s) = x.
-Proof using.
+Proof.
   clear.
   move => H_x x0.
   have H_size := onth_size H_x.
@@ -657,7 +657,7 @@ Qed.
 
 (* x in s implies onth of (the index of x in s) is x *)
 Lemma onth_index (T : eqType) (x : T) (s : seq T): x \in s -> onth s (index x s) = Some x.
-Proof using.
+Proof.
   move => H_in.
     by rewrite /onth /ohead (drop_nth x);[rewrite nth_index|rewrite index_mem].
 Qed.
@@ -667,7 +667,7 @@ Lemma at_step_onth n (path : seq GState) (P : pred GState):
   at_step n path P ->
   forall g, onth path n = Some g ->
   P g.
-Proof using.
+Proof.
   unfold at_step, onth.
   case Hdrop: (drop n path) => [|a l] //=.
   by move => HP g; case =><-.
@@ -677,7 +677,7 @@ Qed.
 Lemma onth_at_step n (path : seq GState) g:
   onth path n = Some g ->
   forall (P : pred GState), P g -> at_step n path P.
-Proof using.
+Proof.
   unfold at_step, onth.
   case Hdrop: (drop n path) => [|a l] //=.
   by case =><-.
@@ -707,7 +707,7 @@ Lemma transition_from_path
       g1 g2
       (H_step : step_in_path_at g1 g2 ix states):
   g1 ~~> g2.
-Proof using.
+Proof.
   unfold step_in_path_at in H_step.
   destruct states. inversion H_path.
   destruct H_path as [H_g0 H_path]; subst.
@@ -725,7 +725,7 @@ Lemma step_ix_same trace ix g1 g2:
     forall g3 g4,
     step_in_path_at g3 g4 ix trace ->
       g3 = g1 /\ g4 = g2.
-Proof using.
+Proof.
   clear.
   unfold step_in_path_at.
   destruct (drop ix trace) as [|? [|]];(tauto || intuition congruence).
@@ -734,7 +734,7 @@ Qed.
 (* step in path at n from g1 to g2 means g1 is at index n *)
 Lemma step_in_path_onth_pre {g1 g2 n path} (H_step : step_in_path_at g1 g2 n path)
   : onth path n = Some g1.
-Proof using.
+Proof.
   unfold step_in_path_at in H_step.
   unfold onth. destruct (drop n path) as [|? []];destruct H_step.
   rewrite H;reflexivity.
@@ -743,7 +743,7 @@ Qed.
 (* step in path at n from g1 to g2 means g2 is at index n+1 *)
 Lemma step_in_path_onth_post {g1 g2 n path} (H_step : step_in_path_at g1 g2 n path)
   : onth path n.+1 = Some g2.
-Proof using.
+Proof.
   unfold step_in_path_at in H_step.
   unfold onth. rewrite -add1n -drop_drop.
   destruct (drop n path) as [|? []];destruct H_step.
@@ -754,7 +754,7 @@ Qed.
 Lemma step_in_path_prefix (g1 g2 : GState) n k (path : seq GState) :
   step_in_path_at g1 g2 n (take k path)
   -> step_in_path_at g1 g2 n path.
-Proof using.
+Proof.
   revert k path;induction n.
   intros k path;
   destruct path;[done|];destruct k;[done|];
@@ -771,7 +771,7 @@ Qed.
 Lemma step_in_path_take (g1 g2 : GState) n (path : seq GState) :
   step_in_path_at g1 g2 n path
   -> step_in_path_at g1 g2 n (take n.+2 path).
-Proof using.
+Proof.
   revert path; induction n.
   intro path.
   destruct path;[done|];destruct path;done.
@@ -788,7 +788,7 @@ Qed.
 (* Reset_deadline in reset_user_msg_delays if m in msgs *)
 Lemma reset_msg_delays_fwd : forall (msgs : {mset R * Msg}) (m : R * Msg),
     m \in msgs -> forall now, (reset_deadline now m \in reset_user_msg_delays msgs now).
-Proof using.
+Proof.
   move => msgs m Hm now.
   rewrite -has_pred1 /= has_count.
   have Hcnt: (0 < count_mem m msgs) by rewrite -has_count has_pred1.
@@ -803,7 +803,7 @@ Qed.
 Lemma reset_user_msg_delays_rev (now : R) (msgs : {mset R * Msg}) (m: R*Msg):
   m \in reset_user_msg_delays msgs now ->
   exists d0, m = reset_deadline now (d0,m.2) /\ (d0,m.2) \in msgs.
-Proof using.
+Proof.
   move => Hm.
   suff: (has (preim (reset_deadline now) (pred1 m)) msgs).
     move: m Hm => [d msg] Hm.
@@ -817,12 +817,12 @@ Qed.
 (* Domain of msgpool unchanged after reste_msg_delays *)
 Lemma reset_msg_delays_domf : forall (msgpool : MsgPool) now,
    domf msgpool = domf (reset_msg_delays msgpool now).
-Proof using. by move => msgpool pre; rewrite -updf_domf. Qed.
+Proof. by move => msgpool pre; rewrite -updf_domf. Qed.
 
 (* reset_msg_delays at uid results in reset_user_msg_delays *)
 Lemma reset_msg_delays_upd : forall (msgpool : MsgPool) now uid (h : uid \in domf msgpool),
   (reset_msg_delays msgpool now).[? uid] = Some (reset_user_msg_delays msgpool.[h] now).
-Proof using.
+Proof.
 move => msgpool now uid h.
 have Hu := updf_update _ h.
 have Hu' := Hu (domf msgpool) _ h.
@@ -833,7 +833,7 @@ Qed.
 Lemma reset_msg_delays_notin : forall (msgpool : MsgPool) now uid
   (h : uid \notin domf msgpool),
   (reset_msg_delays msgpool now).[? uid] = None.
-Proof using.
+Proof.
   move => msgpool now uid h.
   apply not_fnd.
   change (uid \notin domf (reset_msg_delays msgpool now)).
@@ -861,14 +861,14 @@ Definition user_sent_at ix path uid msg :=
 (* user who sends a message must be in both pre and post states *)
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
   sender \in pre.(users).
-Proof using.
+Proof.
   by case: H => [msgs [H_mem [[d [recv H_step]] | H_step]]];
     case: H_step => [key_ustate [ustate_post H_step]].
 Qed.
 
 Lemma user_sent_in_post {sender m pre post} (H : user_sent sender m pre post):
   sender \in post.(users).
-Proof using.
+Proof.
   destruct H as [msgs [H_mem [[d [recv H_step]] | H_step]]]; simpl in H_step.
   - by destruct H_step as [key_ustate [ustate_post [H_sender [H_corrupt H_step]]]];
       destruct H_step as [key_mailbox [H_recv H_post]];
@@ -886,7 +886,7 @@ Lemma utransition_label_start uid msg g1 g2 :
     user_sent uid msg g1 g2 ->
     forall u, g1.(users).[? uid] = Some u ->
     (step_of_ustate u) = (msg_step msg).
-Proof using.
+Proof.
   unfold user_sent.
   move => [sent [msg_in H_trans]] u H_u.
   destruct msg as [[[[mtype v] r] p] uid_m].
@@ -940,7 +940,7 @@ Lemma utransition_label_end : forall uid msg g1 g2,
     user_sent uid msg g1 g2 ->
     forall u, g2.(users).[? uid] = Some u ->
     step_lt (msg_step msg) (step_of_ustate u).
-Proof using.
+Proof.
   move => uid msg g1 g2.
   unfold user_sent.
   move => [sent [msg_in H_trans]] u H_u.
@@ -1020,7 +1020,7 @@ Definition received_next_vote u voter round period step value path : Prop :=
 (* all global transitions have some label *)
 Lemma transitions_labeled: forall g1 g2,
     g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
-Proof using.
+Proof.
   split.
   + (* forward - find label for transition *)
     destruct 1;simpl.
@@ -1076,7 +1076,7 @@ Lemma deliver_analysis1:
       uid = uid2)
     /\ [mset (r,m)] =( odflt mset0 (g.(msg_in_transit).[?uid])
        `\` odflt mset0 (g2.(msg_in_transit).[?uid]))%mset.
-Proof using.
+Proof.
   clear.
   move=> g uid upost r m l key_mbox H_pending g2.
 
@@ -1213,7 +1213,7 @@ Lemma deliver_deliver_lbl_unique :
     uid' # g.(users).[key_state'] ; m' ~> (upost', l') ->
     delivery_result g uid key_mbox (r, m) upost l = delivery_result g uid' key_mbox' (r', m') upost' l' ->
     uid = uid' /\ r = r' /\ m = m' /\ l = l'.
-Proof using.
+Proof.
   clear.
   move => g uid uid' upost upost' r r' m m' l l' key_state key_mbox key_state' key_mbox'
           H_honest H_pending H_step H_honest' H_pending' H_step' H_results.
@@ -1261,7 +1261,7 @@ Lemma deliver_internal_False :
     uid' # g.(users).[key_state'] ~> (upost', l') ->
     delivery_result g uid key_mbox (r, m) upost l = step_result g uid' upost' l' ->
     False.
-Proof using.
+Proof.
 clear.
 move => g uid uid' upost upost' r m l l' key_state key_mbox key_state'.
 move => H_honest H_msg H_step H_honest' H_step'.
@@ -1409,7 +1409,7 @@ Lemma transition_label_unique : forall lbl lbl2 g1 g2,
       end
     | _ => True
     end.
-Proof using.
+Proof.
   move => lbl lbl2 g1 g2.
   destruct lbl eqn:H_lbl;try done.
   + (* deliver *)
@@ -1490,7 +1490,7 @@ Qed.
 Lemma utransition_msg_sender_good uid u msg result:
   uid # u ; msg ~> result ->
   forall m, m \in result.2 -> uid = msg_sender m.
-Proof using.
+Proof.
   clear.
   by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
 Qed.
@@ -1499,7 +1499,7 @@ Qed.
 Lemma utransition_internal_sender_good uid u result:
   uid # u ~> result ->
   forall m, m \in result.2 -> uid = msg_sender m.
-Proof using.
+Proof.
   clear.
   by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
 Qed.
@@ -1545,7 +1545,7 @@ Definition honest_during_step (step:nat * nat * nat) uid (path : seq GState) :=
 (* internal user transition preserves corrupt flag *)
 Lemma utransition_internal_preserves_corrupt uid pre post sent:
   uid # pre ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
-Proof using.
+Proof.
   set result:=(post,sent). change post with (result.1). clearbody result.
   destruct 1;reflexivity.
 Qed.
@@ -1553,7 +1553,7 @@ Qed.
 (* message transition preserves corrupt flag *)
 Lemma utransition_msg_preserves_corrupt uid msg pre post sent:
   uid # pre ; msg ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
-Proof using.
+Proof.
   set result:=(post,sent). change post with (result.1). clearbody result.
   destruct 1;try reflexivity.
   + unfold deliver_nonvote_msg_result;simpl.
@@ -1629,7 +1629,7 @@ Lemma honest_during_le s1 s2 uid trace:
   step_le s1 s2 ->
   honest_during_step s2 uid trace ->
   honest_during_step s1 uid trace.
-Proof using.
+Proof.
   clear.
   move => H_le.
   unfold honest_during_step.
@@ -1645,7 +1645,7 @@ Lemma honest_backwards_gstep : forall (g1 g2 : GState),
     GTransition g1 g2 ->
     forall uid, user_honest uid g2 ->
                 user_honest uid g1.
-Proof using.
+Proof.
   move => g1 g2 Hstep uid.
   destruct Hstep;unfold user_honest;destruct pre;
     unfold tick_update,tick_users; simpl algorand_model.users in * |- *; try done.
@@ -1672,7 +1672,7 @@ Qed.
 Lemma honest_last_all uid g0 p (H_path : is_trace g0 p):
     user_honest uid (last g0 p) ->
     all (user_honest uid) (g0::p).
-Proof using.
+Proof.
   move => H_honest.
   destruct p. inversion H_path.
   destruct H_path as [H_g0 H_path]; subst.
@@ -1718,7 +1718,7 @@ Qed.
 (* dropping elements from a trace still results in a trace *)
 Lemma is_trace_drop g0 g0' trace trace' (H_trace: is_trace g0 trace) n:
   drop n trace = g0' :: trace' -> is_trace g0' (g0' :: trace').
-Proof using.
+Proof.
   move => H_drop.
   destruct trace. inversion H_trace.
   destruct H_trace as [H_g0 H_trace]; subst.
@@ -1737,7 +1737,7 @@ Lemma path_gsteps_onth
     forall (P : pred GState),
     ~~ P g0 -> P g_p ->
     exists n g1 g2, step_in_path_at g1 g2 n trace /\ ~~ P g1 /\ P g2.
-Proof using.
+Proof.
   destruct trace;[by contradict H_path|].
   move: H_path => [H_g0 H_path];subst g.
   move=> P H_NPg0 H_Pg.
@@ -1770,7 +1770,7 @@ Qed.
 (* global transition preserves domain of users *)
 Lemma gtrans_preserves_users: forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) = domf gs2.(users).
-Proof using.
+Proof.
 move => gs1 gs2.
 elim => //.
 - move => increment pre Htick.
@@ -1785,7 +1785,7 @@ Qed.
 
 Lemma gtrans_domf_users: forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) `<=` domf gs2.(users).
-Proof using.
+Proof.
   move => gs1 gs2 H_trans.
   apply gtrans_preserves_users in H_trans.
   move/eqP in H_trans; rewrite eqEfsubset in H_trans; move/andP in H_trans.
@@ -1799,7 +1799,7 @@ Qed.
 (* A one-step user-level transition never decreases round-period-step *)
 Lemma utr_rps_non_decreasing_msg : forall uid m us1 us2 ms,
   uid # us1 ; m ~> (us2, ms) -> ustate_after us1 us2.
-Proof using.
+Proof.
 move => uid m us1 us2 ms utrH.
 inversion_clear utrH.
 - rewrite /pre'.
@@ -1860,7 +1860,7 @@ Qed.
 (* A one-step user-level transition never decreases round-period-step *)
 Lemma utr_rps_non_decreasing_internal : forall uid us1 us2 ms,
   uid # us1 ~> (us2, ms) -> ustate_after us1 us2.
-Proof using.
+Proof.
 move => uid us1 us2 ms utrH.
 inversion_clear utrH.
 - case: H => tH [vH oH].
@@ -1927,7 +1927,7 @@ Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
   g1 ~~> g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
-Proof using.
+Proof.
 move => g1 g2 uid us1 us2.
 elim => //.
 - move => increment pre Htick.
@@ -1994,7 +1994,7 @@ Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
   greachable g1 g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
   ustate_after us1 us2.
-Proof using.
+Proof.
 move => g1 g2 uid us1 us2.
 case => gtrace Hpath Hlast.
 destruct gtrace. inversion Hpath.
@@ -2029,10 +2029,10 @@ Qed.
 (* softvotes monotone over internal user transition *)
 Lemma softvotes_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
-  forall r p, pre.(softvotes) r p \subset post.(softvotes) r p.
-Proof using.
-  move => uid pre post msgs step r p.
-  remember (post,msgs) as result eqn:H_result;
+  forall r p, {subset pre.(softvotes) r p <= post.(softvotes) r p}.
+Proof.
+move => uid pre post msgs step r p.
+remember (post,msgs) as result eqn:H_result;
   destruct step;case:H_result => [? ?];subst;done.
 Qed.
 
@@ -2040,23 +2040,23 @@ Qed.
 Lemma softvotes_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   forall r p,
-    pre.(softvotes) r p \subset post.(softvotes) r p.
-Proof using.
-  move => uid pre post m msgs step r p;
+    {subset pre.(softvotes) r p <= post.(softvotes) r p}.
+Proof.
+  by move => uid pre post m msgs step r p;
   remember (post,msgs) as result eqn:H_result;
     destruct step;case:H_result => [? ?];subst;
   destruct pre;simpl;autounfold with utransition_unfold;
     repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end;
   try (by apply subxx_hint);
-  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+  move => x H_x; rewrite ?in_cons ?mem_undup H_x ?orbT.
 Qed.
 
 (* softvotes monotone over global transition *)
 Lemma softvotes_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   exists u2, g2.(users).[?uid] = Some u2
-             /\ forall r p, u1.(softvotes) r p \subset u2.(softvotes)  r p.
-Proof using.
+             /\ forall r p, {subset u1.(softvotes) r p <= u2.(softvotes)  r p}.
+Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
   have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
@@ -2065,25 +2065,27 @@ Proof using.
       [move/eqP in H_eq;subst uid0|]);
     try (eexists;split;[eassumption|done]);
     first rewrite updf_update //;
-    (eexists;split;[reflexivity|]).
+    (eexists;split;[eauto|]); try by intuition auto.
   * (* tick *)
+    move => r p v Hv.
     rewrite H_in1' /user_advance_timer.
     by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
   * (* deliver *)
-    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply softvotes_utransition_deliver.
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'.
+    exact: softvotes_utransition_deliver.
   * (* internal *)
-    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply softvotes_utransition_internal.
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'.
+    exact: softvotes_utransition_internal.
   * (* corrupt *)
-    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+    by rewrite ?(eq_getf _ H_in1) /= H_in1' => r p v Hv.
 Qed.
 
 (* softvotes monotone between reachable states *)
 Lemma softvotes_monotone g1 g2 (H_reach:greachable g1 g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   forall u2, g2.(users).[?uid] = Some u2 ->
-  forall r p,
-    u1.(softvotes) r p \subset u2.(softvotes)  r p.
-Proof using.
+  forall r p, {subset u1.(softvotes) r p <= u2.(softvotes) r p}.
+Proof.
   clear -H_reach.
   move => u1 H_u1 u2 H_u2.
   destruct H_reach as [trace H_path H_last].
@@ -2091,13 +2093,14 @@ Proof using.
   destruct H_path as [H_g0 H_path]. subst g.
   move: g1 H_path H_last u1 H_u1.
   induction trace.
-  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
-  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => -> r p v Hv.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p v Hv.
     specialize (IHtrace a H_path H_last).
     have [umid [H_umid H_sub]] := softvotes_gtransition H_step H_u1.
     specialize (H_sub r p).
     specialize (IHtrace umid H_umid r p).
-    refine (subset_trans H_sub IHtrace).
+    apply IHtrace.
+    exact: H_sub.
 Qed.
 
 (* weight of softvotes monotone between reachable states *)
@@ -2106,12 +2109,13 @@ Lemma soft_weight_monotone g1 g2 (H_reach:greachable g1 g2) uid:
   forall u2, g2.(users).[?uid] = Some u2 ->
   forall v r p,
     soft_weight v u1 r p <= soft_weight v u2 r p.
-Proof using.
+Proof.
   move => u1 H_u1 u2 H_u2 v r p.
-  have H_mono := softvotes_monotone H_reach H_u1 H_u2 r p.
+  have H_mono := softvotes_monotone H_reach H_u1 H_u2.
   apply fsubset_leq_card.
   unfold softvoters_for.
-  move: (u1.(softvotes)) (u2.(softvotes)) H_mono;clear => s1 s2 /subsetP H_mono.
+  move: (u1.(softvotes)) (u2.(softvotes)) H_mono.
+  clear => s1 s2 H_mono.
   apply subset_imfset.
   simpl.
   move => x /andP [H_x_s1 H_val].
@@ -2121,8 +2125,8 @@ Qed.
 (* blocks monotone over internal user transition *)
 Lemma blocks_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
-  forall r, pre.(blocks) r \subset post.(blocks) r.
-Proof using.
+  forall r, {subset pre.(blocks) r <= post.(blocks) r}.
+Proof.
   move => uid pre post msgs step r.
   remember (post,msgs) as result eqn:H_result;
   destruct step;case:H_result => [? ?];subst;done.
@@ -2131,9 +2135,8 @@ Qed.
 (* blocks monotone over user message transition *)
 Lemma blocks_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
-  forall r,
-    pre.(blocks) r \subset post.(blocks) r.
-Proof using.
+  forall r, {subset pre.(blocks) r <= post.(blocks) r}.
+Proof.
   move => uid pre post m msgs step r;
   remember (post,msgs) as result eqn:H_result;
     destruct step;case:H_result => [? ?];subst;
@@ -2141,15 +2144,15 @@ Proof using.
     repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b
            | _ => progress simpl end;
   try (by apply subxx_hint);
-  by apply/subsetP => x H_x;rewrite ?in_cons mem_undup H_x ?orbT.
+  by move => x H_x;rewrite ?in_cons ?mem_undup H_x ?orbT.
 Qed.
 
 (* blocks monotone over global transition *)
 Lemma blocks_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   exists u2, g2.(users).[?uid] = Some u2
-             /\ forall r, u1.(blocks) r \subset u2.(blocks) r.
-Proof using.
+             /\ forall r, {subset u1.(blocks) r <= u2.(blocks) r}.
+Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
   have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
@@ -2158,24 +2161,27 @@ Proof using.
       [move/eqP in H_eq;subst uid0|]);
     try (eexists;split;[eassumption|done]);
     first rewrite updf_update //;
-    (eexists;split;[reflexivity|]).
+    (eexists;split;[eauto|]); try by intuition auto.
   * (* tick *)
+    move => r p Hp.
     rewrite H_in1' /user_advance_timer.
     by match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
   * (* deliver *)
-    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_deliver.
+    move:H1. rewrite ?(eq_getf _ H_in1) H_in1'.
+    exact: blocks_utransition_deliver.
   * (* internal *)
-    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'. apply blocks_utransition_internal.
+    move:H0. rewrite ?(eq_getf _ H_in1) H_in1'.
+    exact: blocks_utransition_internal.
   * (* corrupt *)
-    rewrite ?(eq_getf _ H_in1) H_in1'. done.
+    by rewrite ?(eq_getf _ H_in1) H_in1' => r p Hp.
 Qed.
 
 (* blocks monotone between reachable states *)
 Lemma blocks_monotone g1 g2 (H_reach: greachable g1 g2) uid:
   forall u1, g1.(users).[? uid] = Some u1 ->
   forall u2, g2.(users).[? uid] = Some u2 ->
-  forall r, u1.(blocks) r \subset u2.(blocks) r.
-Proof using.
+  forall r, {subset u1.(blocks) r <= u2.(blocks) r}.
+Proof.
   clear -H_reach.
   move => u1 H_u1 u2 H_u2.
   destruct H_reach as [trace H_path H_last].
@@ -2183,13 +2189,14 @@ Proof using.
   destruct H_path as [H_g0 H_path]. subst g.
   move: g1 H_path H_last u1 H_u1.
   induction trace.
-  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => ->.
-  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r.
+  * simpl. by move => g1 _ <- u1;rewrite H_u2{H_u2};case => -> r p Hp.
+  * cbn [path last] => g1 /andP [/asboolP H_step H_path] H_last u1 H_u1 r p Hp.
     specialize (IHtrace a H_path H_last).
     have [umid [H_umid H_sub]] := blocks_gtransition H_step H_u1.
     specialize (H_sub r).
     specialize (IHtrace umid H_umid r).
-    refine (subset_trans H_sub IHtrace).
+    apply IHtrace.
+    exact: H_sub.
 Qed.
 
 (* starting value preserved over internal user transition *)
@@ -2198,7 +2205,7 @@ Lemma stv_utransition_internal:
   pre.(round) = post.(round) ->
   pre.(period) = post.(period) ->
   forall p, pre.(stv) p = post.(stv) p.
-Proof using.
+Proof.
   move => uid pre post msgs step.
   remember (post,msgs) as result eqn:H_result;
   destruct step;case:H_result => [? ?];subst;done.
@@ -2210,7 +2217,7 @@ Lemma stv_utransition_deliver:
   pre.(round) = post.(round) ->
   pre.(period) = post.(period) ->
   forall p, pre.(stv) p = post.(stv) p.
-Proof using.
+Proof.
   move => uid pre post m msgs step H_round H_period.
   remember (post,msgs) as result eqn:H_result;
   destruct step;case:H_result => [? ?];subst;
@@ -2242,7 +2249,7 @@ Lemma stv_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   /\  (u1.(round)  = u2.(round)  ->
        u1.(period) = u2.(period) ->
        forall p, u1.(stv) p = u2.(stv) p).
-Proof using.
+Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
   have H_in1': g1.(users)[`H_in1] = u1 by rewrite in_fnd in H_u1;case:H_u1.
@@ -2272,7 +2279,7 @@ Lemma stv_forward
   u1.(round) = u2.(round) ->
   u1.(period) = u2.(period) ->
   forall p, u1.(stv) p = u2.(stv) p.
-Proof using.
+Proof.
   clear -H_reach.
   move => H_u1 H_u2 H_r H_p.
   destruct H_reach as [trace H_path H_last].
@@ -2322,7 +2329,7 @@ Lemma at_greachable
       g1 (H_g1 : onth states ix1 = Some g1)
       g2 (H_g2 : onth states ix2 = Some g2):
   greachable g1 g2.
-Proof using.
+Proof.
   clear -H_path H_le H_g1 H_g2.
   assert (ix2 < size states) by
   (rewrite -subn_gt0 -size_drop;
@@ -2357,7 +2364,7 @@ Lemma steps_greachable
       pre post (H_step : step_in_path_at pre post ix path)
       pre2 post2 (H_step2 : step_in_path_at pre2 post2 ix2 path):
   greachable post pre2.
-Proof using.
+Proof.
   apply step_in_path_onth_post in H_step.
   apply step_in_path_onth_pre in H_step2.
   eapply at_greachable;eassumption.
@@ -2374,7 +2381,7 @@ Lemma order_ix_from_steps g0 trace (H_path: is_trace g0 trace):
   forall uid (key1: uid \in g1.(users)) (key2: uid \in g2.(users)),
     step_lt (step_of_ustate (g1.(users)[`key1])) (step_of_ustate (g2.(users)[`key2])) ->
     ix1 < ix2.
-Proof using.
+Proof.
   move => ix1 g1 H_g1 ix2 g2 H_g2 uid key1 key2 H_step_lt.
   rewrite ltnNge. apply /negP => H_ix_le.
 
@@ -2424,7 +2431,7 @@ Lemma user_honest_from_during g0 trace (H_path: is_trace g0 trace):
   forall uid (H_in : uid \in g1.(users)),
     honest_during_step (step_of_ustate (g1.(users)[`H_in])) uid trace ->
   user_honest uid g1.
-Proof using.
+Proof.
   move => ix g1 H_onth uid H_in /all_nthP.
   move/(_ g1 ix (onth_size H_onth)).
   rewrite (onth_nth H_onth g1) /user_honest /upred' (in_fnd H_in).
@@ -2442,7 +2449,7 @@ Lemma honest_during_from_ustate trace g0 (H_path : is_trace g0 trace):
   forall r p s,
     step_lt (r,p,s) (step_of_ustate u) ->
     honest_during_step (r,p,s) uid trace.
-Proof using.
+Proof.
   move => ix g H_g uid u H_u H_honest r p s H_lt.
   have H_g_honest: user_honest uid g by rewrite /user_honest H_u.
   apply/allP => x H_in_x.
@@ -2469,7 +2476,7 @@ Lemma honest_at_from_during r p s uid trace:
       forall u, g.(users).[? uid] = Some u ->
       step_le (step_of_ustate u) (r,p,s) ->
       user_honest_at n trace uid.
-Proof using.
+Proof.
   clear.
   move => H_honest g0 H_path n g H_onth u H_u H_le.
   apply (onth_at_step H_onth).
@@ -2483,7 +2490,7 @@ Lemma honest_during_from_sent
   g0 trace (H_path: is_trace g0 trace)
   ix uid mty mval r p (H_send: user_sent_at ix trace uid (mty,mval,r,p,uid)):
     honest_during_step (msg_step (mty,mval,r,p,uid)) uid trace.
-Proof using.
+Proof.
   move: H_send => [g1 [g2 [H_step H_send]]].
   have H_honest := negbT (user_sent_honest_post H_send).
   have H_in := in_fnd (user_sent_in_post H_send).
@@ -2501,7 +2508,7 @@ Lemma honest_in_from_during_and_send: forall r p s uid trace,
     user_sent uid (mt,v,r,p,uid) g1 g2 ->
   step_le (msg_step (mt,v,r,p,uid)) (r,p,s) ->
     honest_in_period r p uid trace.
-Proof using.
+Proof.
   move => r p s uid trace H_honest g0 H_path ix g1 g2 H_step mt v H_sent H_msg_step.
   have H_g1 := step_in_path_onth_pre H_step.
   exists ix. rewrite H_g1.

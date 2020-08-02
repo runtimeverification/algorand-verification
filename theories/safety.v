@@ -73,7 +73,7 @@ Lemma replay_had_original
   forall (msg:Msg), msg \in g.(msg_history) ->
     r <= msg_round msg ->
     exists send_ix, user_sent_at send_ix trace (msg_sender msg) msg.
-Proof using.
+Proof.
   clear -H_path H_start.
   move => g ix H_g msg H_msg H_r.
   pose proof (path_gsteps_onth H_path H_g (P:=fun g => msg \in g.(msg_history))).
@@ -137,7 +137,7 @@ Lemma pending_sent_or_forged
     exists send_ix g1 g2, step_in_path_at g1 g2 send_ix trace
       /\ (user_sent sender pending_msg g1 g2
           \/ user_forged pending_msg g1 g2).
-Proof using.
+Proof.
   clear -H_path H_start.
   intros g_pending pending_ix H_g uid key_msg d msg H_msg sender H_round.
   subst sender.
@@ -251,7 +251,7 @@ Lemma pending_honest_sent: forall g0 trace (H_path: is_trace g0 trace),
     honest_during_step (msg_step pending_msg) sender trace ->
     r <= msg_round pending_msg ->
     exists send_ix, user_sent_at send_ix trace sender pending_msg.
-Proof using.
+Proof.
   clear.
   move => g0 trace H_path r H_start g ix H_g
              uid key_msg d msg H_msg sender H_honest H_round.
@@ -280,7 +280,7 @@ Lemma received_was_sent g0 trace (H_path: is_trace g0 trace)
     r0 <= r ->
     honest_during_step (msg_step msg) (sender:UserId) trace ->
     exists ix, user_sent_at ix trace sender msg.
-Proof using.
+Proof.
   clear -H_path H_start H_recv.
   move: H_recv => [ix_r [ms H_deliver]].
   rewrite {1}[msg]surjective_pairing
@@ -314,7 +314,7 @@ Lemma vote_value_unique uid r p g1 g2 v:
   user_sent uid (Certvote,val v,r,p,uid) g1 g2 ->
   user_honest uid g1 ->
   forall v2, user_sent uid (Certvote,val v2,r,p,uid) g1 g2 -> v2 = v.
-Proof using.
+Proof.
   move => H_sent H_honest v2 H_sent2.
   unfold user_sent in H_sent, H_sent2.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
@@ -339,7 +339,7 @@ Lemma softvote_value_unique uid r p g1 g2 v:
   user_honest uid g1 ->
   forall v2, user_sent uid (Softvote,val v2,r,p,uid) g1 g2 ->
   v2 = v.
-Proof using.
+Proof.
   move => H_sent H_honest v2 H_sent2.
   unfold user_sent in H_sent, H_sent2.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
@@ -368,7 +368,7 @@ Lemma softvote_precondition g1 g2 uid v r p
   u (H_u: g1.(users).[?uid] = Some u):
   softvote_new_ok u uid v r p
    \/ softvote_repr_ok u uid v r p.
-Proof using.
+Proof.
   clear -H_sent H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]];
     simpl in H_step;
@@ -435,7 +435,7 @@ Lemma certvote_postcondition uid v r p g1 g2:
   v \in certvals u r p /\
         (exists b, b \in u.(blocks) r /\ valid_block_and_hash b v)
   /\ valid_rps u r p 4.
-Proof using.
+Proof.
   move => H_sent u H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
   (* need to grab u *)
@@ -476,7 +476,7 @@ Lemma nextvote_open_precondition g1 g2 uid r p s:
   user_sent uid (Nextvote_Open, step_val s, r, p, uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
   nextvote_open_ok u uid r p s.
-Proof using.
+Proof.
   move => H_sent u H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
   * { (* message delivery cases *)
@@ -546,7 +546,7 @@ Lemma no_two_certvotes_in_p : forall g0 trace (H_path : is_trace g0 trace) uid r
     forall ix2 v2, certvoted_in_path_at ix2 trace uid r p v2 ->
                    user_honest_at ix2 trace uid ->
                    ix1 = ix2 /\ v1 = v2.
-Proof using.
+Proof.
   move => g0 trace H_path uid r p.
   move => ix1 v1 H_send1 H_honest1.
   move => ix2 v2 H_send2 H_honest2.
@@ -577,7 +577,7 @@ Lemma no_two_softvotes_in_p : forall g0 trace (H_path : is_trace g0 trace) uid r
     forall ix1 v1, softvoted_in_path_at ix1 trace uid r p v1 ->
     forall ix2 v2, softvoted_in_path_at ix2 trace uid r p v2 ->
                    ix1 = ix2 /\ v1 = v2.
-Proof using.
+Proof.
   clear.
   move => g0 trace H_path uid r p.
   move => ix1 v1 H_send1 ix2 v2 H_send2.
@@ -623,7 +623,7 @@ Lemma received_softvote
     (voter, v) \in u.(softvotes) r p ->
     r0 <= r ->
     exists d, msg_received uid d (Softvote, val v, r, p, voter) trace.
-Proof using.
+Proof.
   clear -H_path H_start H_last.
   move => uid u H_u voter v r p H_softvotes H_r.
 
@@ -828,7 +828,7 @@ Lemma received_nextvote_open
     voter \in u.(nextvotes_open) r p s ->
     r0 <= r ->
     exists d, msg_received uid d (Nextvote_Open, step_val s, r, p, voter) trace.
-Proof using.
+Proof.
   clear -H_path H_start.
   move => ix g H_g uid u H_u voter r p s H_voter H_r.
   set P := upred uid (fun u => voter \in u.(nextvotes_open) r p s).
@@ -952,7 +952,7 @@ Lemma received_nextvote_val
     (voter, v) \in u.(nextvotes_val) r p s ->
     r0 <= r ->
     exists d, msg_received uid d (Nextvote_Val, next_val v s, r, p, voter) trace.
-Proof using.
+Proof.
   clear -H_path H_start.
   move => ix g H_g uid u H_u voter v r p s H_voter H_r.
   set P := upred uid (fun u => (voter,v) \in u.(nextvotes_val) r p s).
@@ -1097,7 +1097,7 @@ Lemma softvotes_sent
       (voter,v) \in u.(softvotes) r p ->
       honest_during_step (r,p,2) voter trace ->
       softvoted_in_path trace voter r p v.
-Proof using.
+Proof.
   clear -H_path H_start.
   move => ix g H_onth uid u H_u r H_r voter v p H_voter H_honest.
   generalize dependent g. generalize dependent ix. generalize dependent voter.
@@ -1169,7 +1169,7 @@ Qed.
 Lemma user_sent_credential uid msg g1 g2:
   user_sent uid msg g1 g2 ->
   let:(r,p,s) := msg_step msg in uid \in committee r p s.
-Proof using.
+Proof.
   move => [ms [H_in [[d [pending H_rel]]|H_rel]]];move: H_in;
            simpl in H_rel;
   [case: H_rel => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]] |
@@ -1196,7 +1196,7 @@ Qed.
 Lemma user_forged_credential msg g1 g2:
   user_forged msg g1 g2 ->
   let:(r,p,s) := msg_step msg in msg_sender msg \in committee r p s.
-Proof using.
+Proof.
   move: msg => [[[[mty v] r] p] sender] H_forged.
   simpl in H_forged;decompose record H_forged;clear H_forged;subst g2.
   move: (g1.(users)[`x]) H1 H0 => u. clear.
@@ -1366,7 +1366,7 @@ Lemma post_enter_reaches_sent
       (H_r_msg: msg_round msg = r)
       (H_p_msg: msg_period msg = p):
   greachable ge2 gs1.
- Proof using.
+ Proof.
   move: H_enter => [H_step_enter [ukey_ge1 [ukey_ge2 [H_adv [H_ge1_step_lt H_ge2_step_eq]]]]].
   set ukey_gs1 := user_sent_in_pre H_send.
 
@@ -1401,7 +1401,7 @@ Lemma period_advance_only_by_next_votes
         /\ (exists u, g2.(users).[?uid] = Some u /\ u.(stv) p = v)
         /\ forall voter, voter \in next_voters ->
            received_next_vote uid voter r p.-1 s v trace.
-Proof using.
+Proof.
   clear -H_path H_start.
   intros n uid r p H_r g1 g2 H_adv.
   destruct H_adv as [H_step [H_g1 [H_g2 [H_round [H_lt H_rps]]]]].
@@ -1695,7 +1695,7 @@ Lemma honest_in_period_entered
   forall p, 1 < p ->
   forall uid, honest_in_period r p uid trace ->
   exists n g1 g2, period_advance_at n trace uid r p g1 g2.
-Proof using.
+Proof.
   clear -H_path H_start.
   move => p H_p_gt uid [ix H_in_period].
   move: H_in_period.
@@ -1939,7 +1939,7 @@ Lemma no_bottom_quorums_during_from_nextvoted_excl
   (H_r: u.(round) = r)
   (H_p: u.(period) = p.+1):
   forall s : nat, ~ nextvote_bottom_quorum u r p s.
- Proof using.
+ Proof.
    unfold nextvote_bottom_quorum => s H_bot_quorum.
    move:H_excl => [_ /(_ s (nextvoters_open_for u r p s)) H_no_bot_votes].
    specialize (H_no_bot_votes (nextvote_open_credentials_checked H_path H_start H_g H_u (leqnn _) p s)).
@@ -1964,7 +1964,7 @@ Lemma stv_at_entry_from_excl
       ix uid g1 g2 (H_adv: period_advance_at ix trace uid r p.+1 g1 g2)
       u (H_u: g2.(users).[?uid] = Some u):
       u.(stv) p.+1 = Some v.
-Proof using.
+Proof.
   clear -H_path H_start H_excl H_adv H_u.
   move: (period_advance_only_by_next_votes H_path H_start (leqnn r) H_adv).
   move => [nv_step [v0 [voters [H_creds [H_size [H_stv H_voters_voted]]]]]].
@@ -2000,7 +2000,7 @@ Lemma stv_at_send_from_excl
       (H_p_msg: msg_period msg = p)
       u (H_u: g1.(users).[?uid] = Some u)
       : u.(stv) p = Some v.
-Proof using.
+Proof.
   have H_sent_at: user_sent_at ix trace uid msg by exists g1, g2;split;assumption.
   have H_honest_in := user_honest_in_from_send H_sent_at.
     rewrite H_r_msg H_p_msg in H_honest_in.
@@ -2226,7 +2226,7 @@ Lemma certinfo_forward
   (H_u_step: step_le (r,p,4) (msg_step msg)):
   v \in certvals u r p
   /\ exists b, b \in blocks u r /\ valid_block_and_hash b v.
-Proof using.
+Proof.
   move: H_saw => /(@hasP _ _ trace)=> -[g_mid H_g_mid].
   case:fndP => // key_mid.
   set u_mid: UState := g_mid.(users)[`key_mid].
@@ -2251,7 +2251,7 @@ Proof using.
     }
     exact (at_greachable H_path H (onth_index H_g_mid) (step_in_path_onth_pre H_step)).
   }
-  have H_softvotes_advance := softvotes_monotone H_reach (in_fnd key_mid) (in_fnd key1) r p.
+  have H_softvotes_advance := softvotes_monotone H_reach (in_fnd key_mid) (in_fnd key1).
 
   assert (v \in certvals u r p).
   {
@@ -2265,23 +2265,20 @@ Proof using.
       apply subset_imfset.
       move => x /andP [x_mem x_prop].
       apply/andP;split;[|exact x_prop].
-      move: H_softvotes_advance x_mem => /subsetP/(_ x).
-        by apply.
+      by apply (H_softvotes_advance r p).
     *
       move: H_votes_mid.
       rewrite !mem_undup.
       move/mapP => -[x H_x_in H_x2].
       apply/mapP;exists x;[|assumption].
-      move: H_softvotes_advance H_x_in => /subsetP.
-        by apply.
+      by apply (H_softvotes_advance r p).
   }
 
   move: H_blocks_mid => /hasP [b' H_b' /asboolP H_b'_valid].
   assert (b' \in u.(blocks) r).
   {
     move: {H_b'_valid}b' H_b'.
-    apply/subsetP.
-    exact (blocks_monotone H_reach (in_fnd key_mid) (in_fnd key1) r).
+    exact: (blocks_monotone H_reach (in_fnd key_mid) (in_fnd key1)).
   }
 
   by split;[|exists b';split].

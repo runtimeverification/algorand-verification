@@ -32,8 +32,8 @@ Open Scope fset_scope.
 (* We assume a finite set of users *)
 Parameter UserId : finType.
 
-(* And a finite set of values (blocks and block hashes) *)
-Parameter Value : finType.
+(* And a countable set of values (blocks and block hashes) *)
+Parameter Value : choiceType.
 
 (* ------------ *)
 (* Message Type *)
@@ -137,7 +137,6 @@ Proof using. case;reflexivity. Qed.
 (* Register canonical structures on ExValue; needed for using ExValue in fset, mset, etc. *)
 Canonical exValue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
 Canonical exValue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
-Canonical exValue_countType  := CountType  ExValue (PcanCountMixin  cancelExVal).
 
 (* -------- *)
 (* Messages *)
@@ -811,7 +810,7 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   exists b,
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
-  #|[seq x <- pre.(certvotes) r p | matchValue x v]| >= tau_c .
+  size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c.
 
 (* State update *)
 Definition certify_result r (pre : UState) : UState :=
