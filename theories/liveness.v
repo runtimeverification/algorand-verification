@@ -71,7 +71,7 @@ Definition sensible_gstate (gs : GState) : Prop :=
 
 Lemma step_later_deadlines : forall s,
     s > 3 -> next_deadline s = (lambda + big_lambda + (INR s - 3) * L)%R.
-Proof using.
+Proof.
   intros s H_s; clear -H_s.
   unfold next_deadline.
   do 3 (destruct s;[exfalso;apply not_false_is_true;assumption|]).
@@ -99,7 +99,7 @@ Proof.
   try by intuition lra.
   (* deliver nonvote msg needs some custom steps *)
   clear H_output.
-  destruct msg as [[[[mtype ex_val] ?] ?] ?];
+  destruct msg as [mtype ex_val ? ? ?];
     destruct ex_val;simpl;[destruct mtype;simpl|..];intuition lra.
 Qed.
 
@@ -156,7 +156,7 @@ Admitted.
 Lemma gtr_preserves_sensibility : forall gs gs',
   sensible_gstate gs -> GTransition gs gs' ->
   sensible_gstate gs'.
-Proof using.
+Proof.
   let use_hyp H := (unfold valid_rps in H;simpl in H; decompose record H) in
   intros gs gs' H_sensible Hstep;
   destruct Hstep.
@@ -211,7 +211,7 @@ Admitted.
 (* Generalization of preservation of sensibility to paths *)
 Lemma greachable_preserves_sensibility : forall g0 g,
   greachable g0 g -> sensible_gstate g0 -> sensible_gstate g.
-Proof using.
+Proof.
   move => g0 g [p Hp] Hg.
   destruct p. inversion Hp.
   unfold is_trace in Hp.
@@ -272,9 +272,9 @@ Qed.
    given path *)
 Definition proposed_in_path_at ix path uid r p v b : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path /\
-    (user_sent uid (Proposal, val v, r, p, uid) g1 g2 /\
-     user_sent uid (Block, val b, r, p, uid) g1 g2 \/
-     user_sent uid (Reproposal, repr_val v uid p, r, p, uid) g1 g2).
+    (user_sent uid (mkMsg Proposal (val v) r p uid) g1 g2 /\
+     user_sent uid (mkMsg Block (val b) r p uid) g1 g2 \/
+     user_sent uid (mkMsg Reproposal (repr_val v uid p) r p uid) g1 g2).
 
 (* A block proposer (potential leader) for a given round/period along a path*)
 Definition block_proposer_in_path_at ix path uid r p v b : Prop :=
@@ -344,23 +344,42 @@ Admitted.
 
 (* Whether the effect of a message is recored in the user state *)
 Definition message_recorded ustate msg : Prop :=
-  match msg with
-  | (Block, val b, r,_,_) =>
-       b \in ustate.(blocks) r
-  | (Proposal, val v, r, p, uid) =>
-       exists c, (uid, c, v, true) \in ustate.(proposals) r p
-  | (Reproposal, repr_val v uid' p', r, p, uid) =>
-       exists c, (uid, c, v, false) \in ustate.(proposals) r p
-  | (Softvote, val v, r, p, uid) =>
-       (uid, v) \in ustate.(softvotes) r p
-  | (Certvote, val v, r, p, uid) =>
-       (uid, v) \in ustate.(certvotes) r p
-  | (Nextvote_Open, step_val s, r, p, uid) =>
-       uid \in ustate.(nextvotes_open) r p s
-  | (Nextvote_Val, next_val v s, r, p, uid) =>
-       (uid, v) \in ustate.(nextvotes_val) r p s
-  | _ => True
-  end.
+match msg_type msg, msg_ev msg with
+| Block, val b =>
+  let: r := msg_round msg in
+  b \in ustate.(blocks) r
+| Proposal, val v =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  exists c, (uid, c, v, true) \in ustate.(proposals) r p
+| Reproposal, repr_val v uid' p' =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  exists c, (uid, c, v, false) \in ustate.(proposals) r p
+| Softvote, val v =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  (uid, v) \in ustate.(softvotes) r p
+| Certvote, val v =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  (uid, v) \in ustate.(certvotes) r p
+| Nextvote_Open, step_val s =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  uid \in ustate.(nextvotes_open) r p s
+| Nextvote_Val, next_val v s =>
+  let: uid := msg_sender msg in
+  let: r := msg_round msg in
+  let: p := msg_period msg in
+  (uid, v) \in ustate.(nextvotes_val) r p s
+| _, _ => True
+end.
 
 (* The effect of the message is recorded in the state of the target user on or
    before the message's deadline *)
@@ -382,6 +401,7 @@ Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
     exists ix g, ohead (drop ix (g1 :: trace)) = Some g
       /\ (forall target, target \in honest_users g.(users) ->
             msg_timely_delivered msg deadline g target).
+Proof.
 Admitted.
 
 
@@ -404,7 +424,7 @@ destruct prop_sent_H as [g'' [prop_step_H prop_sent_H]]. destruct prop_step_H. s
                       - the user who is receiving the message *)
 destruct prop_sent_H as [propsent_H | repropsent_H].
   destruct propsent_H as [propsent_H blocksent_H].
-  pose proof (@sent_msg_timely_received sender (Proposal, val v, r, 1, sender) g' g'' trace). simpl in * |- *.
+  pose proof (@sent_msg_timely_received sender (mkMsg Proposal (val v) r 1 sender) g' g'' trace). simpl in * |- *.
 Admitted.
 
 
@@ -417,6 +437,7 @@ Lemma prop_c : forall ix path uid r p v b,
   leader_in_path_at ix path uid r 1 v b ->
   user_honest_at ix path uid ->
   certified_in_period path r p v.
+Proof.
 Admitted.
 
 (* softvote quorum of all honest users implies certvote quorum *)
@@ -437,6 +458,7 @@ Lemma stv_not_bot_softvote : forall ix path r p v uid,
   uid \in domf (honest_users (users_at ix path)) ->
   user_stv_val_at ix path uid p (Some v) ->
   softvoted_in_path_at ix path uid r p v.
+Proof.
 Abort.
 
 (* If some period r.p with p >= 2 is reached, and all honest users have starting
@@ -469,5 +491,6 @@ Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     user_honest uid g1 ->
     user_stv_val uid g1 p None ->
     (exists v, certvoted_in_path path_seq uid r p v
-               \/ period_advance_at 1 path_seq uid r p g1 g2) .
+               \/ period_advance_at 1 path_seq uid r p g1 g2).
+Proof.
 Admitted.
