@@ -27,6 +27,9 @@ Open Scope fset_scope.
 
 (** * Algorand parameters, data, and transition system *)
 
+(** This module contains the definitions that comprise the Algorand consensus
+protocol model. *)
+
 (** ** Basic parameters *)
 
 (** We assume a finite set of users. *)
@@ -329,7 +332,7 @@ Definition flip_partition_flag (g : GState) : GState :=
 
 (** ** Global parameters and axioms of the system *)
 
-(** Small - non-block - message delivery delay. *)
+(** Small (non-block) message delivery delay. *)
 Parameter lambda : R.
 
 (** Block message delivery delay. *)
@@ -547,7 +550,6 @@ Definition next_deadline k : R :=
 (** ** Step 1: Proposing predicates and user state updates *)
 
 (** The proposal step preconditions. Note that this covers both:
-
 - the case when [p = 1], and
 - the case when [p > 1] with the previous period voting for bottom.
 
@@ -587,13 +589,11 @@ Definition propose_result (pre : UState) : UState :=
 
 (** ** Step 2: Softvoting predicates and user state updates *)
 
-(** The Softvoting-a-proposal step preconditions. This covers both: 
-
+(** The Softvoting-a-proposal step preconditions. This covers both:
 - the case when [p = 1], and
 - the case when [p > 1] with the previous period voting for bottom.
 
 Note that:
-
 - the automaton model has the constraint clock [>= 2*lambda], and
 - the phrase "[v] is a period 1 block" in the Algorand2 description
   is interpreted here as "[v] is a reproposal", for simplicity. *)
@@ -619,7 +619,6 @@ Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
 
 (** The no-softvoting step preconditions. Three reasons a user may
 not be able to soft-vote:
-
 - not being in the soft-voting committee, or
 - not being able to identify a potential leader value to soft-vote for
 - not seeing enough next-votes for a value reproposed when the previous period
@@ -683,7 +682,6 @@ Definition certvote_result (pre : UState) : UState :=
 (** ** Steps >= 4: Nextvoting predicates and user state updates *)
 
 (** Nextvoting step preconditions, the proper-value case. Note:
-
 - corresponds (roughly) to transition nextvote_val in the automaton
   model (but not the same), and
 - corresponds more closely to the Algorand2 description (but with the
@@ -699,7 +697,6 @@ Definition nextvote_val_ok (pre : UState) uid (v b : Value) r p s : Prop :=
   v \in certvals pre r p.
 
 (** Nextvoting step preconditions, the bottom-value case. Note:
-
 - corresponds (roughly) to transition nextvote_open in the automaton
   model (but not the same), and
 - corresponds more closely to the Algorand2 description (but with the
@@ -716,7 +713,6 @@ Definition nextvote_open_ok (pre : UState) uid r p s : Prop :=
 
 (** Nextvoting step preconditions, the additional special case of using
 the starting value. Note:
-
 - this might not be captured in the automaton model, and
 - corresponds more closely to the Algorand2 description (but with
   additional constraints given explicitly).
@@ -764,12 +760,11 @@ Definition adv_period_val_result (pre : UState) v : UState :=
   (advance_period pre) <| stv := fun p => if p == pre.(period).+1 then Some v else (pre.(stv) p) |>.
 
 (** Advancing round predicates and user state updates. Note:
-
 - corresponds to transition certify in the automaton model, and
 - the requirement [valid_rps] has been removed since certification
   may happen at any time.
 
-TODO: must have some assertion about message age. *)
+TODO: need to have some assertion about message age. *)
 Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   advancing_rp pre r p /\
   exists b,
@@ -808,7 +803,6 @@ Definition u_transition_internal_type := UserId -> UState -> (UState * seq Msg) 
 Reserved Notation "x # z ~> y" (at level 70).
 
 (** Internal actions are supposed to take place either:
-
 - at a specific time instance (i.e. never triggered by a recevied message), or
 - during a time duration, but the preconditions are already satisfied that
   the action fires eagerly at the beginning of that time duration (again,
@@ -951,6 +945,7 @@ and allowing it would complicated proofs. *)
     forall uid (pre : UState) msg c r p,
       ~ vote_msg msg ->
       uid # pre ; msg ~> (deliver_nonvote_msg_result pre msg c r p, [::])
+
 where "a # b ; c ~> d" := (UTransitionMsg a b c d) : type_scope.
 
 (** ** Helper functions for global transitions *)
@@ -960,7 +955,6 @@ Definition is_partitioned pre : bool := pre.(network_partition).
 Definition is_unpartitioned pre : bool := ~~ is_partitioned pre.
 
 (** It is OK to advance time if:
-
 - the user is corrupt (its deadline is irrelevant), or
 - the increment does not go beyond the deadline. *)
 Definition user_can_advance_timer (increment : posreal) : pred UState :=
@@ -977,7 +971,6 @@ Definition tick_ok_users increment (pre:GState) : bool :=
   allf (user_can_advance_timer increment) pre.(users).
 
 (** It is OK to advance time if:
-
 - the network is partitioned (message delivery delays are ignored), or
 - the time increment does not cause missing a message delivery deadline.
  *)
@@ -1043,9 +1036,8 @@ Definition user_honest_at ix p (uid : UserId) : bool :=
 
 (** Returns the given users map restricted to honest users only. *)
 Definition honest_users (users : {fmap UserId -> UState}) :=
-  let corrupt_ids :=
-    [fset x in domf users | is_user_corrupt x users] in
-    users.[\ corrupt_ids] .
+  let corrupt_ids := [fset x in domf users | is_user_corrupt x users] in
+  users.[\ corrupt_ids].
 
 (** Computes the global state after a message delivery, given the result of the
 user transition and the messages sent out. Note:
@@ -1124,7 +1116,7 @@ Definition drop_mailbox_of_user uid (msgs : MsgPool) : MsgPool :=
 The user will have its corrupt flag (in its local state) set to [true]
 and his mailbox in the global state removed. *)
 Definition corrupt_user_result (pre : GState) (uid : UserId)
-                               (ustate_key : uid \in pre.(users)) : GState :=
+ (ustate_key : uid \in pre.(users)) : GState :=
   let ustate' := make_corrupt pre.(users).[ustate_key] in
   let msgs' := drop_mailbox_of_user uid  pre.(msg_in_transit) in
   let users' := pre.(users).[uid <- ustate'] in
@@ -1134,8 +1126,7 @@ Definition corrupt_user_result (pre : GState) (uid : UserId)
 The message is replayed to the given target user and added to his mailbox.
 It is not broadcast because other users have already seen the original. *)
 Definition replay_msg_result (pre : GState) (uid : UserId) (msg : Msg) : GState :=
-  let msgs' := send_broadcasts pre.(now) [fset uid] (* (domf (honest_users pre.(users))) *)
-                 pre.(msg_in_transit) [:: msg] in
+  let msgs' := send_broadcasts pre.(now) [fset uid] pre.(msg_in_transit) [:: msg] in
   pre <| msg_in_transit := msgs' |>.
 
 (** Does the adversary have the keys of the user for the given r-p-s?
@@ -1218,7 +1209,7 @@ Inductive GTransition : g_transition_type :=
 
 | step_forge_msg : (**r adversary action: forge and send out a message *)
     forall pre sender (sender_key : sender \in pre.(users))
-                          r p s mtype mval,
+      r p s mtype mval,
     have_keys pre.(users).[sender_key] r p s ->
     comm_cred_step sender r p s ->
     mtype_matches_step mtype mval s ->

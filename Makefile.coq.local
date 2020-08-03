@@ -6,5 +6,5 @@ COQ2HTMLFLAGS = -base Algorand -external https://math-comp.github.io/htmldoc/ ma
 coq2html: $(GLOBFILES) $(VFILES)
 	$(SHOW)'COQ2HTML -d $(COQ2HTMLDIR)'
 	$(HIDE)mkdir -p $(COQ2HTMLDIR)
-	$(HIDE)$(COQ2HTML) $(COQ2HTMLFLAGS) -d $(COQ2HTMLDIR) $(VFILES) $(GLOBFILES)
+	$(HIDE)cd theories && $(COQ2HTML) $(COQ2HTMLFLAGS) -d ../$(COQ2HTMLDIR) *.v *.glob
 .PHONY: coq2html
