@@ -24,10 +24,15 @@ Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
 
+(** * Safety helper definitions and results *)
+
+(** This module contains helper functions and lemmas
+used when proving safety of the transition system. *)
+
 Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexists]].
 
-(* Gather all the unfoldings we might want for working with transitions into
-   a hint database for use with autounfold *)
+(** Gather all the unfoldings we might want for working with transitions into
+a hint database for use with autounfold. *)
 Create HintDb utransition_unfold discriminated.
 Hint Unfold
      (* UTransitionInternal *)
@@ -54,11 +59,9 @@ Hint Unfold
 
 Arguments delivery_result : clear implicits.
 
-(* ------------------- *)
-(* Generic path lemmas *)
-(* ------------------- *)  
+(** ** Generic path lemmas *)
 
-(* dropping elements from a path still results in a path *)
+(** Dropping elements from a path still results in a path. *)
 Lemma path_drop T (R:rel T) x p (H:path R x p) n:
   match drop n p with
   | List.nil => true
@@ -82,7 +85,7 @@ Proof.
   by destruct (drop n p);[|destruct l;[|move/andP => []]].
 Qed.
 
-(* path still holds after taking n elements *)
+(** Predicate [path] still holds after taking [n] elements. *)
 Lemma path_prefix : forall T R p (x:T) n,
     path R x p -> path R x (take n p).
 Proof.
@@ -92,8 +95,8 @@ Proof.
   simpl;apply /andP;by auto.
 Qed.
 
-(* proposition does not hold initially but holds for last element implies there
-   must be a point in the path where it becomes true *)
+(** Proposition does not hold initially but holds for last element implies there
+must be a point in the path where it becomes true. *)
 Lemma path_steps : forall {T} (R : rel T) x0 p,
     path R x0 p ->
     forall (P : pred T),
@@ -132,18 +135,17 @@ Proof.
     rewrite ltnS. apply leqnSn.
 Qed.
 
-(* ----------------------- *)
-(* Generic multiset lemmas *)
-(* ----------------------- *)
+(** ** Generic multiset lemmas *)
 
-(* x in mset of seq iff x is in seq *)
+(** Element [x] in mset of seq iff [x] is in seq. *)
 Lemma in_seq_mset (T : choiceType) (x : T) (s : seq T):
   (x \in seq_mset s) = (x \in s).
 Proof.
   apply perm_mem, perm_eq_seq_mset.
 Qed.
 
-(* the number of elements in the preimage of f w.r.t. b and multiset m is the same as applying map_mset on f and m and then b *)
+(** The number of elements in the preimage of [f] w.r.t. [b] and multiset [m] is
+the same as applying [map_mset] on [f] and [m] and then [b]. *)
 Lemma map_mset_count {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:B), (count (preim f (pred1 b)) m) = (map_mset f m) b.
 Proof.
@@ -153,7 +155,7 @@ Proof.
   by rewrite mset_seqE count_map.
 Qed.
 
-(* element membership w.r.t. preimage is preserved by map_mset on the multiset m *)
+(** Element membership w.r.t. preimage is preserved by [map_mset] on the multiset [m]. *)
 Lemma map_mset_has {A B :choiceType} (f: A -> B) (m : {mset A}) :
   forall (b:pred B), has b (map_mset f m) = has (preim f b) m.
 Proof.
@@ -162,14 +164,14 @@ Proof.
   by apply eq_has_r, perm_mem, perm_eq_seq_mset.
 Qed.
 
-(* the support of the multiset is unique when viewed as a sequence *)
+(** The support of a multiset is unique when viewed as a sequence. *)
 Lemma finsupp_mset_uniq (T:choiceType) (A:{mset T}):
   uniq (finsupp A).
 Proof.
   by rewrite -(perm_uniq (perm_undup_mset A));apply undup_uniq.
 Qed.
 
-(* the sequence of a subset of a multiset is equal to the subset's finite support modulo reordering *)
+(** The sequence of a subset of a multiset is equal to the subset's finite support modulo reordering. *)
 Lemma msubset_finsupp (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   perm_eq (finsupp A) [seq i <- finsupp B | i \in A].
@@ -185,7 +187,7 @@ Proof.
   move:H_sub => /msubset_subset. apply.
 Qed.
 
-(* summing up elements in a multiset subset is the same as taking sequence length *)
+(** Summing up elements in a multiset subset is the same as taking sequence length. *)
 Lemma msubset_size_sum (T:choiceType) (A B: {mset T}):
   (A `<=` B)%mset ->
   \sum_(i <- finsupp B) A i = size A.
@@ -197,7 +199,7 @@ Proof.
     by move=>i /mset_eq0P.
 Qed.
 
-(* size of unioned multiset is sum of size of components *)
+(** The size of a unioned multiset is sum of the size of its components. *)
 Lemma mset_add_size (T:choiceType) (A B : {mset T}):
   size (A `+` B) = (size A + size B)%nat.
 Proof.
@@ -207,7 +209,7 @@ Proof.
   rewrite -{1}[A]msetD0. apply msetDS, msub0set.
 Qed.
 
-(* size of msetn n _ is n *)
+(** The size of [msetn n x]  is [n] for any [x]. *)
 Lemma msetn_size (T:choiceType) n (x:T):
   size (msetn n x) = n.
 Proof.
@@ -217,7 +219,7 @@ Proof.
   by rewrite big_seq_fset1 msetnxx.
 Qed.
 
-(* subset of a multiset has smaller size *)
+(** The subset of a multiset has smaller size. *)
 Lemma msubset_size (T:choiceType) (A B : {mset T}):
   (A `<=` B)%mset -> size A <= size B.
 Proof.
@@ -225,7 +227,7 @@ Proof.
   by rewrite -(msetBDK H_sub) mset_add_size leq_addl.
 Qed.
 
-(* msets equal after adding seqs to mset A implies seqs have same elements *)
+(** If msets are equal after adding seqs to mset [A], this implies seqs have the same elements. *)
 Lemma msetD_seq_mset_perm_eq (T:choiceType) (A: {mset T}) (l l': seq T):
   A `+` seq_mset l = A `+` seq_mset l' -> perm_eq l l'.
 Proof.
@@ -235,9 +237,7 @@ Proof.
   by apply perm_eq_seq_mset.
 Qed.
 
-(* ----------------------- *)
-(* Generic sequence lemmas *)
-(* ----------------------- *)
+(** ** Generic sequence lemmas *)
 
 Lemma take_rcons T : forall (s : seq T) (x : T), take (size s) (rcons s x) = s.
 Proof. elim => //=; last by move => a l IH x; rewrite IH. Qed.
@@ -260,15 +260,13 @@ move => Hpr.
 by have Hs: size s1 = size s2 by apply perm_size.
 Qed.
 
-(* ----------------------------- *)
-(* Lemmas relating seqs and sets *)
-(* ----------------------------- *)
+(** ** Lemmas relating seqs and sets *)
 
-(* set derived from empty seq is empty set *)
+(** A set derived from an empty seq is the empty set. *)
 Lemma set_nil : forall (T : finType), [set x in [::]] = @set0 T.
 Proof. by move => T. Qed.
 
-(* cardinality of seq as set is size of unduplicated seq *)
+(** The cardinality of seq as set is size of the unduplicated seq. *)
 Lemma finseq_size : forall (T : finType) (s: seq T), #|s| = size (undup s).
 Proof.
 move=> T s.
@@ -288,24 +286,21 @@ move/negP/negP => Hx.
 by rewrite cardsU1 /= inE Hx /= add1n IH.
 Qed.
 
-(* set derived using filter in seq and filter directly have same size *)
+(** A set derived using filter in seq and filter directly have same size. *)
 Lemma imfset_filter_size_lem (A B : choiceType) (f : A -> B) (sq : seq A) (P : A -> bool):
   #|` [fset x | x in [seq f x | x <- sq & P x]]| = #|` [fset f x | x in sq & P x]|.
 Proof.
   clear -f sq P.
   rewrite Imfset.imfsetE !size_seq_fset.
   apply perm_size, uniq_perm;[apply undup_uniq..|].
-
   intro fx. rewrite !mem_undup map_id /= filter_undup mem_undup.
   apply Bool.eq_true_iff_eq;rewrite -!/(is_true _).
   by split;move/mapP => [x H_x ->];apply map_f;move:H_x;rewrite mem_undup.
 Qed.
 
-(* ------------------- *)
-(* Generic definitions *)
-(* ------------------- *)
+(** ** Generic definitions *)
 
-(* turn pred on UState into pred on GState - assumed false if uid not present *)
+(** Turn [pred] on [UState] into [pred] on [GState] - assumed false if [uid] not present. *)
 Definition upred uid (P : pred UState) : pred GState :=
   fun g =>
     match g.(users).[? uid] with
@@ -313,7 +308,7 @@ Definition upred uid (P : pred UState) : pred GState :=
     | None => false
     end.
 
-(* turn pred on UState into pred on GState - assumed true if uid not present *)
+(** Turn [pred] on [UState] into [pred] on [GState] - assumed true if [uid] not present. *)
 Definition upred' uid (P : pred UState) : pred GState :=
   fun g =>
     match g.(users).[? uid] with
@@ -321,11 +316,9 @@ Definition upred' uid (P : pred UState) : pred GState :=
     | None => true
     end.
 
-(* --------------------------------- *)
-(* Lemmas about step of a user state *)
-(* --------------------------------- *)
+(** ** Lemmas about the step of a user state *)
 
-(* ssreflect: step_le is equivalent to step_leb *)
+(** [step_le] is equivalent to [step_leb]. *)
 Lemma step_leP: forall s1 s2, reflect (step_le s1 s2) (step_leb s1 s2).
 Proof.
   clear.
@@ -334,7 +327,7 @@ Proof.
     by rewrite /step_le !(reflect_eq eqP, reflect_eq andP, reflect_eq orP).
 Qed.
 
-(* ssreflect: step_lt is equivalent to step_ltb *)
+(** [step_lt] is equivalent to [step_ltb]. *)
 Lemma step_ltP: forall s1 s2, reflect (step_lt s1 s2) (step_ltb s1 s2).
 Proof.
   clear.
@@ -343,7 +336,7 @@ Proof.
     by rewrite /step_lt !(reflect_eq eqP, reflect_eq andP, reflect_eq orP).
 Qed.
 
-(* weaken step: less-than implies less-than-or-equal *)
+(** Weaken step: less-than implies less-than-or-equal. *)
 Lemma step_ltW a b:
   step_lt a b -> step_le a b.
 Proof.
@@ -352,7 +345,7 @@ Proof.
   unfold step_lt,step_le;intuition.
 Qed.
 
-(* transitivitity of step_le *)
+(** Transitivitity of [step_le]. *)
 Lemma step_le_trans a b c:
   step_le a b -> step_le b c -> step_le a c.
 Proof.
@@ -368,7 +361,7 @@ Proof.
   eapply leq_trans;eassumption.
 Qed.
 
-(* transitivity of step_lt *)
+(** Transitivity of [step_lt]. *)
 Lemma step_lt_trans a b c:
   step_lt a b -> step_lt b c -> step_lt a c.
 Proof.
@@ -384,7 +377,7 @@ Proof.
   eapply ltn_trans;eassumption.
 Qed.
 
-(* a < b and b <= c -> a < c *)
+(** [a < b] and [b <= c] implies [a < c]. *)
 Lemma step_lt_le_trans a b c:
   step_lt a b -> step_le b c -> step_lt a c.
 Proof.
@@ -400,7 +393,7 @@ Proof.
   eapply leq_trans;eassumption.
 Qed.
 
-(* a <= b and b < c -> a < c *)
+(** [a <= b] and [b < c] implies [a < c]. *)
 Lemma step_le_lt_trans a b c:
   step_le a b -> step_lt b c -> step_lt a c.
 Proof.
@@ -416,20 +409,20 @@ Proof.
   eapply leq_ltn_trans;eassumption.
 Qed.
 
-(* step is not less than itself *)
+(** [step] is not less than itself. *)
 Lemma step_lt_irrefl r p s: ~step_lt (r,p,s) (r,p,s).
 Proof.
   clear.
   unfold step_lt;intuition;by rewrite -> ltnn in * |- .
 Qed.
 
-(* step is less than or equal to itself *)
+(** [step] is less than or equal to itself. *)
 Lemma step_le_refl step: step_le step step.
 Proof.
   clear;unfold step_le;intuition.
 Qed.
 
-(* ustate_after and step_le equivalence *)
+(** [ustate_after] and [step_le] are equivalent. *)
 Lemma ustate_after_iff_step_le u1 u2:
   step_le (step_of_ustate u1) (step_of_ustate u2)
   <-> ustate_after u1 u2.
@@ -438,7 +431,7 @@ Proof.
   clear;tauto.
 Qed.
 
-(* transitivity of ustate_after *)
+(** Transitivity of [ustate_after]. *)
 Lemma ustate_after_transitive :
   forall us1 us2 us3,
     ustate_after us1 us2 ->
@@ -450,11 +443,9 @@ rewrite -!ustate_after_iff_step_le.
 apply step_le_trans.
 Qed.
 
-(* --------------------------- *)
-(* Lemmas about tick functions *)
-(* --------------------------- *)
+(** ** Lemmas about tick functions *)
 
-(* ssreflect: tick_ok_users function as a proposition *)
+(* [tick_ok_users] function as a proposition. *)
 Lemma tick_ok_usersP : forall increment (g : GState),
   reflect
     (forall (uid : UserId) (h : uid \in domf g.(users)), user_can_advance_timer increment g.(users).[h])
@@ -464,7 +455,7 @@ move => increment g.
 exact: allfP.
 Qed.
 
-(* Domain of users unchanged after tick *)
+(** Domain of users unchanged after tick. *)
 Lemma tick_users_domf : forall increment pre,
   domf pre.(users) = domf (tick_users increment pre).
 Proof.
@@ -472,7 +463,7 @@ move => increment pre.
 by rewrite -updf_domf.
 Qed.
 
-(* tick_users at uid results in user_advance_timer *)
+(** [tick_users] at [uid] results in [user_advance_timer]. *)
 Lemma tick_users_upd : forall increment pre uid (h : uid \in domf pre.(users)),
   (tick_users increment pre).[? uid] = Some (user_advance_timer increment pre.(users).[h]).
 Proof.
@@ -480,7 +471,7 @@ move => increment pre uid h.
 by rewrite updf_update.
 Qed.
 
-(* tick_users results in None if user not in domain of pre-state *)
+(** [tick_users] results in [None] if the user not in the domain of the pre-state. *)
 Lemma tick_users_notin : forall increment pre uid (h : uid \notin domf pre.(users)),
   (tick_users increment pre).[? uid] = None.
 Proof.
@@ -489,12 +480,10 @@ Proof.
   change (uid \notin domf (tick_users increment pre)); by rewrite -updf_domf.
 Qed.
 
-(* ------------------------------------------------- *)
-(* Lemmas about merge_msgs_deadline, send_broadcasts *)
-(* ------------------------------------------------- *)
+(** ** Lemmas about [merge_msgs_deadline] and [send_broadcasts] *)
 
-(* A message in merge_msgs_deadline is either already in the mailbox or
-   it is a member of the messages being merged *)
+(** A message in [merge_msgs_deadline] is either already in the mailbox or
+   it is a member of the messages being merged. *)
 Lemma in_merge_msgs : forall d (msg:Msg) now msgs mailbox,
     (d,msg) \in merge_msgs_deadline now msgs mailbox ->
     msg \in msgs \/ (d,msg) \in mailbox.
@@ -504,14 +493,14 @@ Proof.
   by rewrite (perm_mem (perm_eq_seq_mset _)) => /mapP [x H_x [_ ->]];left.
 Qed.
 
-(* send_broadcasts definition *)
+(** [send_broadcasts] definition. *)
 Lemma send_broadcastsE now targets prev_msgs msgs:
   send_broadcasts now targets prev_msgs msgs = updf prev_msgs targets (fun _ => merge_msgs_deadline now msgs).
 Proof.
   by rewrite unlock.
 Qed.
 
-(* send_broadcasts at uid results in merge_msgs_deadline *)
+(** [send_broadcasts] at [uid] results in [merge_msgs_deadline]. *)
 Lemma send_broadcasts_in : forall (msgpool : MsgPool) now uid msgs targets
                                   (h : uid \in msgpool) (h' : uid \in targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = Some (merge_msgs_deadline now msgs msgpool.[h]).
@@ -519,10 +508,11 @@ Proof.
   by move => *;rewrite send_broadcastsE updf_update.
 Qed.
 
-(* send_brodcasts results in None if user not in domain of msgpool *)
-Lemma send_broadcast_notin : forall (msgpool : MsgPool) now uid msgs targets
-                                    (h : uid \notin domf msgpool),
-  (send_broadcasts now targets msgpool msgs).[? uid] = None.
+(** [send_brodcasts] results in [None] if [uid] is not in the domain of [msgpool]. *)
+Lemma send_broadcast_notin :
+  forall (msgpool : MsgPool) now uid msgs targets
+    (h : uid \notin domf msgpool),
+    (send_broadcasts now targets msgpool msgs).[? uid] = None.
 Proof.
   move => *;apply not_fnd.
   change (?k \notin ?f) with (k \notin domf f).
