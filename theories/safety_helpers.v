@@ -2132,7 +2132,13 @@ Proof.
     repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b
            | _ => progress simpl end;
   try (by apply subxx_hint);
-  by move => x H_x;rewrite ?in_cons ?mem_undup H_x ?orbT.
+  try (by move => x H_x).
+  - rewrite setfsNK => b Hb.
+    case Hr: (r == r0) => //; move/eqP: Hr =><-.
+    by rewrite mem_undup.
+  - rewrite setfsNK => b Hb.
+    case Hr: (r == r0) => //; move/eqP: Hr =><-.
+    by rewrite in_cons mem_undup Hb orbT.
 Qed.
 
 (* blocks monotone over global transition *)

@@ -222,20 +222,20 @@ The structure of a user's state.
 *)
 Record UState :=
   mkUState {
-    corrupt       : bool; (**r a flag indicating whether the user is corrupt *)
-    round         : nat; (**r the user's current round (starts at 1) *)
-    period        : nat; (**r the user's current period (starts at 1) *)
-    step          : nat; (**r the user's current step counter (starts at 1) *)
-    timer         : R; (**r the user's current timer value (since the beginning of the current period) *)
-    deadline      : R; (**r the user's next deadline time value (since the beginning of the current period) *)
-    p_start       : R; (**r the (local) time at which the user's current period started (i.e., local clock = p_start + timer) *)
-    proposals     : nat -> nat -> seq PropRecord; (**r a sequence of proposal/reproposal records for the given round/period *)
-    stv           : nat -> option Value; (**r starting value *)
-    blocks        : nat -> seq Value; (**r a sequence of values seen for the given round *)
-    softvotes     : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
-    certvotes     : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
-    nextvotes_open: nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
+    corrupt        : bool; (**r a flag indicating whether the user is corrupt *)
+    round          : nat; (**r the user's current round (starts at 1) *)
+    period         : nat; (**r the user's current period (starts at 1) *)
+    step           : nat; (**r the user's current step counter (starts at 1) *)
+    timer          : R; (**r the user's current timer value (since the beginning of the current period) *)
+    deadline       : R; (**r the user's next deadline time value (since the beginning of the current period) *)
+    p_start        : R; (**r the (local) time at which the user's current period started (i.e., local clock = p_start + timer) *)
+    proposals      : nat -> nat -> seq PropRecord; (**r a sequence of proposal/reproposal records for the given round/period *)
+    stv            : nat -> option Value; (**r starting value *)
+    blocks         : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
+    softvotes      : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
+    certvotes      : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
+    nextvotes_open : nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
+    nextvotes_val  : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
 Instance UState_Settable : Settable _ :=
@@ -251,11 +251,8 @@ Definition set_proposals u r' p' prop : UState :=
         then undup (prop :: u.(proposals) r p)
         else u.(proposals) r p |>.
 
-Definition set_blocks (u : UState) r' block : UState :=
-  u <| blocks := fun r =>
-        if r == r'
-        then undup (block :: u.(blocks) r)
-        else u.(blocks) r |>.
+Definition set_blocks (u : UState) (r':nat) block : UState :=
+  u <| blocks := setfs u.(blocks) r' (undup (block :: u.(blocks) r')) |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
   u <| softvotes := fun r p =>
@@ -316,6 +313,20 @@ Instance GState_Settable : Settable _ :=
 
 (** State with empty maps, unpartitioned, at global time 0. *)
 Definition null_state : GState := mkGState 0%R false [fmap] [fmap] mset0.
+
+(*
+Definition codeGState (g : GState) :=
+ (now g, network_partition g, users g, msg_in_transit g, msg_history g).
+
+Definition decodeGState c :=
+mkGState c.1.1.1.1 c.1.1.1.2 c.1.1.2 c.1.2 c.2.
+
+Lemma cancelGState : pcancel codeGState (fun x => Some (decodeGState x)).
+Proof. by case. Qed.
+
+Canonical GState_eqType := EqType GState (PcanEqMixin cancelGState).
+Canonical GState_choiceType := ChoiceType GState (PcanChoiceMixin cancelMsg).
+*)
 
 (** Equality of global states. *)
 Definition eqGState (g1 g2 : GState) : bool := `[<g1 = g2>].
