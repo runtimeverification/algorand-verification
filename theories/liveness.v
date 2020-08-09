@@ -41,7 +41,7 @@ Definition users_at ix path : {fmap UserId -> UState} :=
   end.
 
 Definition user_stv_val (uid:UserId) (g:GState) (p:nat) (stv':option Value) : bool :=
-  if g.(users).[? uid] is Some ustate then ustate.(stv) p == stv' else false.
+  if g.(users).[? uid] is Some ustate then ustate.(stv).[? p] == stv' else false.
 
 Definition user_stv_val_at ix path uid p stv : bool :=
   match drop ix path with
