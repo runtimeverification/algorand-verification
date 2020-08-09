@@ -217,25 +217,23 @@ Definition PropRecord := (UserId * credType * Value * bool)%type.
 and a [Value] (the value voted for). *)
 Definition Vote := (UserId * Value)%type.
 
-(**
-The structure of a user's state.
-*)
+(** The structure of a user's state. *)
 Record UState :=
   mkUState {
-    corrupt        : bool; (**r a flag indicating whether the user is corrupt *)
-    round          : nat; (**r the user's current round (starts at 1) *)
-    period         : nat; (**r the user's current period (starts at 1) *)
-    step           : nat; (**r the user's current step counter (starts at 1) *)
-    timer          : R; (**r the user's current timer value (since the beginning of the current period) *)
-    deadline       : R; (**r the user's next deadline time value (since the beginning of the current period) *)
-    p_start        : R; (**r the (local) time at which the user's current period started (i.e., local clock = p_start + timer) *)
-    proposals      : nat -> nat -> seq PropRecord; (**r a sequence of proposal/reproposal records for the given round/period *)
-    stv            : nat -> option Value; (**r starting value *)
-    blocks         : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
-    softvotes      : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
-    certvotes      : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
+    corrupt : bool; (**r a flag indicating whether the user is corrupt *)
+    round : nat; (**r the user's current round (starts at 1) *)
+    period : nat; (**r the user's current period (starts at 1) *)
+    step : nat; (**r the user's current step counter (starts at 1) *)
+    timer : R; (**r the user's current timer value (since the beginning of the current period) *)
+    deadline : R; (**r the user's next deadline time value (since the beginning of the current period) *)
+    p_start : R; (**r the (local) time at which the user's current period started (i.e., local clock = p_start + timer) *)
+    proposals : nat -> nat -> seq PropRecord; (**r a sequence of proposal/reproposal records for the given round/period *)
+    stv : {fmap nat -> Value}; (**r starting value *)
+    blocks : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
+    softvotes : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
+    certvotes : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
     nextvotes_open : nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
-    nextvotes_val  : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
+    nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
 Instance UState_Settable : Settable _ :=
@@ -291,7 +289,7 @@ Definition advance_round (u : UState) : UState :=
   u <| round := (u.(round) + 1)%nat |>
     <| period := 1%nat |>
     <| step := 1%nat |>
-    <| stv := fun x => None |>
+    <| stv := [fmap] |>
     <| timer := 0%R |>
     <| deadline := 0%R |>
     <| p_start := (u.(p_start) + u.(timer))%R |>.
@@ -618,15 +616,14 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
 (** The Softvoting-a-reproposal step preconditions
 Note that this is the Softvoting step when [p > 1] and the previous period's
 winning vote was for a value [v]. *)
-Definition softvote_repr_ok (pre : UState) uid v r p : Prop :=
+Definition softvote_repr_ok (pre : UState) uid v (r p: nat) : Prop :=
   pre.(timer) = (2 * lambda)%R /\
   valid_rps pre r p 2 /\ p > 1 /\
   comm_cred_step uid r p 2 /\
   ( (~ cert_may_exist pre /\
     (exists s, nextvote_value_quorum pre v r (p - 1) s) /\
     leader_reprop_value v (pre.(proposals) r p))
-    \/
-    (cert_may_exist pre /\ pre.(stv) p = Some v) ).
+    \/ (cert_may_exist pre /\ pre.(stv).[? p] = Some v) ).
 
 (** The no-softvoting step preconditions. Three reasons a user may
 not be able to soft-vote:
@@ -645,7 +642,7 @@ Definition no_softvote_ok (pre : UState) uid r p : Prop :=
     /\ ((cert_may_exist pre \/
         (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
         ~ leader_reprop_value v (pre.(proposals) r p))
-       /\ (~ cert_may_exist pre \/ ~ pre.(stv) p = Some v)))).
+       /\ (~ cert_may_exist pre \/ ~ pre.(stv).[? p] = Some v)))).
 
 (** The softvoting step (new or reproposal) post-state.
 We keep the current deadline at [2 * lambda] and let certvoting handle
@@ -764,11 +761,11 @@ Definition adv_period_val_ok (pre : UState) (v : Value) r p s : Prop :=
 
 (** State update, the bottom-value case. *)
 Definition adv_period_open_result (pre : UState) : UState :=
-  (advance_period pre) <| stv := fun p => if p == pre.(period).+1 then None else (pre.(stv) p) |>.
+  (advance_period pre) <| stv := pre.(stv).[~ pre.(period).+1] |>.
 
 (** State updatem the proper value case. *)
 Definition adv_period_val_result (pre : UState) v : UState :=
-  (advance_period pre) <| stv := fun p => if p == pre.(period).+1 then Some v else (pre.(stv) p) |>.
+  (advance_period pre) <| stv := pre.(stv).[pre.(period).+1 <- v] |>.
 
 (** Advancing round predicates and user state updates. Note:
 - corresponds to transition certify in the automaton model, and
@@ -872,7 +869,7 @@ Inductive UTransitionInternal : u_transition_internal_type :=
 
 | nextvote_stv : (**r steps >= 4: finishing step, special case of using [stv] *)
     forall uid (pre : UState) v r p s,
-      nextvote_stv_ok pre uid r p s /\ pre.(stv) p = Some v ->
+      nextvote_stv_ok pre uid r p s /\ pre.(stv).[? p] = Some v ->
         uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Val (next_val v s) r p uid])
 
 | no_nextvote : (**r steps >= 4: finishing step, no next-voting *)

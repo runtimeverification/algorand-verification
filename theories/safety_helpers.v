@@ -2198,7 +2198,7 @@ Lemma stv_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
   pre.(round) = post.(round) ->
   pre.(period) = post.(period) ->
-  forall p, pre.(stv) p = post.(stv) p.
+  forall p, pre.(stv).[? p] = post.(stv).[? p].
 Proof.
   move => uid pre post msgs step.
   remember (post,msgs) as result eqn:H_result;
@@ -2210,7 +2210,7 @@ Lemma stv_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   pre.(round) = post.(round) ->
   pre.(period) = post.(period) ->
-  forall p, pre.(stv) p = post.(stv) p.
+  forall p, pre.(stv).[? p] = post.(stv).[? p].
 Proof.
   move => uid pre post m msgs step H_round H_period.
   remember (post,msgs) as result eqn:H_result;
@@ -2241,7 +2241,7 @@ Lemma stv_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   exists u2, g2.(users).[?uid] = Some u2
   /\  (u1.(round)  = u2.(round)  ->
        u1.(period) = u2.(period) ->
-       forall p, u1.(stv) p = u2.(stv) p).
+       forall p, u1.(stv).[? p] = u2.(stv).[? p]).
 Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
@@ -2271,7 +2271,7 @@ Lemma stv_forward
   g2.(users).[?uid] = Some u2 ->
   u1.(round) = u2.(round) ->
   u1.(period) = u2.(period) ->
-  forall p, u1.(stv) p = u2.(stv) p.
+  forall p, u1.(stv).[? p] = u2.(stv).[? p].
 Proof.
   clear -H_reach.
   move => H_u1 H_u2 H_r H_p.

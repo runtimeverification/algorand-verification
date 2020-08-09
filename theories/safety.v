@@ -499,7 +499,7 @@ Lemma nextvote_val_precondition g1 g2 uid v r p s:
   user_sent uid (mkMsg Nextvote_Val (next_val v s) r p uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
   (exists b, nextvote_val_ok u uid v b r p s) \/
-  (nextvote_stv_ok u uid r p s /\ u.(stv) p = Some v).
+  (nextvote_stv_ok u uid r p s /\ u.(stv).[? p] = Some v).
 Proof.
   move => H_sent u H_u.
   destruct H_sent as [ms [H_msg [[d1 [in1 H_step]]|H_step]]].
@@ -1395,7 +1395,7 @@ Lemma period_advance_only_by_next_votes
       exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
         next_voters `<=` committee r p.-1 s
         /\ (if v then tau_v else tau_b) <= #|` next_voters |
-        /\ (exists u, g2.(users).[?uid] = Some u /\ u.(stv) p = v)
+        /\ (exists u, g2.(users).[? uid] = Some u /\ u.(stv).[? p] = v)
         /\ forall voter, voter \in next_voters ->
            received_next_vote uid voter r p.-1 s v trace.
 Proof.
@@ -1497,10 +1497,9 @@ Proof.
       by rewrite card_fseq -finseq_size.
 
       exists (adv_period_open_result pre').
-      split.
-        by rewrite Heqdr fnd_set eq_refl.
-      simpl.
-      by rewrite H_p0 -/addn addn1 eq_refl.
+      split; first by rewrite Heqdr fnd_set eq_refl.
+      rewrite not_fnd //=.
+      by rewrite addn1 H_p0 mem_remfF.
 
       intro voter.
       rewrite in_fset.
@@ -1547,9 +1546,10 @@ Proof.
       by apply/imfset_filter_size_lem.
 
       exists (adv_period_val_result pre' v).
-      split.
-        by rewrite Heqdr fnd_set eq_refl.
-        by rewrite /= H_p0 -/addn addn1 eq_refl.
+      split; first by rewrite Heqdr fnd_set eq_refl.
+      rewrite addn1 /= H_p0.
+      rewrite in_fnd //=; first by rewrite in_fset1U eqxx.
+      by move => Hin; rewrite getf_set.
 
       intros voter H_voter.
       have H_nextvote : (voter,v) \in pre'.(nextvotes_val) r1 p0 s
@@ -1963,7 +1963,7 @@ Lemma stv_at_entry_from_excl
       p v (H_excl: period_nextvoted_exclusively_for v r p trace)
       ix uid g1 g2 (H_adv: period_advance_at ix trace uid r p.+1 g1 g2)
       u (H_u: g2.(users).[?uid] = Some u):
-      u.(stv) p.+1 = Some v.
+      u.(stv).[? p.+1] = Some v.
 Proof.
   clear -H_path H_start H_excl H_adv H_u.
   move: (period_advance_only_by_next_votes H_path H_start (leqnn r) H_adv).
@@ -1999,7 +1999,7 @@ Lemma stv_at_send_from_excl
       (H_r_msg: msg_round msg = r)
       (H_p_msg: msg_period msg = p)
       u (H_u: g1.(users).[?uid] = Some u)
-      : u.(stv) p = Some v.
+      : u.(stv).[? p] = Some v.
 Proof.
   have H_sent_at: user_sent_at ix trace uid msg by exists g1, g2;split;assumption.
   have H_honest_in := user_honest_in_from_send H_sent_at.
@@ -2011,7 +2011,7 @@ Proof.
   have H_ue := in_fnd ukey2.
   set ue:UState := ge2.(users) [`ukey2] in H_ue H_ue_step.
   move: H_ue_step => [H_r_ue H_p_ue _].
-  have H_stv_entry: ue.(stv) p = Some v.
+  have H_stv_entry: ue.(stv).[? p] = Some v.
   {
     rewrite -[p](ltn_predK H_p_gt).
     refine (stv_at_entry_from_excl H_path H_start H_excl _ (in_fnd ukey2)).
@@ -2047,7 +2047,7 @@ Proof.
   have H_u := in_fnd (user_sent_in_pre H_send).
   set u: UState := g1.(users)[` user_sent_in_pre H_send] in H_u.
 
-  have stv_fwd : u.(stv) p = Some v
+  have stv_fwd : u.(stv).[? p] = Some v
     := stv_at_send_from_excl H_path H_start H_p_gt H_excl H_step H_send erefl erefl H_u.
 
   have H_g1 := step_in_path_onth_pre H_step.
