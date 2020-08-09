@@ -1042,11 +1042,14 @@ Lemma internal_not_noop :
     s # pre ~> (post, l) ->
     pre <> post.
 Proof.
-  move => s pre post l Hst;inversion Hst;subst;
-  autounfold with utransition_unfold in H2;decompose record H2;clear H2;
+  move => s pre post l Hst;inversion Hst;subst.
+  all: try (autounfold with utransition_unfold in H2; decompose record H2; clear H2;
     match goal with [H : valid_rps _ _ _ _ |- _] =>
-      destruct H as [_ [_ H_s]];contradict H_s;rewrite H_s;simpl;clear
-    end;try discriminate; by rewrite addn1 => /esym /n_Sn.
+    destruct H as [_ [_ H_s]];contradict H_s;rewrite H_s;simpl;clear
+    end;try discriminate; by rewrite addn1 => /esym /n_Sn).
+  autounfold with utransition_unfold in H3; decompose record H3; clear H3.
+  destruct H1 as [_ [_ H_s]];contradict H_s;rewrite H_s;simpl;clear.
+  by rewrite addn1 => /esym /n_Sn.
 Qed.
 
 (* delivery_result decreases size of mailbox - used in transition_label_unique *)
@@ -1889,7 +1892,7 @@ inversion_clear utrH.
   unfold ustate_after => /=.
   do 2! [right]. do 2! [split; auto].
   rewrite addn1. by subst.
-- case: H => H v'H.
+- move: H0 => v'H.
   case: H => tH [vH [vbH [svH oH]]].
   case: vH => rH [pH sH].
   unfold ustate_after => /=.

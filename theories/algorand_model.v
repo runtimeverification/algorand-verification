@@ -869,8 +869,9 @@ Inductive UTransitionInternal : u_transition_internal_type :=
 
 | nextvote_stv : (**r steps >= 4: finishing step, special case of using [stv] *)
     forall uid (pre : UState) v r p s,
-      nextvote_stv_ok pre uid r p s /\ pre.(stv).[? p] = Some v ->
-        uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Val (next_val v s) r p uid])
+      nextvote_stv_ok pre uid r p s ->
+      pre.(stv).[? p] = Some v ->
+      uid # pre ~> (nextvote_result pre s, [:: mkMsg Nextvote_Val (next_val v s) r p uid])
 
 | no_nextvote : (**r steps >= 4: finishing step, no next-voting *)
     forall uid (pre : UState) r p s,
@@ -900,14 +901,14 @@ Inductive UTransitionMsg : u_transition_msg_type :=
 | deliver_softvote : (**r deliver a softvote while not triggering any internal action *)
     forall uid (pre : UState) r p i v b,
       let pre' := (set_softvotes pre r p (i, v)) in
-        ~ certvote_ok pre' uid v b r p ->
-        uid # pre ; mkMsg Softvote (val v) r p i ~> (pre', [::])
+      ~ certvote_ok pre' uid v b r p ->
+      uid # pre ; mkMsg Softvote (val v) r p i ~> (pre', [::])
 
 | deliver_softvote_certvote1 : (**r deliver a softvote and cert-vote for the value (committee member case) *)
     forall uid (pre : UState) r p i v b,
       let pre' := set_softvotes pre r p (i, v) in
-        certvote_ok pre' uid v b r p ->
-        uid # pre ; mkMsg Softvote (val v) r p i ~> (certvote_result pre', [:: mkMsg Certvote (val v) r p uid])
+      certvote_ok pre' uid v b r p ->
+      uid # pre ; mkMsg Softvote (val v) r p i ~> (certvote_result pre', [:: mkMsg Certvote (val v) r p uid])
 
 | deliver_nextvote_open : (**r deliver a nextvote for bottom while not triggering any internal action *)
     forall uid (pre : UState) r p s i,
@@ -925,8 +926,8 @@ Inductive UTransitionMsg : u_transition_msg_type :=
 | deliver_nextvote_val : (**r deliver a nextvote for value while not triggering any internal action *)
     forall uid (pre : UState) r p s i v,
       let pre' := set_nextvotes_val pre r p s (i, v) in
-        ~ adv_period_val_ok pre' v r p s ->
-        uid # pre ; mkMsg Nextvote_Val (next_val v s) r p i ~> (pre', [::])
+      ~ adv_period_val_ok pre' v r p s ->
+      uid # pre ; mkMsg Nextvote_Val (next_val v s) r p i ~> (pre', [::])
 
 | deliver_nextvote_val_adv_prd : (**r deliver a nextvote for value and advance the period *)
     forall uid (pre : UState) r p s i v,
@@ -943,8 +944,8 @@ Inductive UTransitionMsg : u_transition_msg_type :=
 | deliver_certvote_adv_rnd : (**r deliver a certvote for value and advance the round *)
     forall uid (pre : UState) v r p i,
       let pre' := set_certvotes pre r p (i, v) in
-        certify_ok pre' v r p ->
-        uid # pre ; mkMsg Certvote (val v) r p i ~> (certify_result r pre', [::])
+      certify_ok pre' v r p ->
+      uid # pre ; mkMsg Certvote (val v) r p i ~> (certify_result r pre', [::])
 (** Note that some Algorand documents say this transition may try to
 send another certvote message from this node, but we have been
 informed that the implementation does not do this,
@@ -1216,8 +1217,7 @@ Inductive GTransition : g_transition_type :=
     pre ~~> replay_msg_result pre uid msg
 
 | step_forge_msg : (**r adversary action: forge and send out a message *)
-    forall pre sender (sender_key : sender \in pre.(users))
-      r p s mtype mval,
+    forall pre sender (sender_key : sender \in pre.(users)) r p s mtype mval,
     have_keys pre.(users).[sender_key] r p s ->
     comm_cred_step sender r p s ->
     mtype_matches_step mtype mval s ->

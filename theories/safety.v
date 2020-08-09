@@ -522,7 +522,7 @@ Proof.
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
       left; exists b; subst; assumption.
-      right;subst;assumption.
+      right; subst; split; assumption.
     }
 Qed.
 
@@ -1606,10 +1606,9 @@ Proof.
            clear -H4 H_s; by lia).
 
     subst; try apply step_lt_irrefl in H_lt; try contradiction.
-
-    destruct H0 as [H_nv_stv H_stv].
+    move: H0 H1 => H_nv_stv H_stv.
     destruct H_nv_stv as [H_lam [H_vrps [H_ccs [H_s [H_rest]]]]].
-    clear -H4 H_s. by lia.
+    clear -H5 H_s. by lia.
 
     (* no nextvote ok - need s > 3 assumption? *)
     move:H_lt_0;rewrite H_g1_key_ustate -Hequ /step_of_ustate H2 H3.
