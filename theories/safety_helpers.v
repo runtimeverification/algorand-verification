@@ -445,7 +445,7 @@ Qed.
 
 (** ** Lemmas about tick functions *)
 
-(* [tick_ok_users] function as a proposition. *)
+(** [tick_ok_users] function as a predicate. *)
 Lemma tick_ok_usersP : forall increment (g : GState),
   reflect
     (forall (uid : UserId) (h : uid \in domf g.(users)), user_can_advance_timer increment g.(users).[h])
@@ -519,17 +519,17 @@ Proof.
   by rewrite send_broadcastsE -updf_domf.
 Qed.
 
-(* send_brodcasts at uid results in msgpool at uid if uid in msgpool but 
-   uid not in targets of send_broadacsts function *)
+(** [send_brodcasts] at [uid] results in [msgpool] at [uid] if [uid] is in [msgpool],
+but uid is not in targets of [send_broadcasts] function. *)
 Lemma send_broadcast_notin_targets : forall (msgpool : MsgPool) now uid msgs targets
-                                            (h : uid \in msgpool) (h' : uid \notin targets),
+  (h : uid \in msgpool) (h' : uid \notin targets),
   (send_broadcasts now targets msgpool msgs).[? uid] = msgpool.[? uid].
 Proof.
   move => msgpool now uid msg targets h h'.
   by rewrite send_broadcastsE updf_update' // in_fnd.
 Qed.
 
-(* send_broadcast contains msg but original mailbox does not, msg must be in l *)
+(** [send_broadcast] contains [msg] but original mailbox does not, [msg] must be in [l]. *)
 Lemma broadcasts_prop
   uid (msg:Msg) (l:seq Msg)
   time (targets : {fset UserId}) (mailboxes' mailboxes : {fmap UserId -> {mset R * Msg}}):
@@ -570,15 +570,13 @@ Proof.
   by apply /hasP;exists (d,msg).
 Qed.
 
-(* ------------------------------------------ *)
-(* Definition of onth, lemmas about onth/step *)
-(* ------------------------------------------ *)
+(** ** Definition of [onth], lemmas about [onth] and [step] *)
 
-(* onth: option returning nth element of seq if n small enough *)
+(** [onth]: option returning [n]th element of seq if [n] small enough. *)
 Definition onth {T : Type} (s : seq T) (n : nat) : option T :=
   ohead (drop n s).
 
-(* onth results in Some if index is small *)
+(** [onth] results in [Some] if the index is small. *)
 Lemma onth_size : forall T (s:seq T) n x, onth s n = Some x -> n < size s.
 Proof.
   clear.
@@ -590,22 +588,22 @@ Proof.
   by rewrite drop_oversize.
 Qed.
 
-(* If onth of a prefix is not None then onth of the original seq is the same *)
+(** If [onth] of a prefix is not [None] then [onth] of the original sequence is the same. *)
 Lemma onth_from_prefix T (s:seq T) k n x:
-    onth (take k s) n = Some x ->
-    onth s n = Some x.
+  onth (take k s) n = Some x ->
+  onth s n = Some x.
 Proof.
   move => H_prefix.
-  have H_inbounds: n < size (take k s)
-    by rewrite ltnNge;apply/negP => H_oversize;
-                                      rewrite /onth drop_oversize in H_prefix.
+  have H_inbounds: n < size (take k s).
+    rewrite ltnNge;apply/negP => H_oversize.
+    by rewrite /onth drop_oversize in H_prefix.
   move: H_prefix.
   unfold onth, ohead.
   rewrite -{2}(cat_take_drop k s) drop_cat H_inbounds.
   by case: (drop n (take k s)).
 Qed.
 
-(* onth is Some x implies nth is x *)
+(** [onth] equal to [Some x] implies [n]th element is [x]. *)
 Lemma onth_nth T (s:seq T) ix x:
   onth s ix = Some x -> (forall x0, nth x0 s ix = x).
 Proof.
@@ -616,7 +614,7 @@ Proof.
   destruct (drop ix s);simpl;congruence.
 Qed.
 
-(* onth is Some x means x is in the seq *)
+(** [onth] equal to [Some x] means [x] is in the sequence. *)
 Lemma onth_in (T:eqType) (s:seq T) ix x:
   onth s ix = Some x -> x \in s.
 Proof.
@@ -626,7 +624,7 @@ Proof.
   exact (mem_nth _ (onth_size H)).
 Qed.
 
-(* onth is Some x means last element of prefixed sequence is x *)
+(** [onth] equal to [Some x] means that the last element of the prefixed sequence is [x]. *)
 Lemma onth_take_last T (s:seq T) n x:
   onth s n = some x ->
   forall x0, last x0 (take n.+1 s) = x.
@@ -638,21 +636,21 @@ Proof.
     by apply onth_nth.
 Qed.
 
-(* True for all elements of a sequence implies true for element returned by onth *)
+(** Predicates true for all elements of a sequence are true for elements returned by [onth]. *)
 Lemma all_onth T P s: @all T P s -> forall ix x, onth s ix = Some x -> P x.
 Proof.
   move/all_nthP => H ix x H_g. rewrite -(onth_nth H_g x).
   apply H, (onth_size H_g).
 Qed.
 
-(* x in s implies onth of (the index of x in s) is x *)
+(** [x] in [s] implies [onth] (the index of [x] in [s]) is [x]. *)
 Lemma onth_index (T : eqType) (x : T) (s : seq T): x \in s -> onth s (index x s) = Some x.
 Proof.
   move => H_in.
     by rewrite /onth /ohead (drop_nth x);[rewrite nth_index|rewrite index_mem].
 Qed.
 
-(* at_step holds for nth element with P and nth element is g, then P g holds *)
+(** [at_step] holds for [n]th element with [P] and [n]th element is [g], then [P g] holds. *)
 Lemma at_step_onth n (path : seq GState) (P : pred GState):
   at_step n path P ->
   forall g, onth path n = Some g ->
@@ -663,7 +661,7 @@ Proof.
   by move => HP g; case =><-.
 Qed.
 
-(* nth element is g and P g holds, then at_step holds for n and P *)
+(** If [n]th element is [g] and [P g] holds, then [at_step] holds for [n] and [P]. *)
 Lemma onth_at_step n (path : seq GState) g:
   onth path n = Some g ->
   forall (P : pred GState), P g -> at_step n path P.
@@ -673,7 +671,7 @@ Proof.
   by case =><-.
 Qed.
 
-(* onth true at ix implies onth true at truncated trace for size of new trace - 1 *)
+(** [onth] is true at [ix] implies [onth] is true at truncated trace for size of new trace minus one. *)
 Lemma onth_take_some : forall (trace: seq GState) ix g,
   onth trace ix = Some g ->
   onth (take ix.+1 trace) (size (take ix.+1 trace)).-1 = Some g.
@@ -687,11 +685,9 @@ Proof.
   destruct trace. inversion H_onth. intuition.
 Qed.
 
-(* ---------------------------- *)
-(* Lemmas about step_in_path_at *)
-(* ---------------------------- *)
+(** ** Lemmas about [step_in_path_at] *)
 
-(* step_in_path_at implies global transition *)
+(** [step_in_path_at] implies a global transition. *)
 Lemma transition_from_path
       g0 states ix (H_path: is_trace g0 states)
       g1 g2
@@ -709,19 +705,19 @@ Proof.
   by move/andP => [] /asboolP.
 Qed.
 
-(* step_in_path_at with same index must be with same states *)
+(** [step_in_path_at] with same index must be with same states. *)
 Lemma step_ix_same trace ix g1 g2:
-    step_in_path_at g1 g2 ix trace ->
-    forall g3 g4,
-    step_in_path_at g3 g4 ix trace ->
-      g3 = g1 /\ g4 = g2.
+  step_in_path_at g1 g2 ix trace ->
+  forall g3 g4,
+  step_in_path_at g3 g4 ix trace ->
+  g3 = g1 /\ g4 = g2.
 Proof.
   clear.
   unfold step_in_path_at.
   destruct (drop ix trace) as [|? [|]];(tauto || intuition congruence).
 Qed.
 
-(* step in path at n from g1 to g2 means g1 is at index n *)
+(** A step in path at [n] from [g1] to [g2] means [g1] is at index [n]. *)
 Lemma step_in_path_onth_pre {g1 g2 n path} (H_step : step_in_path_at g1 g2 n path)
   : onth path n = Some g1.
 Proof.
@@ -730,7 +726,7 @@ Proof.
   rewrite H;reflexivity.
 Qed.
 
-(* step in path at n from g1 to g2 means g2 is at index n+1 *)
+(** [step_in_path_at] from [g1] to [g2] with [n] means [g2] is at index [n+1]. *)
 Lemma step_in_path_onth_post {g1 g2 n path} (H_step : step_in_path_at g1 g2 n path)
   : onth path n.+1 = Some g2.
 Proof.
@@ -740,7 +736,7 @@ Proof.
   rewrite H0;reflexivity.
 Qed.
 
-(* step_in_path_at of truncated path implies step_in_path_at of original path *)
+(** [step_in_path_at] of truncated path implies [step_in_path_at] of original path. *)
 Lemma step_in_path_prefix (g1 g2 : GState) n k (path : seq GState) :
   step_in_path_at g1 g2 n (take k path)
   -> step_in_path_at g1 g2 n path.
@@ -756,8 +752,8 @@ Proof.
   simpl. apply IHn.
 Qed.
 
-(* step_in_path_at implies step_in_path_at of truncated path provided truncation
-   is sufficiently long *)
+(** [step_in_path_at] implies [step_in_path_at] of truncated path provided the truncation
+is sufficiently long. *)
 Lemma step_in_path_take (g1 g2 : GState) n (path : seq GState) :
   step_in_path_at g1 g2 n path
   -> step_in_path_at g1 g2 n (take n.+2 path).
