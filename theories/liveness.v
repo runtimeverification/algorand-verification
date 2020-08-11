@@ -11,10 +11,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext.
-
-From Algorand
-Require Import algorand_model safety_helpers quorums safety.
+Require Import fmap_ext algorand_model safety_helpers quorums safety.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

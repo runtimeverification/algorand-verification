@@ -11,10 +11,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext zify.
-
-From Algorand
-Require Import algorand_model safety_helpers quorums.
+Require Import zify fmap_ext algorand_model safety_helpers quorums.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

@@ -11,7 +11,7 @@ From mathcomp.analysis
 Require Import boolp Rstruct.
 
 From Algorand
-Require Import R_util fmap_ext algorand_model zify.
+Require Import zify fmap_ext algorand_model.
 
 Set Implicit Arguments.
 Unset Strict Implicit.

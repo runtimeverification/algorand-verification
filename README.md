@@ -16,12 +16,12 @@ Statements of some _liveness_ properties for the transition system are also prov
 
 ## Requirements
 
-- [`Coq 8.12`](https://github.com/coq/coq/releases/tag/V8.12.0)
-- [`MathComp ssreflect 1.11.0`](https://math-comp.github.io)
-- [`MathComp algebra`](https://math-comp.github.io)
-- [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
-- [`MathComp analysis 0.3.2`](https://github.com/math-comp/analysis)
-- [`Coq record update`](https://github.com/tchajed/coq-record-update)
+- [Coq 8.12](https://github.com/coq/coq/releases/tag/V8.12.0)
+- [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+- [MathComp algebra](https://math-comp.github.io)
+- [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
+- [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+- [Coq record update](https://github.com/tchajed/coq-record-update)
 
 ## Building
 
@@ -41,7 +41,6 @@ Then, run `make` in the project root directory. This will check all the definiti
 All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
 
 - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
-- `R_util.v`: auxiliary lemmas on real numbers
 - `fmap_ext.v`: auxiliary definitions and results on finite maps
 - `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
