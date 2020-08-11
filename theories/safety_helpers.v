@@ -888,7 +888,7 @@ Proof.
     try (exfalso;exact (notF msg_in)).
 
   (* Only one delivery transition actually sends a message *)
-  move/Iter.In_mem in msg_in;case: msg_in => [[*]|[]];subst.
+  move: msg_in; rewrite inE; case/eqP => [eq_type eq_ev eq_p eq_r eq_s]; subst.
   unfold certvote_ok in H;decompose record H;clear H.
   revert H0.
   clear;unfold pre',valid_rps;autounfold with utransition_unfold;simpl;clear.
@@ -2295,15 +2295,12 @@ Proof.
     have H_r': u1.(round) = umid.(round). {
       move: H_r H_p H_le_u1_umid H_le_umid_u2.
       unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
-      intuition. have := ltn_trans H H0. by rewrite ltnn.
+      by intuition lia.
     }
     have H_p': u1.(period) = umid.(period). {
       move: H_r H_p H_le_u1_umid H_le_umid_u2.
       unfold ustate_after. destruct u1,umid,u2;simpl;clear;intros;subst.
-      intuition. have := ltn_trans H H0. by rewrite ltnn.
-      subst. by rewrite ltnn in H.
-      subst. by rewrite ltnn in H0.
-      have := ltn_trans H2 H3. by rewrite ltnn.
+      by intuition lia.
     }
     specialize (H_sub H_r' H_p').
     rewrite H_sub. clear H_sub.

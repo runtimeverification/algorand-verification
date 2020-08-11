@@ -16,11 +16,11 @@ Statements of some _liveness_ properties for the transition system are also prov
 
 ## Requirements
 
-- [`Coq 8.11`](https://github.com/coq/coq/releases/tag/V8.11.2)
+- [`Coq 8.12`](https://github.com/coq/coq/releases/tag/V8.12.0)
 - [`MathComp ssreflect 1.11`](https://math-comp.github.io)
 - [`MathComp algebra`](https://math-comp.github.io)
 - [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
-- [`MathComp analysis 0.3.1`](https://github.com/math-comp/analysis)
+- [`MathComp analysis 0.3.2`](https://github.com/math-comp/analysis)
 - [`Interval 4.0.0`](http://coq-interval.gforge.inria.fr)
 - [`Coq record update`](https://github.com/tchajed/coq-record-update)
 
@@ -30,9 +30,9 @@ We recommend installing the dependencies of the project via
 [OPAM](http://opam.ocaml.org/doc/Install.html), for example:
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq.8.11.2 coq-mathcomp-ssreflect.1.11.0 \
+opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
   coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 coq-record-update \
-  coq-mathcomp-analysis.0.3.1 coq-interval.4.0.0
+  coq-mathcomp-analysis.0.3.2 coq-interval.4.0.0
 ```
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
