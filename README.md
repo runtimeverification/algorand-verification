@@ -17,7 +17,7 @@ Statements of some _liveness_ properties for the transition system are also prov
 ## Requirements
 
 - [`Coq 8.12`](https://github.com/coq/coq/releases/tag/V8.12.0)
-- [`MathComp ssreflect 1.11`](https://math-comp.github.io)
+- [`MathComp ssreflect 1.11.0`](https://math-comp.github.io)
 - [`MathComp algebra`](https://math-comp.github.io)
 - [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
 - [`MathComp analysis 0.3.2`](https://github.com/math-comp/analysis)
