@@ -7,9 +7,6 @@ Require Import finmap multiset.
 From Coq
 Require Import Reals Relation_Definitions Relation_Operators Lra.
 
-From Interval
-Require Import Tactic.
-
 From mathcomp.analysis
 Require Import boolp Rstruct.
 

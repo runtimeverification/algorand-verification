@@ -23,7 +23,6 @@ depends: [
   "coq-mathcomp-algebra" 
   "coq-mathcomp-finmap" {>= "1.5"}
   "coq-mathcomp-analysis" {>= "0.3.2"}
-  "coq-interval" {>= "4.0.0"}
   "coq-record-update" 
 ]
 

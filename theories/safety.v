@@ -322,8 +322,8 @@ Proof.
     | [H : _ # _ ~> _ |- _] => H
     end
     in clear -H; set result := (ustate_post,ms) in H;change ms with result.2;clearbody result;revert H;
-  destruct 1;simpl;clear;move/Iter.In_mem => H_msg;try (exfalso;exact H_msg);
-     move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
+  destruct 1;simpl;clear;move/in_memP => H_msg;try (exfalso;exact H_msg);
+     move/in_memP => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
 
 (* a user can only softvote one value during given round/period *)
@@ -347,8 +347,8 @@ Proof.
     | [H : _ # _ ~> _ |- _] => H
     end
     in clear -H;set result := (ustate_post,ms) in H;change ms with result.2;clearbody result;revert H;
-  destruct 1;simpl;clear;move/Iter.In_mem => H_msg;try (exfalso;exact H_msg);
-     move/Iter.In_mem => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
+  destruct 1;simpl;clear;move/in_memP => H_msg;try (exfalso;exact H_msg);
+     move/in_memP => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
 
 (* ---------------------------------------------- *)
@@ -401,7 +401,7 @@ Proof.
       rewrite H in H_step; clear H.
       remember (ustate_post,ms) as ustep_out in H_step.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction.
       simpl in H_msg; destruct H_msg; try contradiction; inversion H0.
       left. exists i, b; split; subst; auto.
       rewrite fnd_set eq_refl. auto.
@@ -413,7 +413,7 @@ Proof.
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-        intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction;
+        intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction;
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
       by right; exists b; subst.
@@ -437,7 +437,7 @@ Proof.
                           & key_mailbox & H_msg_in_mailbox & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction.
       simpl in H_msg; destruct H_msg; try contradiction.
       inversion H0;subst;clear H0.
       unfold certvote_ok in H;decompose record H;clear H.
@@ -452,7 +452,7 @@ Proof.
       destruct H_step as (key_user & ustate_post & H_honest & H_step & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-        intros <- <-; move/Iter.In_mem in H_msg; try contradiction;
+        intros <- <-; move/in_memP in H_msg; try contradiction;
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg;subst;clear H_msg.
       rewrite fnd_set eq_refl in H_u. case:H_u => H_u.
@@ -477,7 +477,7 @@ Proof.
                           & key_mailbox & H_msg_in_mailbox & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction.
       simpl in H_msg; destruct H_msg; try contradiction; inversion H0.
     }
   * { (* internal transition cases *)
@@ -487,7 +487,7 @@ Proof.
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-        intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction;
+        intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction;
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
       subst; assumption.
@@ -508,7 +508,7 @@ Proof.
                           & key_mailbox & H_msg_in_mailbox & ->).
       remember (ustate_post,ms) as ustep_out in H_step.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-      intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction.
+      intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction.
       simpl in H_msg; destruct H_msg; try contradiction; inversion H0.
     }
   * { (* internal transition cases *)
@@ -518,7 +518,7 @@ Proof.
       rewrite in_fnd in H_u; inversion H_u; trivial.
       rewrite H in H_step. clear H.
       destruct H_step; injection Hequstep_out; clear Hequstep_out;
-        intros <- <-; revert H_msg; move/Iter.In_mem => H_msg; try contradiction;
+        intros <- <-; revert H_msg; move/in_memP => H_msg; try contradiction;
       simpl in H_msg; destruct H_msg as [H_msg | H_msg]; try contradiction;
       try destruct H_msg as [H_msg | H_msg]; inversion H_msg.
       left; exists b; subst; assumption.
@@ -1171,7 +1171,7 @@ Proof.
   * { (* utransition deliver *)
     move: H_ustep. clear. move: {g1 H_uid}(g1.(users)[`H_uid]) => u.
     remember (ustate_post,ms) as result.
-    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/Iter.In_mem => /= H_in;intuition;
+    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/in_memP => /= H_in;intuition;
     subst msg;simpl;
     apply/imfsetP;exists uid;[|reflexivity];apply/asboolP.
     unfold certvote_ok in H;decompose record H;assumption.
@@ -1179,7 +1179,7 @@ Proof.
   * { (* utransition internal *)
     move: H_ustep. clear. move: {g1 H_uid}(g1.(users)[`H_uid]) => u.
     remember (ustate_post,ms) as result.
-    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/Iter.In_mem => /= H_in;intuition;
+    destruct 1;case:Heqresult => ? ?;subst ustate_post ms;move/in_memP => /= H_in;intuition;
     (subst msg;simpl;
      apply/imfsetP;exists uid;[|reflexivity];apply/asboolP);
     autounfold with utransition_unfold in * |-;

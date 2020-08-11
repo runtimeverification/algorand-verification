@@ -7,9 +7,6 @@ Require Import finmap multiset.
 From Coq
 Require Import Reals Relation_Definitions Relation_Operators.
 
-From Interval
-Require Import Tactic.
-
 From mathcomp.analysis
 Require Import boolp Rstruct.
 
@@ -238,6 +235,18 @@ Proof.
 Qed.
 
 (** ** Generic sequence lemmas *)
+
+Lemma in_memP (T : eqType) (x : T) l : reflect (List.In x l) (in_mem x (mem l)).
+Proof.
+apply iffP with (P := x \in l).
+- by case: (x \in l) => //; constructor.
+- elim: l => [|h l IH] //=.
+  rewrite inE; case/orP; first by move/eqP=>->; left.
+  by move/IH => mem_x; right.
+- elim: l => [|h l IH] //=; case.
+    by move =>->; rewrite inE; apply/orP; left.
+  by move/IH; rewrite inE => mem_x; apply/orP; right.
+Qed.
 
 Lemma take_rcons T : forall (s : seq T) (x : T), take (size s) (rcons s x) = s.
 Proof. elim => //=; last by move => a l IH x; rewrite IH. Qed.
@@ -899,7 +908,7 @@ Proof.
     destruct g1;simpl in * |- *.
     rewrite in_fnd in H_u;injection H_u;clear H_u.
     intro H. rewrite -> H in * |- *. clear key_user users H.
-    move/Iter.In_mem in msg_in.
+    move/in_memP: msg_in => msg_in.
     clear -msg_in H_step.
 
     unfold step_of_ustate.
@@ -958,7 +967,7 @@ Proof.
   revert H_u. rewrite fnd_set eq_refl. case => {u}<-.
 
   destruct g1;cbn -[in_mem mem eq_op] in * |- *.
-  move/Iter.In_mem in msg_in.
+  move/in_memP: msg_in => msg_in.
 
   clear -msg_in H_step.
   remember (ustate_post,sent) as ustep_out in H_step.
@@ -1480,7 +1489,7 @@ Lemma utransition_msg_sender_good uid u msg result:
   forall m, m \in result.2 -> uid = msg_sender m.
 Proof.
   clear.
-  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+  by destruct 1 => /= m /in_memP /=;intuition;subst m.
 Qed.
 
 (* internal transition on uid results in msg sent by uid *)
@@ -1489,7 +1498,7 @@ Lemma utransition_internal_sender_good uid u result:
   forall m, m \in result.2 -> uid = msg_sender m.
 Proof.
   clear.
-  by destruct 1 => /= m /Iter.In_mem /=;intuition;subst m.
+  by destruct 1 => /= m /in_memP /=;intuition;subst m.
 Qed.
 
 (* ---------------------------- *)
