@@ -31,7 +31,7 @@ Definition user_before_round r (u : UState) : Prop :=
   (u.(round) < r \/
    (u.(round) = r /\
     u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
-  /\ (forall r' p, r <= r' -> nilp (u.(proposals) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(proposals) (r', p)))
   /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))

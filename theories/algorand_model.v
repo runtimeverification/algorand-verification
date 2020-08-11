@@ -227,7 +227,7 @@ Record UState :=
     timer : R; (**r the user's current timer value (since the beginning of the current period) *)
     deadline : R; (**r the user's next deadline time value (since the beginning of the current period) *)
     p_start : R; (**r the (local) time at which the user's current period started (i.e., local clock = p_start + timer) *)
-    proposals : nat -> nat -> seq PropRecord; (**r a sequence of proposal/reproposal records for the given round/period *)
+    proposals : {fsfun nat * nat -> seq PropRecord with [::]}; (**r a sequence of proposal/reproposal records for the given round/period *)
     stv : {fmap nat -> Value}; (**r starting value *)
     blocks : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
     softvotes : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
@@ -244,10 +244,7 @@ Instance UState_Settable : Settable _ :=
 
 (** Update functions for sequences maintained in the user state. *)
 Definition set_proposals u r' p' prop : UState :=
-  u <| proposals := fun r p =>
-        if (r, p) == (r', p')
-        then undup (prop :: u.(proposals) r p)
-        else u.(proposals) r p |>.
+  u <| proposals := setfs u.(proposals) (r', p') (undup (prop :: u.(proposals) (r', p'))) |>.
 
 Definition set_blocks (u : UState) (r':nat) block : UState :=
   u <| blocks := setfs u.(blocks) r' (undup (block :: u.(blocks) r')) |>.
@@ -611,7 +608,7 @@ Definition softvote_new_ok (pre : UState) uid v r p : Prop :=
   valid_rps pre r p 2 /\
   comm_cred_step uid r p 2 /\
   ~ cert_may_exist pre /\
-  leader_prop_value v (pre.(proposals) r p) .
+  leader_prop_value v (pre.(proposals) (r, p)) .
 
 (** The Softvoting-a-reproposal step preconditions
 Note that this is the Softvoting step when [p > 1] and the previous period's
@@ -622,7 +619,7 @@ Definition softvote_repr_ok (pre : UState) uid v (r p: nat) : Prop :=
   comm_cred_step uid r p 2 /\
   ( (~ cert_may_exist pre /\
     (exists s, nextvote_value_quorum pre v r (p - 1) s) /\
-    leader_reprop_value v (pre.(proposals) r p))
+    leader_reprop_value v (pre.(proposals) (r, p)))
     \/ (cert_may_exist pre /\ pre.(stv).[? p] = Some v) ).
 
 (** The no-softvoting step preconditions. Three reasons a user may
@@ -638,10 +635,10 @@ Definition no_softvote_ok (pre : UState) uid r p : Prop :=
   valid_rps pre r p 2 /\
   forall v,
   (comm_cred_step uid r p 2 ->
-    (( cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) r p))
+    (( cert_may_exist pre \/ ~ leader_prop_value v (pre.(proposals) (r, p)))
     /\ ((cert_may_exist pre \/
         (forall s, ~ nextvote_value_quorum pre v r (p - 1) s) \/
-        ~ leader_reprop_value v (pre.(proposals) r p))
+        ~ leader_reprop_value v (pre.(proposals) (r, p)))
        /\ (~ cert_may_exist pre \/ ~ pre.(stv).[? p] = Some v)))).
 
 (** The softvoting step (new or reproposal) post-state.

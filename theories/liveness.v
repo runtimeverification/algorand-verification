@@ -346,12 +346,12 @@ match msg_type msg, msg_ev msg with
   let: uid := msg_sender msg in
   let: r := msg_round msg in
   let: p := msg_period msg in
-  exists c, (uid, c, v, true) \in ustate.(proposals) r p
+  exists c, (uid, c, v, true) \in ustate.(proposals) (r, p)
 | Reproposal, repr_val v uid' p' =>
   let: uid := msg_sender msg in
   let: r := msg_round msg in
   let: p := msg_period msg in
-  exists c, (uid, c, v, false) \in ustate.(proposals) r p
+  exists c, (uid, c, v, false) \in ustate.(proposals) (r, p)
 | Softvote, val v =>
   let: uid := msg_sender msg in
   let: r := msg_round msg in
