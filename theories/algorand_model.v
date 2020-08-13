@@ -230,7 +230,7 @@ Record UState :=
     proposals : {fsfun nat * nat -> seq PropRecord with [::]}; (**r a sequence of proposal/reproposal records for the given round/period *)
     stv : {fmap nat -> Value}; (**r starting value *)
     blocks : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
-    softvotes : nat -> nat -> seq Vote; (**r a sequence of softvotes seen for the given round/period *)
+    softvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of softvotes seen for the given round/period *)
     certvotes : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
     nextvotes_open : nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
@@ -250,10 +250,7 @@ Definition set_blocks (u : UState) (r':nat) block : UState :=
   u <| blocks := setfs u.(blocks) r' (undup (block :: u.(blocks) r')) |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  u <| softvotes := fun r p =>
-        if (r, p) == (r', p')
-        then undup (sv :: u.(softvotes) r p)
-        else u.(softvotes) r p |>.
+  u <| softvotes := setfs u.(softvotes) (r', p') (undup (sv :: u.(softvotes) (r', p'))) |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
   u <| certvotes := fun r p =>
@@ -462,7 +459,7 @@ Definition vote_values (vs: seq Vote) : seq Value :=
   undup [seq x.2 | x <- vs].
 
 Definition softvoters_for (v:Value) (u:UState) r p : {fset UserId} :=
-  [fset x.1 | x in u.(softvotes) r p & matchValue x v].
+  [fset x.1 | x in u.(softvotes) (r, p) & matchValue x v].
 
 Definition nextvoters_open_for (u:UState) r p s : {fset UserId} :=
   [fset x in u.(nextvotes_open) r p s].
@@ -479,7 +476,7 @@ Definition soft_weight (v:Value) (u:UState) r p : nat :=
 and period, i.e., the sequence of values in softvotes having votes greater than or equal 
 to the threshold. Invariant: size is [<= 1]. *)
 Definition certvals (u:UState) r p : seq Value :=
-  [seq v <- vote_values (u.(softvotes) r p) | (soft_weight v u r p) >= tau_s].
+  [seq v <- vote_values (u.(softvotes) (r, p)) | (soft_weight v u r p) >= tau_s].
 
 (** The sequence of values certified for in the last period as seen by the given user.
 This corresponds to prev_certvals field in the automaton model. *)

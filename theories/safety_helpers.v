@@ -2025,7 +2025,7 @@ Qed.
 (* softvotes monotone over internal user transition *)
 Lemma softvotes_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
-  forall r p, {subset pre.(softvotes) r p <= post.(softvotes) r p}.
+  forall r p, {subset pre.(softvotes) (r, p) <= post.(softvotes) (r, p)}.
 Proof.
 move => uid pre post msgs step r p.
 remember (post,msgs) as result eqn:H_result;
@@ -2036,22 +2036,35 @@ Qed.
 Lemma softvotes_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   forall r p,
-    {subset pre.(softvotes) r p <= post.(softvotes) r p}.
+    {subset pre.(softvotes) (r, p) <= post.(softvotes) (r, p)}.
 Proof.
-  by move => uid pre post m msgs step r p;
-  remember (post,msgs) as result eqn:H_result;
-    destruct step;case:H_result => [? ?];subst;
-  destruct pre;simpl;autounfold with utransition_unfold;
-    repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end;
-  try (by apply subxx_hint);
-  move => x H_x; rewrite ?in_cons ?mem_undup H_x ?orbT.
+  move => uid pre post m msgs step r p.
+  remember (post,msgs) as result eqn:H_result.
+  destruct step;case:H_result => [? ?];subst.
+  all: destruct pre;simpl;autounfold with utransition_unfold.
+  all: repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
+  all: move => x H_x //.
+  - rewrite setfsNK.
+    case Hrp: (_ == _) => //.
+    by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
+  - rewrite setfsNK.
+    case Hrp: (_ == _) => //.
+    move/eqP: Hrp; case =><--<-.
+    by rewrite in_cons mem_undup H_x orbT.
+  - rewrite setfsNK.
+    case Hrp: (_ == _) => //.
+    by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
+  - rewrite setfsNK.
+    case Hrp: (_ == _) => //.
+    move/eqP: Hrp; case =><--<-.
+    by rewrite in_cons mem_undup H_x orbT.
 Qed.
 
 (* softvotes monotone over global transition *)
 Lemma softvotes_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
-  exists u2, g2.(users).[?uid] = Some u2
-             /\ forall r p, {subset u1.(softvotes) r p <= u2.(softvotes)  r p}.
+  exists u2, g2.(users).[?uid] = Some u2 /\
+    forall r p, {subset u1.(softvotes) (r, p) <= u2.(softvotes) (r, p)}.
 Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
@@ -2080,7 +2093,7 @@ Qed.
 Lemma softvotes_monotone g1 g2 (H_reach:greachable g1 g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   forall u2, g2.(users).[?uid] = Some u2 ->
-  forall r p, {subset u1.(softvotes) r p <= u2.(softvotes) r p}.
+  forall r p, {subset u1.(softvotes) (r, p) <= u2.(softvotes) (r, p)}.
 Proof.
   clear -H_reach.
   move => u1 H_u1 u2 H_u2.
@@ -2152,8 +2165,8 @@ Qed.
 (* blocks monotone over global transition *)
 Lemma blocks_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
-  exists u2, g2.(users).[?uid] = Some u2
-             /\ forall r, {subset u1.(blocks) r <= u2.(blocks) r}.
+  exists u2, g2.(users).[?uid] = Some u2 /\
+    forall r, {subset u1.(blocks) r <= u2.(blocks) r}.
 Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.
@@ -2246,10 +2259,10 @@ Qed.
 (* starting value preserved over global transition *)
 Lemma stv_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
-  exists u2, g2.(users).[?uid] = Some u2
-  /\  (u1.(round)  = u2.(round)  ->
-       u1.(period) = u2.(period) ->
-       forall p, u1.(stv).[? p] = u2.(stv).[? p]).
+  exists u2, g2.(users).[?uid] = Some u2 /\
+    (u1.(round)  = u2.(round) ->
+     u1.(period) = u2.(period) ->
+     forall p, u1.(stv).[? p] = u2.(stv).[? p]).
 Proof.
   clear -H_step => u1 H_u1.
   have H_in1: (uid \in g1.(users)) by rewrite -fndSome H_u1.

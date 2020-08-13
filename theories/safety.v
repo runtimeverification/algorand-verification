@@ -33,7 +33,7 @@ Definition user_before_round r (u : UState) : Prop :=
     u.(step) = 1 /\ u.(period) = 1 /\ u.(timer) = 0%R /\ u.(deadline) = 0%R))
   /\ (forall r' p, r <= r' -> nilp (u.(proposals) (r', p)))
   /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
-  /\ (forall r' p, r <= r' -> nilp (u.(softvotes) r' p))
+  /\ (forall r' p, r <= r' -> nilp (u.(softvotes) (r', p)))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) r' p))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
@@ -604,21 +604,19 @@ Qed.
 
 (* vote in users softvote set -> softvote was received *)
 Lemma received_softvote
-      g0 trace (H_path: is_trace g0 trace)
-      r0 (H_start: state_before_round r0 g0)
-      ix g (H_last: onth trace ix = Some g) :
-  forall uid u,
-    (users g).[? uid] = Some u ->
-  forall voter v r p,
-    (voter, v) \in u.(softvotes) r p ->
-    r0 <= r ->
-    exists d, msg_received uid d (mkMsg Softvote (val v) r p voter) trace.
+  g0 trace (H_path: is_trace g0 trace)
+  r0 (H_start: state_before_round r0 g0)
+  ix g (H_last: onth trace ix = Some g) :
+  forall uid u, (users g).[? uid] = Some u ->
+  forall voter v r p, (voter, v) \in u.(softvotes) (r, p) ->
+  r0 <= r ->
+  exists d, msg_received uid d (mkMsg Softvote (val v) r p voter) trace.
 Proof.
   clear -H_path H_start H_last.
   move => uid u H_u voter v r p H_softvotes H_r.
 
   assert (~~match g0.(users).[? uid] with
-            | Some u0 => (voter,v) \in u0.(softvotes) r p
+            | Some u0 => (voter,v) \in u0.(softvotes) (r, p)
             | None => false
             end). {
     destruct (g0.(users).[?uid]) as [u0|] eqn:H_u0;[|done].
@@ -634,7 +632,7 @@ Proof.
 
   pose proof H_path as H_path_copy.
   apply path_gsteps_onth with
-      (P := upred uid (fun u => (voter, v) \in u.(softvotes) r p))
+      (P := upred uid (fun u => (voter, v) \in u.(softvotes) (r, p)))
       (ix_p:=ix) (g_p:=g)
     in H_path_copy;
     try eassumption; try (unfold upred; rewrite H_u; assumption).
@@ -695,41 +693,39 @@ Proof.
 
     (* deliver softvote *)
     * {
-      case: H_result => [? ?]; destruct pre.
+      case: H_result => [pre'_eq sent_eq]; destruct pre.
       exists pending.1, [::], H_in1, ustate_post.
       unfold delivery_result; unfold RecordSet.set. simpl in * |- *.
       subst pre0.
       subst ustate_post. subst u0.
-      unfold set_softvotes in H_pg2.
+      unfold pre', set_softvotes in H_pg2.
       simpl in H_pg2.
       revert H_pg2.
       match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
-        try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb2 end;
-        try (by rewrite mem_undup; intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-
-      intro.
-      rewrite in_cons mem_undup in H_pg2.
+       try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
+        rewrite setfsNK /=.
+        case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
+        case/eqP: eq_rp => eq_r eq_p; subst.
+        rewrite mem_undup => H_pg2.
+        by rewrite H_pg2 in H_pg1.
+      rewrite setfsNK.
+      case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
+      case/eqP: eq_rp => eq_r eq_p. subst r p.
+      rewrite in_cons mem_undup => H_pg2.
       move/orP in H_pg2.
-      destruct H_pg2 as [H_eqv | H_neqv];
-        try (by rewrite H_neqv in H_pg1; inversion H_pg1).
-
+      destruct H_pg2 as [H_eqv | H_neqv]; last by rewrite H_neqv in H_pg1; inversion H_pg1.
       move/eqP in H_eqv. move/eqP in Hb1.
-      case: H_eqv. case: Hb1.
-      move => H_r_r1 H_p_p0 H_voter_i H_v_v0.
-      subst r p voter v.
-
-      split. assumption.
-      rewrite in_fnd in H_u1; inversion H_u1. subst.
-      split. assumption.
-
-      exists msg_key. rewrite -H_pending. split. assumption.
-      trivial.
+      case: H_eqv => eq_i eq_v. subst voter v.
+      rewrite in_fnd in H_u1. case: H_u1 => eq_uid.
+      split => //.
+      rewrite -eq_uid.
+      split => //.
+      exists msg_key. rewrite -H_pending. split => //.
+      by rewrite sent_eq.
       }
-
     (* set softvote *)
     * {
-      case: H_result => [? ?]; destruct pre.
+      case: H_result => [pre'_eq sent_eq]; destruct pre.
       exists pending.1, [:: mkMsg Certvote (val v0) r1 p0 uid], H_in1, ustate_post.
       unfold delivery_result. unfold RecordSet.set. simpl in * |- *.
       subst pre0.
@@ -739,26 +735,25 @@ Proof.
       revert H_pg2.
       match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
         try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-      match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb2 end;
-        try (by rewrite mem_undup; intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-
-      intro.
-      rewrite in_cons mem_undup in H_pg2.
+        rewrite setfsNK /=.
+        case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
+        case/eqP: eq_rp => eq_r eq_p; subst.
+        rewrite mem_undup => H_pg2.
+        by rewrite H_pg2 in H_pg1.
+      rewrite setfsNK.
+      case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
+      case/eqP: eq_rp => eq_r eq_p. subst r p.
+      rewrite in_cons mem_undup => H_pg2.
       move/orP in H_pg2.
-      destruct H_pg2 as [H_eqv | H_neqv];
-        try (by rewrite H_neqv in H_pg1; inversion H_pg1).
-
+      destruct H_pg2 as [H_eqv | H_neqv]; last by rewrite H_neqv in H_pg1; inversion H_pg1.
       move/eqP in H_eqv. move/eqP in Hb1.
-      case: H_eqv. case: Hb1.
-      move => H_r_r1 H_p_p0 H_voter_i H_v_v0.
-      subst r p voter v.
-
-      split. assumption.
-      rewrite in_fnd in H_u1; inversion H_u1; subst.
-      split. assumption.
-
-      exists msg_key. rewrite -H_pending. split. assumption.
-      trivial.
+      case: H_eqv => eq_i eq_v. subst voter v.
+      rewrite in_fnd in H_u1. case: H_u1 => eq_uid.
+      split => //.
+      rewrite -eq_uid.
+      split => //.
+      exists msg_key. rewrite -H_pending. split => //.
+      by rewrite sent_eq.
       }
 
     (* deliver nonvote msg result *)
@@ -1084,7 +1079,7 @@ Lemma softvotes_sent
   forall ix g, onth trace ix = Some g ->
   forall uid u, g.(users).[? uid] = Some u ->
   forall r, r0 <= r -> forall voter v p,
-      (voter,v) \in u.(softvotes) r p ->
+      (voter,v) \in u.(softvotes) (r, p) ->
       honest_during_step (r,p,2) voter trace ->
       softvoted_in_path trace voter r p v.
 Proof.
@@ -1216,7 +1211,7 @@ Proof.
   intros ix g H_onth uid u H_lookup r H_r v p.
   apply/fsubsetP => voter H_softvoters.
 
-  have H_softvote : (voter,v) \in u.(softvotes) r p
+  have H_softvote : (voter,v) \in u.(softvotes) (r, p)
     by move: H_softvoters;clear;move => /imfsetP [] [xu xv] /= /andP [H_in /eqP] -> ->.
 
   apply onth_take_some in H_onth.
