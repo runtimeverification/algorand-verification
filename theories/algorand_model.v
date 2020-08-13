@@ -231,7 +231,7 @@ Record UState :=
     stv : {fmap nat -> Value}; (**r starting value *)
     blocks : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
     softvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of softvotes seen for the given round/period *)
-    certvotes : nat -> nat -> seq Vote; (**r a sequence of certvotes seen for the given round/period *)
+    certvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of certvotes seen for the given round/period *)
     nextvotes_open : nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
@@ -253,10 +253,7 @@ Definition set_softvotes (u : UState) r' p' sv : UState :=
   u <| softvotes := setfs u.(softvotes) (r', p') (undup (sv :: u.(softvotes) (r', p'))) |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
-  u <| certvotes := fun r p =>
-        if (r, p) == (r', p')
-        then undup (sv :: u.(certvotes) r p)
-        else u.(certvotes) r p |>.
+  u <| certvotes := setfs u.(certvotes) (r', p') (undup (sv :: u.(certvotes) (r', p'))) |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
   u <| nextvotes_open := fun r p s =>
@@ -772,7 +769,7 @@ Definition certify_ok (pre : UState) (v : Value) r p : Prop :=
   exists b,
   valid_block_and_hash b v /\
   b \in pre.(blocks) r /\
-  size [seq x <- pre.(certvotes) r p | matchValue x v] >= tau_c.
+  size [seq x <- pre.(certvotes) (r, p) | matchValue x v] >= tau_c.
 
 (** State update. *)
 Definition certify_result r (pre : UState) : UState :=
