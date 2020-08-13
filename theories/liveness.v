@@ -371,7 +371,7 @@ match msg_type msg, msg_ev msg with
   let: uid := msg_sender msg in
   let: r := msg_round msg in
   let: p := msg_period msg in
-  (uid, v) \in ustate.(nextvotes_val) r p s
+  (uid, v) \in ustate.(nextvotes_val) (r, p, s)
 | _, _ => True
 end.
 

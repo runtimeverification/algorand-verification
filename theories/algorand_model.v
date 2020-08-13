@@ -233,7 +233,7 @@ Record UState :=
     softvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of softvotes seen for the given round/period *)
     certvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of certvotes seen for the given round/period *)
     nextvotes_open : {fsfun nat * nat * nat -> seq UserId with [::]}; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
-    nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
+    nextvotes_val : {fsfun nat * nat * nat -> seq Vote with [::]} (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
 Instance UState_Settable : Settable _ :=
@@ -256,13 +256,10 @@ Definition set_certvotes (u : UState) r' p' sv : UState :=
   u <| certvotes := setfs u.(certvotes) (r', p') (undup (sv :: u.(certvotes) (r', p'))) |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  u <| nextvotes_open := setfs u.(nextvotes_open) (r',p',s') (undup (nvo :: u.(nextvotes_open) (r', p', s'))) |>.
+  u <| nextvotes_open := setfs u.(nextvotes_open) (r', p', s') (undup (nvo :: u.(nextvotes_open) (r', p', s'))) |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  u <| nextvotes_val := fun r p s =>
-        if (r, p, s) == (r', p', s')
-        then undup (nvv :: u.(nextvotes_val) r p s)
-        else u.(nextvotes_val) r p s |>.
+  u <| nextvotes_val := setfs u.(nextvotes_val) (r', p', s') (undup (nvv :: u.(nextvotes_val) (r', p', s'))) |>.
 
 (** Update function for advancing the period of a user state. *)
 Definition advance_period (u : UState) : UState :=
@@ -459,7 +456,7 @@ Definition nextvoters_open_for (u:UState) r p s : {fset UserId} :=
   [fset x in u.(nextvotes_open) (r, p, s)].
 
 Definition nextvoters_val_for (v:Value) (u:UState) r p s : {fset UserId} :=
-  [fset x.1 | x in u.(nextvotes_val) r p s & matchValue x v].
+  [fset x.1 | x in u.(nextvotes_val) (r, p, s) & matchValue x v].
 
 (** The number of softvotes of a given value in a given user state for the round
 and period given. Does not use the invariant that [u.(softvotes) r p] is duplicate-free. *)
@@ -484,7 +481,7 @@ Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
 
 (** Whether the user has seen enough nextvotes for a given value in the given round-period-step. *)
 Definition nextvote_value_quorum (u:UState) v r p s : Prop :=
-  #|[seq x.1 | x <- u.(nextvotes_val) r p s & matchValue x v]| >= tau_v.
+  #|[seq x.1 | x <- u.(nextvotes_val) (r, p, s) & matchValue x v]| >= tau_v.
 
 (** Whether the user has seen enough nextvotes for some value in the given round-period-step. *)
 Definition nextvote_quorum_for_some_value (u:UState) r p s : Prop :=
