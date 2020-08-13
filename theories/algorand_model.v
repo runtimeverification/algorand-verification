@@ -232,7 +232,7 @@ Record UState :=
     blocks : {fsfun nat -> seq Value with [::]}; (**r a sequence of values seen for the given round *)
     softvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of softvotes seen for the given round/period *)
     certvotes : {fsfun nat * nat -> seq Vote with [::]}; (**r a sequence of certvotes seen for the given round/period *)
-    nextvotes_open : nat -> nat -> nat -> seq UserId; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
+    nextvotes_open : {fsfun nat * nat * nat -> seq UserId with [::]}; (**r a sequence of bottom-nextvotes seen for the given round/period/step *)
     nextvotes_val : nat -> nat -> nat -> seq Vote (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
@@ -256,10 +256,7 @@ Definition set_certvotes (u : UState) r' p' sv : UState :=
   u <| certvotes := setfs u.(certvotes) (r', p') (undup (sv :: u.(certvotes) (r', p'))) |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  u <| nextvotes_open := fun r p s =>
-        if (r, p, s) == (r', p', s')
-        then undup (nvo :: u.(nextvotes_open) r p s)
-        else u.(nextvotes_open) r p s |>.
+  u <| nextvotes_open := setfs u.(nextvotes_open) (r',p',s') (undup (nvo :: u.(nextvotes_open) (r', p', s'))) |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
   u <| nextvotes_val := fun r p s =>
@@ -459,7 +456,7 @@ Definition softvoters_for (v:Value) (u:UState) r p : {fset UserId} :=
   [fset x.1 | x in u.(softvotes) (r, p) & matchValue x v].
 
 Definition nextvoters_open_for (u:UState) r p s : {fset UserId} :=
-  [fset x in u.(nextvotes_open) r p s].
+  [fset x in u.(nextvotes_open) (r, p, s)].
 
 Definition nextvoters_val_for (v:Value) (u:UState) r p s : {fset UserId} :=
   [fset x.1 | x in u.(nextvotes_val) r p s & matchValue x v].
@@ -483,7 +480,7 @@ Definition prev_certvals (u:UState) : seq Value :=
 
 (** Whether the user has seen enough votes for bottom in the given round-period-step. *)
 Definition nextvote_bottom_quorum (u:UState) r p s : Prop :=
-  #|(u.(nextvotes_open) r p s)| >= tau_b.
+  #|(u.(nextvotes_open) (r, p, s))| >= tau_b.
 
 (** Whether the user has seen enough nextvotes for a given value in the given round-period-step. *)
 Definition nextvote_value_quorum (u:UState) v r p s : Prop :=

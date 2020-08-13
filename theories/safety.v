@@ -35,7 +35,7 @@ Definition user_before_round r (u : UState) : Prop :=
   /\ (forall r', r <= r' -> nilp (u.(blocks) r'))
   /\ (forall r' p, r <= r' -> nilp (u.(softvotes) (r', p)))
   /\ (forall r' p, r <= r' -> nilp (u.(certvotes) (r', p)))
-  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) r' p s))
+  /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_open) (r', p, s)))
   /\ (forall r' p s, r <= r' -> nilp (u.(nextvotes_val) r' p s)).
 
 Definition users_before_round (r:nat) (g : GState) : Prop :=
@@ -804,19 +804,17 @@ Qed.
 
 (* vote in users nextvote_open set -> nextvote was received *)
 Lemma received_nextvote_open
-      g0 trace (H_path: is_trace g0 trace)
-      r0 (H_start: state_before_round r0 g0):
+ g0 trace (H_path: is_trace g0 trace)
+ r0 (H_start: state_before_round r0 g0) :
   forall ix g, onth trace ix = Some g ->
-  forall uid u,
-    (users g).[? uid] = Some u ->
-  forall voter r p s,
-    voter \in u.(nextvotes_open) r p s ->
+  forall uid u, (users g).[? uid] = Some u ->
+  forall voter r p s, voter \in u.(nextvotes_open) (r, p, s) ->
     r0 <= r ->
     exists d, msg_received uid d (mkMsg Nextvote_Open (step_val s) r p voter) trace.
 Proof.
   clear -H_path H_start.
   move => ix g H_g uid u H_u voter r p s H_voter H_r.
-  set P := upred uid (fun u => voter \in u.(nextvotes_open) r p s).
+  set P := upred uid (fun u => voter \in u.(nextvotes_open) (r, p, s)).
   assert (~~P g0). {
   move: H_start => [H_users _]. clear -H_users H_r.
   subst P. unfold upred.
@@ -870,12 +868,12 @@ Proof.
     move => H_n H_p.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
+    move: H_p. unfold set_nextvotes_open;simpl.
+    rewrite setfsNK. by rewrite H_neq.
     } case: H2 => ? ? ?;subst r0 p0 s0.
     assert (i = voter). {
       symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= eq_refl in H_p.
-
+    rewrite /set_nextvotes_open /= setfsNK eqxx in H_p.
     match type of H_p with context C [if ?b then _ else _] => destruct b end.
       by rewrite mem_undup in H_p.
       by rewrite in_cons H_neq mem_undup in H_p.
@@ -886,11 +884,12 @@ Proof.
     move => H_n H_p.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p. unfold set_nextvotes_open;simpl. rewrite H_neq. done.
+    move: H_p. unfold set_nextvotes_open;simpl.
+    by rewrite setfsNK H_neq.
     } case: H2 => ? ? ?;subst r0 p0 s0.
     assert (i = voter). {
       symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= eq_refl in H_p.
+    rewrite /set_nextvotes_open /= setfsNK eqxx in H_p.
 
     match type of H_p with context C [if ?b then _ else _] => destruct b end.
       by rewrite mem_undup in H_p.
@@ -1253,9 +1252,9 @@ Proof.
   intros ix g H_onth uid u H_lookup r H_r p s.
   apply/fsubsetP => voter H_nextvoters.
 
-  have H_nextvote : voter \in u.(nextvotes_open) r p s
+  have H_nextvote : voter \in u.(nextvotes_open) (r, p, s)
     by revert H_nextvoters; rewrite in_fset;
-    change (in_mem voter _) with (voter \in u.(nextvotes_open) r p s).
+    change (in_mem voter _) with (voter \in u.(nextvotes_open) (r, p, s)).
 
   apply onth_take_some in H_onth.
   assert (H_ix : ix.+1 > 0) by intuition.
@@ -1495,7 +1494,7 @@ Proof.
 
       intro voter.
       rewrite in_fset.
-      change (in_mem voter _) with (voter \in pre'.(nextvotes_open) r1 p0 s).
+      change (in_mem voter _) with (voter \in pre'.(nextvotes_open) (r1, p0, s)).
 
       intro H_voter.
       eapply received_nextvote_open with (u:=(adv_period_open_result pre'));
