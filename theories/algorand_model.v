@@ -135,7 +135,7 @@ Lemma cancelExVal : pcancel codeExVal (fun x => Some (decodeExVal x)).
 Proof. by case. Qed.
 
 (** Register canonical structures on [ExValue]; needed for using it in [fset]s, [mset]s, etc. *)
-Canonical exValue_eqType     := EqType     ExValue (PcanEqMixin     cancelExVal).
+Canonical exValue_eqType := EqType ExValue (PcanEqMixin cancelExVal).
 Canonical exValue_choiceType := ChoiceType ExValue (PcanChoiceMixin cancelExVal).
 
 (** ** Messages *)
@@ -147,7 +147,6 @@ can be viewed as a tuple [(type, ev, r, p, id)] where:
 - [r] is the round value, and
 - [p] is the period value, and
 - [id] is the sending user's identifier. *)
-
 Record Msg : Type := mkMsg
  { msg_type : MessageType ;
    msg_ev : ExValue ;
@@ -156,17 +155,18 @@ Record Msg : Type := mkMsg
    msg_sender : UserId
  }.
 
-Definition codeMsg (m : Msg) : MessageType * ExValue * nat * nat * UserId :=
+Definition codeMsg (m : Msg) :=
 (msg_type m, msg_ev m, msg_round m, msg_period m, msg_sender m).
 
-Definition decodeMsg (c: MessageType * ExValue * nat * nat * UserId) : Msg :=
-mkMsg c.1.1.1.1 c.1.1.1.2 c.1.1.2 c.1.2 c.2.
+Definition decodeMsg c :=
+let: (msg_type, msg_ev, msg_round, msg_period, msg_sender) := c in
+mkMsg msg_type msg_ev msg_round msg_period msg_sender.
 
 Lemma cancelMsg : pcancel codeMsg (fun x => Some (decodeMsg x)).
 Proof. by case. Qed.
 
 (** Register canonical structures on [Msg]; needed for using it in [fset]s, [mset]s, etc. *)
-Canonical Msg_eqType     := EqType     Msg (PcanEqMixin     cancelMsg).
+Canonical Msg_eqType := EqType Msg (PcanEqMixin cancelMsg).
 Canonical Msg_choiceType := ChoiceType Msg (PcanChoiceMixin cancelMsg).
 
 (** Messages are grouped by the target user, and are paired with a
@@ -245,34 +245,13 @@ Definition codeUState (u : UState) :=
    u.(p_start), u.(proposals), u.(stv), u.(blocks), u.(softvotes), u.(certvotes),
    u.(nextvotes_open), u.(nextvotes_val)).
 
-Definition decodeUState (c :
-  bool * nat * nat * nat * R * R * R *
-  {fsfun nat * nat -> seq PropRecord with [::]} *
-  {fmap nat -> Value} *
-  {fsfun nat -> seq Value with [::]} *
-  {fsfun nat * nat -> seq Vote with [::]} *
-  {fsfun nat * nat -> seq Vote with [::]} *
-  {fsfun nat * nat * nat -> seq UserId with [::]} *
-  {fsfun nat * nat * nat -> seq Vote with [::]}) : UState.
-Proof.
-destruct c as [c nextvotes_val].
-destruct c as [c nextvotes_open].
-destruct c as [c certvotes].
-destruct c as [c softvotes].
-destruct c as [c blocks].
-destruct c as [c stv].
-destruct c as [c proposals].
-destruct c as [c p_start].
-destruct c as [c deadline].
-destruct c as [c timer].
-destruct c as [c step].
-destruct c as [c period].
-destruct c as [corrupt round].
-exact: (mkUState
- corrupt round period step timer deadline
+Definition decodeUState c :=
+let: (corrupt, round, period, step, timer, deadline, p_start,
+      proposals, stv, blocks, softvotes, certvotes,
+      nextvotes_open, nextvotes_val) := c in
+mkUState corrupt round period step timer deadline
  p_start proposals stv blocks softvotes certvotes
- nextvotes_open nextvotes_val).
-Defined.
+ nextvotes_open nextvotes_val.
 
 Lemma cancelUState : pcancel codeUState (fun x => Some (decodeUState x)).
 Proof. by case. Qed.
@@ -341,7 +320,8 @@ Definition codeGState (g : GState) :=
  (now g, network_partition g, users g, msg_in_transit g, msg_history g).
 
 Definition decodeGState c :=
-mkGState c.1.1.1.1 c.1.1.1.2 c.1.1.2 c.1.2 c.2.
+let: (now, network_partition, users, msg_in_transit, msg_history) := c in
+mkGState now network_partition users msg_in_transit msg_history.
 
 Lemma cancelGState : pcancel codeGState (fun x => Some (decodeGState x)).
 Proof. by case. Qed.
