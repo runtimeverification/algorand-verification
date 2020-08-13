@@ -356,12 +356,12 @@ match msg_type msg, msg_ev msg with
   let: uid := msg_sender msg in
   let: r := msg_round msg in
   let: p := msg_period msg in
-  (uid, v) \in ustate.(softvotes) r p
+  (uid, v) \in ustate.(softvotes) (r, p)
 | Certvote, val v =>
   let: uid := msg_sender msg in
   let: r := msg_round msg in
   let: p := msg_period msg in
-  (uid, v) \in ustate.(certvotes) r p
+  (uid, v) \in ustate.(certvotes) (r, p)
 | Nextvote_Open, step_val s =>
   let: uid := msg_sender msg in
   let: r := msg_round msg in
