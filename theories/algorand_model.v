@@ -240,6 +240,46 @@ Instance UState_Settable : Settable _ :=
   settable! mkUState <corrupt;round;period;step;timer;deadline;p_start;
    proposals;stv;blocks;softvotes;certvotes;nextvotes_open;nextvotes_val>.
 
+Definition codeUState (u : UState) :=
+  (u.(corrupt), u.(round), u.(period), u.(step), u.(timer), u.(deadline),
+   u.(p_start), u.(proposals), u.(stv), u.(blocks), u.(softvotes), u.(certvotes),
+   u.(nextvotes_open), u.(nextvotes_val)).
+
+Definition decodeUState (c :
+  bool * nat * nat * nat * R * R * R *
+  {fsfun nat * nat -> seq PropRecord with [::]} *
+  {fmap nat -> Value} *
+  {fsfun nat -> seq Value with [::]} *
+  {fsfun nat * nat -> seq Vote with [::]} *
+  {fsfun nat * nat -> seq Vote with [::]} *
+  {fsfun nat * nat * nat -> seq UserId with [::]} *
+  {fsfun nat * nat * nat -> seq Vote with [::]}) : UState.
+Proof.
+destruct c as [c nextvotes_val].
+destruct c as [c nextvotes_open].
+destruct c as [c certvotes].
+destruct c as [c softvotes].
+destruct c as [c blocks].
+destruct c as [c stv].
+destruct c as [c proposals].
+destruct c as [c p_start].
+destruct c as [c deadline].
+destruct c as [c timer].
+destruct c as [c step].
+destruct c as [c period].
+destruct c as [corrupt round].
+exact: (mkUState
+ corrupt round period step timer deadline
+ p_start proposals stv blocks softvotes certvotes
+ nextvotes_open nextvotes_val).
+Defined.
+
+Lemma cancelUState : pcancel codeUState (fun x => Some (decodeUState x)).
+Proof. by case. Qed.
+
+Canonical UState_eqType := EqType UState (PcanEqMixin cancelUState).
+Canonical UState_choiceType := ChoiceType UState (PcanChoiceMixin cancelUState).
+
 (** ** Updating user state *)
 
 (** Update functions for sequences maintained in the user state. *)
@@ -297,7 +337,6 @@ Instance GState_Settable : Settable _ :=
 (** State with empty maps, unpartitioned, at global time 0. *)
 Definition null_state : GState := mkGState 0%R false [fmap] [fmap] mset0.
 
-(*
 Definition codeGState (g : GState) :=
  (now g, network_partition g, users g, msg_in_transit g, msg_history g).
 
@@ -308,17 +347,7 @@ Lemma cancelGState : pcancel codeGState (fun x => Some (decodeGState x)).
 Proof. by case. Qed.
 
 Canonical GState_eqType := EqType GState (PcanEqMixin cancelGState).
-Canonical GState_choiceType := ChoiceType GState (PcanChoiceMixin cancelMsg).
-*)
-
-(** Equality of global states. *)
-Definition eqGState (g1 g2 : GState) : bool := `[<g1 = g2>].
-
-Lemma eqGStateP : Equality.axiom eqGState.
-Proof. by move => g1 g2; apply/asboolP. Qed.
-
-Canonical GState_eqMixin := EqMixin eqGStateP.
-Canonical GState_eqType := Eval hnf in EqType GState GState_eqMixin.
+Canonical GState_choiceType := ChoiceType GState (PcanChoiceMixin cancelGState).
 
 (** Flipping the network partition flag. *)
 Definition flip_partition_flag (g : GState) : GState :=
