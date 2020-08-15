@@ -21,12 +21,10 @@ Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
 
-(* ------------------------------------------------------------ *)
-(* NOTE: This is only an initial attempt at specifying liveness 
-   properties for the transition system. This part is still 
-   work-in-progress and thus the file contains incomplete 
-   (admitted) proofs.                                            *)
-(* ------------------------------------------------------------ *)
+(** NOTE: This is only an initial attempt at specifying liveness 
+properties for the transition system. This part is still 
+work-in-progress and thus the file contains incomplete 
+(admitted) proofs. *)
 
 Definition users_at ix path : {fmap UserId -> UState} :=
   match drop ix path with
@@ -43,15 +41,16 @@ Definition user_stv_val_at ix path uid p stv : bool :=
   | _ => false
   end.
 
-(* Sensible states *)
-(* This notion specifies what states can be considered valid states. The idea
-   is that we only consider execution traces that begin at sensible states,
-   since sensibility is preserved by the transition system (to be shown), the
-   set of reachable states will also be sensible (to be shown). This means that
-   it is not important which specific state is assumed as the initial state as
-   long as the state is sensible.
-   Note: the traditional operational notion of an initial state is a now a
-   special case of sensibility *)
+(** ** Sensible states *)
+
+(** This notion specifies what states can be considered valid states. The idea
+is that we only consider execution traces that begin at sensible states,
+since sensibility is preserved by the transition system (to be shown), the
+set of reachable states will also be sensible (to be shown). This means that
+it is not important which specific state is assumed as the initial state as
+long as the state is sensible.
+Note: the traditional operational notion of an initial state is a now a
+special case of sensibility. *)
 Definition sensible_ustate (us : UState) : Prop :=
   (us.(p_start) >= 0)%R /\
   (0 <= us.(timer) <= us.(deadline))%R .
@@ -72,7 +71,7 @@ Proof.
   reflexivity.
 Qed.
 
-(* The user transition relation preserves sensibility of user states *)
+(** The user transition relation preserves sensibility of user states. *)
 Lemma utr_msg_preserves_sensibility : forall uid us us' m ms,
   sensible_ustate us -> uid # us ; m ~> (us', ms) ->
   sensible_ustate us'.
@@ -146,7 +145,7 @@ Proof.
      by admit.
 Admitted.
 
-(* The global transition relation preserves sensibility of global states *)
+(** The global transition relation preserves sensibility of global states. *)
 Lemma gtr_preserves_sensibility : forall gs gs',
   sensible_gstate gs -> GTransition gs gs' ->
   sensible_gstate gs'.
@@ -262,29 +261,29 @@ Proof.
   by case:(no_two_softvotes_in_p H_path H_sent_v1 H_sent_v2).
 Qed.
 
-(* A user has (re-)proposed a value/block for a given round/period along a
-   given path *)
+(** A user has (re-)proposed a value/block for a given round/period
+along a given path. *)
 Definition proposed_in_path_at ix path uid r p v b : Prop :=
   exists g1 g2, step_in_path_at g1 g2 ix path /\
     (user_sent uid (mkMsg Proposal (val v) r p uid) g1 g2 /\
      user_sent uid (mkMsg Block (val b) r p uid) g1 g2 \/
      user_sent uid (mkMsg Reproposal (repr_val v uid p) r p uid) g1 g2).
 
-(* A block proposer (potential leader) for a given round/period along a path*)
+(** A block proposer (potential leader) for a given round/period along a path. *)
 Definition block_proposer_in_path_at ix path uid r p v b : Prop :=
   uid \in committee r p 1 /\
   valid_block_and_hash b v /\
   proposed_in_path_at ix path uid r p v b.
 
-(* The block proposer (the leader) for a given round/period along a path*)
+(** The block proposer (the leader) for a given round/period along a path. *)
 Definition leader_in_path_at ix path uid r p v b : Prop :=
   block_proposer_in_path_at ix path uid r p v b /\
   forall id, id \in committee r p 1 /\ id <> uid ->
     (credential uid r p 1 < credential id r p 1)%O.
 
-(* a trace is partition-free if it's either empty or it's a valid trace that
-   starts at an unparitioned state and does not involve a partitioning
-   transition -- Note: not compatible with is_trace above *)
+(** A trace is partition-free if it is either empty or it is a valid trace that
+starts at an unparitioned state and does not involve a partitioning
+transition -- Note: not compatible with [is_trace] above. *)
 
 Definition partition_free g0 trace : Prop :=
   is_trace g0 trace /\
@@ -301,7 +300,7 @@ Proof.
   simpl. assumption.
 Qed.
 
-(* is_partitioned as a proposition *)
+(** [is_partitioned] as a proposition. *)
 Lemma is_partitionedP : forall g : GState,
   reflect
     (g.(network_partition) = true)
@@ -375,16 +374,15 @@ match msg_type msg, msg_ev msg with
 | _, _ => True
 end.
 
-(* The effect of the message is recorded in the state of the target user on or
-   before the message's deadline *)
+(** The effect of the message is recorded in the state of the target user on or
+before the message's deadline. *)
 Definition msg_timely_delivered msg deadline gstate target : Prop :=
   Rle gstate.(now) deadline /\
   exists ustate, gstate.(users).[? target] = Some ustate /\
   message_recorded ustate msg.
 
-(* If a message is sent along a partition-free trace, and the trace is long enough,
-   then the message is received by all honest users in a timely fashion
- *)
+(** If a message is sent along a partition-free trace, and the trace is long enough,
+   then the message is received by all honest users in a timely fashion. *)
 (* Note: this probably needs revision *)
 Lemma sent_msg_timely_received : forall sender msg g0 g1 trace,
   let deadline := msg_deadline msg g0.(now) in
@@ -399,8 +397,8 @@ Proof.
 Admitted.
 
 
-(* If the block proposer of period r.1 is honest, then a certificate for round r
-is produced at period r.1 *)
+(** If the block proposer of period [r,1] is honest, then a certificate for round [r]
+is produced at period [r,1]. *)
 (* Need the assumption of no partition?? *)
 Lemma prop_a : forall g0 g1 trace uid r v b,
   path gtransition g0 (g1 :: trace) ->
@@ -422,8 +420,8 @@ destruct prop_sent_H as [propsent_H | repropsent_H].
 Admitted.
 
 
-(* If some period r.p, p >= 2 is reached with unique starting value bot and the
-   leader is honest, then the leader’s proposal is certified. *)
+(** If some period [r,p] for [p >= 2] is reached with unique starting value bot and the
+leader is honest, then the leader’s proposal is certified. *)
 (* TODO: all users need starting value bot or just leader? *)
 Lemma prop_c : forall ix path uid r p v b,
   p >= 2 ->
@@ -434,7 +432,7 @@ Lemma prop_c : forall ix path uid r p v b,
 Proof.
 Admitted.
 
-(* softvote quorum of all honest users implies certvote quorum *)
+(** Softvote quorum of all honest users implies certvote quorum. *)
 Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset UserId}) ix path r p v,
   (forall voter : UserId, voter \in softvote_quorum ->
                                     voter \in domf (honest_users (users_at ix path))) ->
@@ -447,7 +445,7 @@ Lemma honest_softvote_quorum_implies_certvote : forall (softvote_quorum : {fset 
 Proof.
 Abort.
 
-(* Honest user softvotes starting value *)
+(** Honest user softvotes starting value. *)
 Lemma stv_not_bot_softvote : forall ix path r p v uid,
   uid \in domf (honest_users (users_at ix path)) ->
   user_stv_val_at ix path uid p (Some v) ->
@@ -455,9 +453,8 @@ Lemma stv_not_bot_softvote : forall ix path r p v uid,
 Proof.
 Abort.
 
-(* If some period r.p with p >= 2 is reached, and all honest users have starting
-   value H(B), then a certificate for H(B) that period is produced by the honest
-   users. *)
+(** If some period [r,p] with [p >= 2] is reached, and all honest users have starting
+value [H(B)], then a certificate for [H(B)] that period is produced by the honest users. *)
 (* TODO: need to say quorum for certificate is only *honest* users? *)
 Lemma prop_e : forall ix path r p v b,
   p >= 2 ->
@@ -475,16 +472,16 @@ Proof.
   repeat split; try assumption.
 Admitted.
 
-(* If any honest user is in period r.p with starting value bottom, then within
-time (2*lambda+Lambda), every honest user in period r.p will either certify a
-value (i.e., will get a certificate) or move to the next period *)
+(** If any honest user is in period [r,p] with starting value bottom, then within
+time [(2*lambda+Lambda)], every honest user in period [r,p] will either certify a
+value (i.e., will get a certificate) or move to the next period. *)
 Lemma prop_f : forall r p g0 g1 g2 path_seq uid,
     path gtransition g0 path_seq ->
     g2 = last g0 path_seq ->
     g1 = last g0 (drop 1 path_seq) ->
     user_honest uid g1 ->
     user_stv_val uid g1 p None ->
-    (exists v, certvoted_in_path path_seq uid r p v
-               \/ period_advance_at 1 path_seq uid r p g1 g2).
+    (exists v, certvoted_in_path path_seq uid r p v \/
+      period_advance_at 1 path_seq uid r p g1 g2).
 Proof.
 Admitted.

@@ -776,13 +776,11 @@ Proof.
   simpl. apply IHn.
 Qed.
 
-(* -------------------------------------------------- *)
-(* Lemmas for reset_msg_delays, reset_user_msg_delays *)
-(* -------------------------------------------------- *)
+(** ** Lemmas on [reset_msg_delays] and [reset_user_msg_delays] *)
 
-(* Reset_deadline in reset_user_msg_delays if m in msgs *)
+(** Reset_deadline in [reset_user_msg_delays] if [m] is in [msgs]. *)
 Lemma reset_msg_delays_fwd : forall (msgs : {mset R * Msg}) (m : R * Msg),
-    m \in msgs -> forall now, (reset_deadline now m \in reset_user_msg_delays msgs now).
+  m \in msgs -> forall now, (reset_deadline now m \in reset_user_msg_delays msgs now).
 Proof.
   move => msgs m Hm now.
   rewrite -has_pred1 /= has_count.
@@ -794,7 +792,7 @@ Proof.
   by move => H /= /eqP ->.
 Qed.
 
-(* If m was in reset_user_msg_delays then the deadline must have been reset *)
+(** If [m] was in [reset_user_msg_delays] then the deadline must have been reset. *)
 Lemma reset_user_msg_delays_rev (now : R) (msgs : {mset R * Msg}) (m: R*Msg):
   m \in reset_user_msg_delays msgs now ->
   exists d0, m = reset_deadline now (d0,m.2) /\ (d0,m.2) \in msgs.
@@ -809,12 +807,12 @@ Proof.
   by rewrite has_count map_mset_count -count_mem_mset -has_count has_pred1.
 Qed.
 
-(* Domain of msgpool unchanged after reste_msg_delays *)
+(** The domain of [msgpool] is unchanged after [reset_msg_delays]. *)
 Lemma reset_msg_delays_domf : forall (msgpool : MsgPool) now,
    domf msgpool = domf (reset_msg_delays msgpool now).
 Proof. by move => msgpool pre; rewrite -updf_domf. Qed.
 
-(* reset_msg_delays at uid results in reset_user_msg_delays *)
+(** [reset_msg_delays] at [uid] results in [reset_user_msg_delays]. *)
 Lemma reset_msg_delays_upd : forall (msgpool : MsgPool) now uid (h : uid \in domf msgpool),
   (reset_msg_delays msgpool now).[? uid] = Some (reset_user_msg_delays msgpool.[h] now).
 Proof.
@@ -824,7 +822,7 @@ have Hu' := Hu (domf msgpool) _ h.
 by rewrite Hu'.
 Qed.
 
-(* reset_msg_delays results in None if user not in domain of msgpool *)
+(** [reset_msg_delays] results in [None] if the user is not in the domain of the message pool. *)
 Lemma reset_msg_delays_notin : forall (msgpool : MsgPool) now uid
   (h : uid \notin domf msgpool),
   (reset_msg_delays msgpool now).[? uid] = None.
@@ -836,9 +834,7 @@ Proof.
   by rewrite -updf_domf.
 Qed.
 
-(* ----------------------------------------------- *)
-(* Definitions and lemmas for sent/forged messages *)
-(* ----------------------------------------------- *)
+(** ** Definitions and lemmas for sent and forged messages *)
 
 Definition user_sent sender (m : Msg) (pre post : GState) : Prop :=
   exists (ms : seq Msg), m \in ms
@@ -852,7 +848,7 @@ Definition user_sent_at ix path uid msg :=
   exists g1 g2, step_in_path_at g1 g2 ix path
                 /\ user_sent uid msg g1 g2.
 
-(* user who sends a message must be in both pre and post states *)
+(** A user who sends a message must be in both pre and post states. *)
 Lemma user_sent_in_pre {sender m pre post} (H : user_sent sender m pre post):
   sender \in pre.(users).
 Proof.
@@ -875,7 +871,7 @@ Proof.
         rewrite dom_setf; apply fset1U1.
 Qed.
 
-(* step of user in pre-state who sends message is same as message step *)
+(** The step of a user in the pre-state who sends message is same as [msg_step]. *)
 Lemma utransition_label_start uid msg g1 g2 :
     user_sent uid msg g1 g2 ->
     forall u, g1.(users).[? uid] = Some u ->
@@ -929,7 +925,7 @@ Proof.
   }
 Qed.
 
-(* step of user in post-state who sends message is greater than message step *)
+(** The step of a user in post-state who sends a message is greater than the message step. *)
 Lemma utransition_label_end : forall uid msg g1 g2,
     user_sent uid msg g1 g2 ->
     forall u, g2.(users).[? uid] = Some u ->
@@ -988,14 +984,10 @@ Proof.
   }
 Qed.
 
-(* ---------------------------------- *)
-(* Definitions for receiving messages *)
-(* ---------------------------------- *)
+(** ** Definitions for receiving messages *)
 
 Definition step_at path ix lbl :=
-  exists g1 g2,
-    step_in_path_at g1 g2 ix path
-    /\ related_by lbl g1 g2.
+ exists g1 g2, step_in_path_at g1 g2 ix path /\ related_by lbl g1 g2.
 
 Definition msg_received uid msg_deadline msg path : Prop :=
   exists n ms, step_at path n
@@ -1007,13 +999,11 @@ Definition received_next_vote u voter round period step value path : Prop :=
                                | None => mkMsg Nextvote_Open (step_val step) round period voter
                          end) path.
 
-(* --------------------- *)
-(* Labelling transitions *)
-(* --------------------- *)
+(** ** Labeling transitions *)
 
-(* all global transitions have some label *)
+(** All global transitions have some label. *)
 Lemma transitions_labeled: forall g1 g2,
-    g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
+  g1 ~~> g2 <-> exists lbl, related_by lbl g1 g2.
 Proof.
   split.
   + (* forward - find label for transition *)
@@ -1045,11 +1035,9 @@ Proof.
       by subst g2; eapply step_forge_msg; eassumption.
 Qed.
 
-(* internal transition changes state - used in transition_label_unique *)
+(** Internal transitions change the state - used in [transition_label_unique]. *)
 Lemma internal_not_noop :
-  forall s pre post l,
-    s # pre ~> (post, l) ->
-    pre <> post.
+  forall s pre post l, s # pre ~> (post, l) -> pre <> post.
 Proof.
   move => s pre post l Hst;inversion Hst;subst.
   all: try (autounfold with utransition_unfold in H2; decompose record H2; clear H2;
@@ -1061,7 +1049,7 @@ Proof.
   by rewrite addn1 => /esym /n_Sn.
 Qed.
 
-(* delivery_result decreases size of mailbox - used in transition_label_unique *)
+(** [delivery_result] decreases mailbox size - used in [transition_label_unique]. *)
 Lemma deliver_analysis1:
   forall g uid upost r m l
          (key_mbox : uid \in g.(msg_in_transit)),
@@ -1169,11 +1157,11 @@ Proof.
   }
 Qed.
 
-(* message transition with same resulting state has same output messages - 
-   used in transition_label_unique *)
+(** Message transitions with same resulting state has the same output messages - 
+   used in [transition_label_unique]. *)
 Lemma utransition_msg_result_analysis uid upre m upost l l'
-      (H_step: uid # upre; m ~> (upost, l))
-      (H_step': uid # upre; m ~> (upost, l')):
+  (H_step: uid # upre; m ~> (upost, l))
+  (H_step': uid # upre; m ~> (upost, l')) :
   l = l'.
 Proof.
   clear -H_step H_step'.
@@ -1196,8 +1184,8 @@ Proof.
     by intuition.
 Qed.
 
-(* delivery_result on a global state is the same means the message delivery
-   transitions are equal - used in transition_label_unique *)
+(** [delivery_result] on a global state is the same means the message delivery
+   transitions are equal - used in [transition_label_unique]. *)
 Lemma deliver_deliver_lbl_unique :
   forall g uid uid' upost upost' r r' m m' l l'
     (key_state : uid \in g.(users)) (key_mbox : uid \in g.(msg_in_transit))
@@ -1245,8 +1233,8 @@ Proof.
   apply utransition_msg_result_analysis.
 Qed.
 
-(* message delivery transition cannot be the same as internal transition -
-   used in transition_label_unique *)
+(** Message delivery transitions cannot be the same as internal transitions -
+used in [transition_label_unique]. *)
 Lemma deliver_internal_False :
   forall g uid uid' upost upost' r m l l'
     (key_state : uid \in g.(users)) (key_mbox : uid \in g.(msg_in_transit))
@@ -1331,8 +1319,8 @@ rewrite send_broadcast_notin_targets; first rewrite send_broadcast_notin_targets
   by case/negP: Hf.
 Qed.
 
-(* internal transition with equal post-states with the same messages sent must
-   have sent the messages in the same order - used in transition_label_unique *)
+(** Internal transitions with equal post-states with the same messages sent must
+have sent the messages in the same order - used in [transition_label_unique]. *)
 Lemma utransition_result_perm_eq uid upre upost l l' :
   uid # upre ~> (upost, l) ->
   uid # upre ~> (upost, l') ->
@@ -1385,9 +1373,8 @@ rewrite inE.
 by move/eqP =><-.
 Qed.
 
-(* This lemma is necessary for technical reasons to rule out the possibility
-   that a step that counts as one user sending a message can't also count as a
-   send from a different user or different message *)
+(** Rule out the possibility that a step that counts as one user sending a
+message cannot also count as a send from a different user or different message. *)
 Lemma transition_label_unique : forall lbl lbl2 g1 g2,
     related_by lbl g1 g2 ->
     related_by lbl2 g1 g2 ->
@@ -1479,11 +1466,9 @@ Proof.
       exact: utransition_result_perm_eq.
 Qed.
 
-(* ----------------------------------------------- *)
-(* User transition lemmas - destructing post state *)
-(* ----------------------------------------------- *)
+(** ** User transition lemmas, destructing post state *)
 
-(* msg transition on uid results in msg sent by uid *)
+(** Message transition on [uid] results in message sent by [uid]. *)
 Lemma utransition_msg_sender_good uid u msg result:
   uid # u ; msg ~> result ->
   forall m, m \in result.2 -> uid = msg_sender m.
@@ -1492,7 +1477,7 @@ Proof.
   by destruct 1 => /= m /in_memP /=;intuition;subst m.
 Qed.
 
-(* internal transition on uid results in msg sent by uid *)
+(** Internal transition on [uid] results in message sent by [uid]. *)
 Lemma utransition_internal_sender_good uid u result:
   uid # u ~> result ->
   forall m, m \in result.2 -> uid = msg_sender m.
@@ -1501,11 +1486,9 @@ Proof.
   by destruct 1 => /= m /in_memP /=;intuition;subst m.
 Qed.
 
-(* ---------------------------- *)
-(* Definitions for user honesty *)
-(* ---------------------------- *)
+(** ** Definitions of user honesty *)
 
-(* user is honest at step (r,p,s) *)
+(** User is honest at step [(r,p,s)]. *)
 Definition honest_at_step (r p s:nat) uid (path : seq GState) :=
   exists n,
     match onth path n with
@@ -1518,7 +1501,7 @@ Definition honest_at_step (r p s:nat) uid (path : seq GState) :=
       end
     end.
 
-(* user is honest in round r, period p *)
+(** User is honest in round [r] and period [p]. *)
 Definition honest_in_period (r p:nat) uid path :=
   exists n,
     match @onth GState path n with
@@ -1531,15 +1514,13 @@ Definition honest_in_period (r p:nat) uid path :=
       end
     end.
 
-(* user honest at all points <= step in the path *)
+(** User is honest at all points [<= step] in the path. *)
 Definition honest_during_step (step:nat * nat * nat) uid (path : seq GState) :=
   all (upred' uid (fun u => step_leb (step_of_ustate u) step ==> ~~u.(corrupt))) path.
 
-(* ------------------------------------------ *)
-(* Preserving honesty through transition/send *)
-(* ------------------------------------------ *)
+(** ** Preserving honesty through transitions *)
 
-(* internal user transition preserves corrupt flag *)
+(** Internal user transitions preserves [corrupt] flag. *)
 Lemma utransition_internal_preserves_corrupt uid pre post sent:
   uid # pre ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
 Proof.
@@ -1547,7 +1528,7 @@ Proof.
   destruct 1;reflexivity.
 Qed.
 
-(* message transition preserves corrupt flag *)
+(** Message transitions preserve [corrupt] flag. *)
 Lemma utransition_msg_preserves_corrupt uid msg pre post sent:
   uid # pre ; msg ~> (post,sent) -> pre.(corrupt) = post.(corrupt).
 Proof.
@@ -1557,7 +1538,7 @@ Proof.
     by destruct msg, msg_ev, msg_type.
 Qed.
 
-(* sender of message is honest in pre-state *)
+(** The sender of a message is honest in the pre-state. *)
 Lemma user_sent_honest_pre uid msg g1 g2
       (H_send: user_sent uid msg g1 g2):
       (g1.(users)[` user_sent_in_pre H_send]).(corrupt) = false.
@@ -1572,7 +1553,7 @@ Proof.
     by rewrite (bool_irrelevance H_in H_uid).
 Qed.
 
-(* sender of message is honest in post-state *)
+(** The sender of message is honest in the post-state. *)
 Lemma user_sent_honest_post uid msg g1 g2
       (H_send: user_sent uid msg g1 g2):
       (g2.(users)[` user_sent_in_post H_send]).(corrupt) = false.
@@ -1597,13 +1578,12 @@ Proof.
     by apply/negP.
 Qed.
 
-(* sender of message is honest in period of message *)
+(** The sender of a message is honest in the period of the message. *)
 Lemma user_honest_in_from_send ix trace uid msg
    (H_vote: user_sent_at ix trace uid msg):
    let: (r,p,_) := msg_step msg in
    honest_in_period r p uid trace.
 Proof.
-  (* move => g0 trace H_path r p v H_p H_excl uid v' H_honest H_vote. *)
   destruct H_vote as (g1_v & g2_v & H_vote_step & H_vote_send).
 
   set H_in: uid \in g1_v.(users) := user_sent_in_pre H_vote_send.
@@ -1616,11 +1596,9 @@ Proof.
   by exists ix;rewrite (step_in_path_onth_pre H_vote_step) H_u (user_sent_honest_pre H_vote_send).
 Qed.
 
-(* ------------------- *)
-(* Propagating honesty *)
-(* ------------------- *)
+(** ** Propagating honesty *)
 
-(* propagate honest_during_step backwards *)
+(** Propagate [honest_during_step] backwards. *)
 Lemma honest_during_le s1 s2 uid trace:
   step_le s1 s2 ->
   honest_during_step s2 uid trace ->
@@ -1636,11 +1614,10 @@ Proof.
   apply /H /step_leP /(step_le_trans H1 H_le).
 Qed.
 
-(* propagate user_honest backwards through transition *)
+(** Propagate [user_honest] backwards through transitions. *)
 Lemma honest_backwards_gstep : forall (g1 g2 : GState),
-    GTransition g1 g2 ->
-    forall uid, user_honest uid g2 ->
-                user_honest uid g1.
+ GTransition g1 g2 ->
+ forall uid, user_honest uid g2 -> user_honest uid g1.
 Proof.
   move => g1 g2 Hstep uid.
   destruct Hstep;unfold user_honest;destruct pre;
@@ -1664,10 +1641,10 @@ Proof.
   by destruct (@eqP (Finite.choiceType UserId) uid uid0).
 Qed.
 
-(* user honest at last state implies user honest in all states in path *)
+(** [user_honest] at the last state implies [user_honest] in all states in the path. *)
 Lemma honest_last_all uid g0 p (H_path : is_trace g0 p):
-    user_honest uid (last g0 p) ->
-    all (user_honest uid) (g0::p).
+  user_honest uid (last g0 p) ->
+  all (user_honest uid) (g0 :: p).
 Proof.
   move => H_honest.
   destruct p. inversion H_path.
@@ -1682,7 +1659,7 @@ Proof.
 Qed.
 Arguments honest_last_all uid [g0] [p].
 
-(* honesty is monotone *)
+(** Honesty is monotone. *)
 Lemma honest_monotone uid g1 g2:
   greachable g1 g2 ->
   user_honest uid g2 ->
@@ -1694,13 +1671,11 @@ Proof.
   by move: H => /andP [].
 Qed.
 
-(* -------------------------- *)
-(* Lemmas manipulating traces *)
-(* -------------------------- *)
+(** ** Lemmas on manipulation of traces *)
 
-(* non-empty prefix of a trace is a trace *)
+(** A non-empty prefix of a trace is a trace. *)
 Lemma is_trace_prefix : forall trace g0 n,
-    is_trace g0 trace -> n > 0 -> is_trace g0 (take n trace).
+  is_trace g0 trace -> n > 0 -> is_trace g0 (take n trace).
 Proof.
   clear.
   induction trace;[done|].
@@ -1711,7 +1686,7 @@ Proof.
   split;[done|by apply path_prefix].
 Qed.
 
-(* dropping elements from a trace still results in a trace *)
+(** Dropping elements from a trace still results in a trace. *)
 Lemma is_trace_drop g0 g0' trace trace' (H_trace: is_trace g0 trace) n:
   drop n trace = g0' :: trace' -> is_trace g0' (g0' :: trace').
 Proof.
@@ -1725,8 +1700,8 @@ Proof.
     by rewrite H_drop in H_trace.
 Qed.
 
-(* see path_steps: predicate not true initiall and true for some state g_p 
-   implies there must have been a step from g1 to g2 where it became true *)
+(** If some predicate is not true initially and then becomes true for some state [g_p], 
+this means there must have been a step from [g1] to [g2] where it became true. *)
 Lemma path_gsteps_onth
       g0 trace (H_path : is_trace g0 trace)
       ix_p g_p (H_g_p : onth trace ix_p = Some g_p):
@@ -1759,11 +1734,9 @@ Proof.
   by rewrite drop_oversize // in H_eq.
 Qed.
 
-(* --------------------- *)
-(* Preservation of users *)
-(* --------------------- *)
+(** ** Preservation of users *)
 
-(* global transition preserves domain of users *)
+(** Global transitions preserve the set of active users. *)
 Lemma gtrans_preserves_users: forall gs1 gs2,
   gs1 ~~> gs2 -> domf gs1.(users) = domf gs2.(users).
 Proof.
@@ -1788,11 +1761,9 @@ Proof.
   tauto.
 Qed.
 
-(* ------------------------------------------ *)
-(* Transitions do not decrease step-of-ustate *)
-(* ------------------------------------------ *)
+(** ** Transitions do not decrease step-of-ustate *)
 
-(* A one-step user-level transition never decreases round-period-step *)
+(** A one-step user-level transition never decreases round-period-step. *)
 Lemma utr_rps_non_decreasing_msg : forall uid m us1 us2 ms,
   uid # us1 ; m ~> (us2, ms) -> ustate_after us1 us2.
 Proof.
@@ -1853,7 +1824,7 @@ inversion_clear utrH.
   do 2! [right]. by do 2! [split; auto].
 Qed.
 
-(* A one-step user-level transition never decreases round-period-step *)
+(** A one-step user-level transition never decreases round-period-step. *)
 Lemma utr_rps_non_decreasing_internal : forall uid us1 us2 ms,
   uid # us1 ~> (us2, ms) -> ustate_after us1 us2.
 Proof.
@@ -1918,7 +1889,7 @@ inversion_clear utrH.
   do 2! [right]. do 2! [split; auto]. by rewrite sH.
 Qed.
 
-(* A one-step global transition never decreases round-period-step of any user *)
+(** A one-step global transition never decreases round-period-step of any user. *)
 Lemma gtr_rps_non_decreasing : forall g1 g2 uid us1 us2,
   g1 ~~> g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
@@ -1985,7 +1956,7 @@ elim => //.
   by right; right.
 Qed.
 
-(* Generalization of non-decreasing round-period-step results to paths *)
+(** Generalization of non-decreasing round-period-step results to paths. *)
 Lemma greachable_rps_non_decreasing : forall g1 g2 uid us1 us2,
   greachable g1 g2 ->
   g1.(users).[? uid] = Some us1 -> g2.(users).[? uid] = Some us2 ->
@@ -2018,11 +1989,9 @@ move: Hg.
 by rewrite in_fnd.
 Qed.
 
-(* -------------------------------- *)
-(* Monotonicity/preservation lemmas *)
-(* -------------------------------- *)
+(** ** Monotonicity and preservation lemmas *)
 
-(* softvotes monotone over internal user transition *)
+(** Softvotes are monotone over internal user transitions. *)
 Lemma softvotes_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
   forall r p, {subset pre.(softvotes) (r, p) <= post.(softvotes) (r, p)}.
@@ -2032,7 +2001,7 @@ remember (post,msgs) as result eqn:H_result;
   destruct step;case:H_result => [? ?];subst;done.
 Qed.
 
-(* softvotes monotone over user message transition *)
+(** Softvotes are monotone over user message transitions. *)
 Lemma softvotes_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   forall r p,
@@ -2060,7 +2029,7 @@ Proof.
     by rewrite in_cons mem_undup H_x orbT.
 Qed.
 
-(* softvotes monotone over global transition *)
+(** Softvotes are monotone over global transitions. *)
 Lemma softvotes_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   exists u2, g2.(users).[?uid] = Some u2 /\
@@ -2089,7 +2058,7 @@ Proof.
     by rewrite ?(eq_getf _ H_in1) /= H_in1' => r p v Hv.
 Qed.
 
-(* softvotes monotone between reachable states *)
+(** Softvotes are monotone between reachable states. *)
 Lemma softvotes_monotone g1 g2 (H_reach:greachable g1 g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   forall u2, g2.(users).[?uid] = Some u2 ->
@@ -2112,12 +2081,11 @@ Proof.
     exact: H_sub.
 Qed.
 
-(* weight of softvotes monotone between reachable states *)
+(** The weight of softvotes is monotone between reachable states. *)
 Lemma soft_weight_monotone g1 g2 (H_reach:greachable g1 g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   forall u2, g2.(users).[?uid] = Some u2 ->
-  forall v r p,
-    soft_weight v u1 r p <= soft_weight v u2 r p.
+  forall v r p, soft_weight v u1 r p <= soft_weight v u2 r p.
 Proof.
   move => u1 H_u1 u2 H_u2 v r p.
   have H_mono := softvotes_monotone H_reach H_u1 H_u2.
@@ -2131,7 +2099,7 @@ Proof.
   by apply/andP;split;[apply/H_mono|].
 Qed.
 
-(* blocks monotone over internal user transition *)
+(** Blocks are monotone over internal user transitions. *)
 Lemma blocks_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
   forall r, {subset pre.(blocks) r <= post.(blocks) r}.
@@ -2141,7 +2109,7 @@ Proof.
   destruct step;case:H_result => [? ?];subst;done.
 Qed.
 
-(* blocks monotone over user message transition *)
+(** Blocks are monotone over user message transition. *)
 Lemma blocks_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   forall r, {subset pre.(blocks) r <= post.(blocks) r}.
@@ -2162,7 +2130,7 @@ Proof.
     by rewrite in_cons mem_undup Hb orbT.
 Qed.
 
-(* blocks monotone over global transition *)
+(** Blocks are monotone over global transition. *)
 Lemma blocks_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   exists u2, g2.(users).[?uid] = Some u2 /\
@@ -2191,7 +2159,7 @@ Proof.
     by rewrite ?(eq_getf _ H_in1) H_in1' => r p Hp.
 Qed.
 
-(* blocks monotone between reachable states *)
+(** Blocks are monotone between reachable states. *)
 Lemma blocks_monotone g1 g2 (H_reach: greachable g1 g2) uid:
   forall u1, g1.(users).[? uid] = Some u1 ->
   forall u2, g2.(users).[? uid] = Some u2 ->
@@ -2214,7 +2182,7 @@ Proof.
     exact: H_sub.
 Qed.
 
-(* starting value preserved over internal user transition *)
+(** Starting values are preserved over internal user transition. *)
 Lemma stv_utransition_internal:
   forall uid pre post msgs, uid # pre ~> (post, msgs) ->
   pre.(round) = post.(round) ->
@@ -2226,7 +2194,7 @@ Proof.
   destruct step;case:H_result => [? ?];subst;done.
 Qed.
 
-(* starting value preserved message user transition *)
+(** Starting values are preserved by message user transitions. *)
 Lemma stv_utransition_deliver:
   forall uid pre post m msgs, uid # pre ; m ~> (post, msgs) ->
   pre.(round) = post.(round) ->
@@ -2256,7 +2224,7 @@ Proof.
     }
 Qed.
 
-(* starting value preserved over global transition *)
+(** Starting values are preserved by global transitions. *)
 Lemma stv_gtransition g1 g2 (H_step:g1 ~~> g2) uid:
   forall u1, g1.(users).[?uid] = Some u1 ->
   exists u2, g2.(users).[?uid] = Some u2 /\
@@ -2284,7 +2252,7 @@ Proof.
     rewrite ?(eq_getf _ H_in1) H_in1'. done.
 Qed.
 
-(* starting value preserved between reachable states *)
+(** Starting values are preserved between reachable states. *)
 Lemma stv_forward
       g1 g2 (H_reach : greachable g1 g2)
       uid u1 u2:
@@ -2329,16 +2297,15 @@ Proof.
     apply IHtrace;congruence.
 Qed.
 
-(* ------------------------------------------------------ *)
-(* Lemmas for deducing reachability between global states *)
-(* ------------------------------------------------------ *)
+(** ** Lemmas for deducing reachability between global states *)
 
-(* index of g1 less than index of g2, both in trace implies g2 reachable from g1 *)
+(** If the index of [g1] is less than the index of [g2], and both are in a 
+trace, this implies [g2] is reachable from [g1]. *)
 Lemma at_greachable
-      g0 states (H_path: is_trace g0 states)
-      ix1 ix2 (H_le : ix1 <= ix2)
-      g1 (H_g1 : onth states ix1 = Some g1)
-      g2 (H_g2 : onth states ix2 = Some g2):
+  g0 states (H_path: is_trace g0 states)
+  ix1 ix2 (H_le : ix1 <= ix2)
+  g1 (H_g1 : onth states ix1 = Some g1)
+  g2 (H_g2 : onth states ix2 = Some g2) :
   greachable g1 g2.
 Proof.
   clear -H_path H_le H_g1 H_g2.
@@ -2367,8 +2334,8 @@ Proof.
   }
 Qed.
 
-(* step_in_path_at from pre to post and pre2 to post2 implies pre2 reachable
-   from post *)
+(** [step_in_path_at] from [pre] to [post] and [pre2] to [post2] 
+implies [pre2] reachable from [post]. *)
 Lemma steps_greachable
       g0 path (H_path : is_trace g0 path)
       ix ix2 (H_lt : ix < ix2)
@@ -2381,11 +2348,10 @@ Proof.
   eapply at_greachable;eassumption.
 Qed.
 
-(* ---------------------------------------- *)
-(* Lemmas about order of indices in a trace *)
-(* ---------------------------------------- *)
+(** ** Lemmas about order of indices in a trace *)
 
-(* step of user is smaller in g1 than g2 implies index of g1 < index of g2 *)
+(** If the step of a user is smaller in [g1] than [g2], this
+implies that the index of [g1] is less than the index of [g2]. *)
 Lemma order_ix_from_steps g0 trace (H_path: is_trace g0 trace):
   forall ix1 g1, onth trace ix1 = Some g1 ->
   forall ix2 g2, onth trace ix2 = Some g2 ->
@@ -2403,7 +2369,7 @@ Proof.
   exact (greachable_rps_non_decreasing H_reach (in_fnd _) (in_fnd _)).
 Qed.
 
-(* step of msg_step for msg1 smaller than msg2 implies index of msg1 < index of msg2 *)
+(** step of [msg_step] for [msg1] smaller than [msg2] implies index of [msg1] less than index of [msg2]. *)
 Lemma order_sends g0 trace (H_path: is_trace g0 trace) uid
       ix1 msg1 (H_send1: user_sent_at ix1 trace uid msg1)
       ix2 msg2 (H_send2: user_sent_at ix2 trace uid msg2):
@@ -2431,11 +2397,9 @@ Proof.
   by apply step_lt_irrefl.
 Qed.
 
-(* ------------------------------- *)
-(* Additional lemmas about honesty *)
-(* ------------------------------- *)
+(** ** Additional lemmas about honesty *)
 
-(* honest at all points <= step implies honest at g1 *)
+(** Honest at all points less than or equal to step implies honest at [g1]. *)
 Lemma user_honest_from_during g0 trace (H_path: is_trace g0 trace):
   forall ix g1,
     onth trace ix = Some g1 ->
@@ -2450,7 +2414,7 @@ Proof.
   by apply /step_leP /step_le_refl.
 Qed.
 
-(* honest at all (r,p,s) less than step of u -> honest_during (r,p,s) *)
+(** Honest at all [(r,p,s)] less than step of [u] implies honest_during [(r,p,s)]. *)
 Lemma honest_during_from_ustate trace g0 (H_path : is_trace g0 trace):
   forall ix g,
     onth trace ix = Some g ->
@@ -2478,8 +2442,8 @@ Proof.
   by rewrite H_u_eq.
 Qed.
 
-(* honest_during (r,p,s), u is at index of n in trace, and step of u <= (r,p,s)
-   implies user_honest_at n *)
+(** Honest_during [(r,p,s)], [u] is at index of [n] in trace,
+and step of [u] less than or equal to [(r,p,s)] implies [user_honest_at n]. *)
 Lemma honest_at_from_during r p s uid trace:
       honest_during_step (r,p,s) uid trace ->
       forall g0 (H_path: is_trace g0 trace),
@@ -2496,7 +2460,7 @@ Proof.
   by apply;apply /step_leP.
 Qed.
 
-(* user honest during step user sends message *)
+(** User honest during step means user sends a message. *)
 Lemma honest_during_from_sent
   g0 trace (H_path: is_trace g0 trace)
   ix uid mty mval r p (H_send: user_sent_at ix trace uid (mkMsg mty mval r p uid)):
@@ -2509,7 +2473,7 @@ Proof.
   exact (utransition_label_end H_send H_in).
 Qed.
 
-(* user sends message at r.p and msg_step <= (r,p,s) then user is honest at r.p *)
+(** User sends message at [r,p] and [msg_step <= (r,p,s)] means user is honest at [r,p]. *)
 Lemma honest_in_from_during_and_send: forall r p s uid trace,
       honest_during_step (r,p,s) uid trace ->
   forall g0 (H_path : is_trace g0 trace),
@@ -2527,13 +2491,10 @@ Proof.
   rewrite (in_fnd key1).
   have H_step1 := utransition_label_start H_sent (in_fnd key1).
   lapply (user_honest_from_during H_path H_g1 (H_in:=key1)).
-  *
-    rewrite /user_honest (in_fnd key1) => /negP H_honest_g1.
+  - rewrite /user_honest (in_fnd key1) => /negP H_honest_g1.
     split;[assumption|].
     by injection H_step1.
-  *
-    revert H_honest.
+  - revert H_honest.
     apply honest_during_le.
-    rewrite H_step1.
-    assumption.
+    by rewrite H_step1.
 Qed.

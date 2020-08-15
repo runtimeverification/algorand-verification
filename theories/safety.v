@@ -21,12 +21,14 @@ Open Scope mset_scope.
 Open Scope fmap_scope.
 Open Scope fset_scope.
 
-(* ----------------------------- *)
-(* Round does not contain a fork *)
-(* ----------------------------- *)
+(** * Safety proof *)
 
-(* To show there is not a fork in a particular round, we will take a history
-   that extends before any honest node has made a transition in that round *)
+(** This module proves the asynchronous safety property of the protocol. *)
+
+(** ** Rounds do not contain forks *)
+
+(** To show there is not a fork in a particular round, we will take a history
+that extends before any honest node has made a transition in that round. *)
 Definition user_before_round r (u : UState) : Prop :=
   (u.(round) < r \/
    (u.(round) = r /\
@@ -51,21 +53,19 @@ Definition state_before_round r (g:GState) : Prop :=
   /\ messages_before_round r g
   /\ (forall msg, msg \in g.(msg_history) -> msg_round msg < r).
 
-(* ------------------------------------------------------ *)
-(* Lemmas connecting pending, sent, and received messages *)
-(* ------------------------------------------------------ *)
+(** ** Lemmas connecting pending, sent, and received messages *)
 
-(* The two main lemmas proved in this section are pending_sent_or_forged and
-   received_was_sent. The former connects a message in transit to a previously
-   sent (or forged) message. The latter, which relies on the proof of
-   pending_sent_or_forged, states that if a message was received, and the sender
-   field of that message was a user who is honest, then that user must have sent
-   that message at some point earlier in the trace *)
+(** The two main lemmas proved in this section are [pending_sent_or_forged] and
+[received_was_sent]. The former connects a message in transit to a previously
+sent (or forged) message. The latter, which relies on the proof of
+[pending_sent_or_forged], states that if a message was received, and the sender
+field of that message was a user who is honest, then that user must have sent
+that message at some point earlier in the trace. *)
 
-(* message in history was sent - used in pending_sent_or_forged *)
+(** Message in history was sent - used in [pending_sent_or_forged]. *)
 Lemma replay_had_original
-      g0 trace (H_path: is_trace g0 trace)
-      r (H_start: state_before_round r g0):
+ g0 trace (H_path: is_trace g0 trace)
+ r (H_start: state_before_round r g0) :
   forall g ix, onth trace ix = Some g ->
   forall (msg:Msg), msg \in g.(msg_history) ->
     r <= msg_round msg ->
@@ -121,7 +121,7 @@ Proof.
     by subst g2; simpl.
 Qed.
 
-(* Pending message was sent or forged earlier in trace *)
+(** A pending message was sent or forged earlier in trace. *)
 Lemma pending_sent_or_forged
       g0 trace (H_path: is_trace g0 trace)
       r (H_start: state_before_round r g0):
@@ -234,9 +234,9 @@ Proof.
     apply msubset_refl.
 Qed.
 
-(* A message from an honest user was actually sent in the trace. Used to relate
+(** A message from an honest user was actually sent in the trace. Used to relate
    an honest user having received a quorum of messages to some honest user
-   having sent those messages - used in received_was_sent *)
+   having sent those messages - used in [received_was_sent]. *)
 (* TODO: hopefully the statement can be cleaned up *)
 Lemma pending_honest_sent: forall g0 trace (H_path: is_trace g0 trace),
     forall r, state_before_round r g0 ->
@@ -268,8 +268,8 @@ Proof.
   by clear;destruct mty,v;simpl;destruct 1.
 Qed.
 
-(* This lemma connects message receipt to the sending of a message, used to
-   reach back to an earlier honest transition. *)
+(** This lemma connects message receipt to the sending of a message, used to
+reach back to an earlier honest transition. *)
 Lemma received_was_sent g0 trace (H_path: is_trace g0 trace)
     r0 (H_start: state_before_round r0 g0)
     u d msg (H_recv: msg_received u d msg trace):
@@ -293,13 +293,11 @@ Proof.
   exact H.
 Qed.
 
-(* Now we have lemmas showing that transitions preserve various invariants *)
+(** ** Uniqueness of votes *)
 
-(* ------------------- *)
-(* Uniqueness of votes *)
-(* ------------------- *)
+(** Now we have lemmas showing that transitions preserve various invariants. *)
 
-(* a user can only certvote one value during given round/period *)
+(** A user can only certvote one value during given round/period. *)
 Lemma vote_value_unique uid r p g1 g2 v:
   user_sent uid (mkMsg Certvote (val v) r p uid) g1 g2 ->
   user_honest uid g1 ->
@@ -323,7 +321,7 @@ Proof.
      move/in_memP => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
 
-(* a user can only softvote one value during given round/period *)
+(** A user can only softvote for one value during a given round/period. *)
 Lemma softvote_value_unique uid r p g1 g2 v:
   user_sent uid (mkMsg Softvote (val v) r p uid) g1 g2 ->
   user_honest uid g1 ->
@@ -348,11 +346,9 @@ Proof.
      move/in_memP => H_msg2;simpl in H_msg, H_msg2;intuition congruence.
 Qed.
 
-(* ---------------------------------------------- *)
-(* Pre- and post-conditions for user sending vote *)
-(* ---------------------------------------------- *)
+(** ** Pre- and post-conditions for users sending votes *)
 
-(* user sends softvote -> softvote_new_ok or softvote_repr_ok must have held *)
+(** User sends softvote implies that [softvote_new_ok] or [softvote_repr_ok] must have held. *)
 Lemma softvote_precondition g1 g2 uid v r p
   (H_sent: user_sent uid (mkMsg Softvote (val v) r p uid) g1 g2)
   u (H_u: g1.(users).[?uid] = Some u):
@@ -376,9 +372,9 @@ Proof.
     by destruct 1;try exact;rewrite mem_seq1 => /eqP [-> -> ->];[left|right].
 Qed.
 
-(* user sends certvote -> certvote_ok must have held. In case where certvote
-   came from message delivery transition, need additional information about how
-   the user state changes for the user who sent the certvote. *)
+(** If a user sends certvote, [certvote_ok] must have held. In case the certvote
+came via a message delivery transition, we need additional information about how
+the user state changes for the user who sent the certvote. *)
 Lemma certvote_precondition g1 g2 uid v r p:
   user_sent uid (mkMsg Certvote (val v) r p uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
@@ -417,8 +413,9 @@ Proof.
     }
 Qed.
 
-(* user sent certvote -> in resulting state, the value is in the users certvals,
-value corresponds to a block in user's blocks, and user is in step 4 *)
+(** If a user sent a certvote this means that in the resulting state, 
+the value is in the user's certvals, value corresponds to a block in
+user's blocks, and user is in step 4. *)
 Lemma certvote_postcondition uid v r p g1 g2:
   user_sent uid (mkMsg Certvote (val v) r p uid) g1 g2 ->
   forall u, g2.(users).[?uid] = Some u ->
@@ -461,7 +458,7 @@ Proof.
     }
 Qed.
 
-(* user sent nextvote open -> nextvote_open_ok must have held *)
+(** If a user sent nextvote open, then [nextvote_open_ok] must have held. *)
 Lemma nextvote_open_precondition g1 g2 uid r p s:
   user_sent uid (mkMsg Nextvote_Open (step_val s) r p uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
@@ -491,7 +488,7 @@ Proof.
     }
 Qed.
 
-(* user sent nextvote val -> nextvote_val_ok must have held *)
+(** If user sent nextvote val, then [nextvote_val_ok] must have held. *)
 Lemma nextvote_val_precondition g1 g2 uid v r p s:
   user_sent uid (mkMsg Nextvote_Val (next_val v s) r p uid) g1 g2 ->
   forall u, g1.(users).[?uid] = Some u ->
@@ -523,13 +520,11 @@ Proof.
     }
 Qed.
 
-(* -------------------------------- *)
-(* Voting for one value in a period *)
-(* -------------------------------- *)
+(** ** Voting for one value in a period *)
 
-(* An honest user cert-votes for at most one value in a period *)
-(* In any global state, an honest user either never certvotes in a period or
-   certvotes once in step 3 and never certvotes after that during that period. *)
+(** An honest user cert-votes for at most one value in a period.
+In any global state, an honest user either never certvotes in a period or
+certvotes once in step 3 and never certvotes after that during that period. *)
 Lemma no_two_certvotes_in_p : forall g0 trace (H_path : is_trace g0 trace) uid r p,
     forall ix1 v1, certvoted_in_path_at ix1 trace uid r p v1 ->
                    user_honest_at ix1 trace uid ->
@@ -562,7 +557,7 @@ Proof.
   exact (at_step_onth H_honest1 (step_in_path_onth_pre H_step1)).
 Qed.
 
-(* An honest user soft-votes for at most one value in a period *)
+(** An honest user soft-votes for at most one value in a period. *)
 Lemma no_two_softvotes_in_p : forall g0 trace (H_path : is_trace g0 trace) uid r p,
     forall ix1 v1, softvoted_in_path_at ix1 trace uid r p v1 ->
     forall ix2 v2, softvoted_in_path_at ix2 trace uid r p v2 ->
@@ -598,11 +593,9 @@ Proof.
   unfold user_honest. rewrite in_fnd. intuition.
 Qed.
 
-(* ----------------------------------------- *)
-(* Votes present in user state were received *)
-(* ----------------------------------------- *)
+(** ** Votes present in user state were received *)
 
-(* vote in users softvote set -> softvote was received *)
+(** A vote in a user's softvote set means a softvote was received. *)
 Lemma received_softvote
   g0 trace (H_path: is_trace g0 trace)
   r0 (H_start: state_before_round r0 g0)
@@ -802,7 +795,7 @@ Proof.
   split; assumption.
 Qed.
 
-(* vote in users nextvote_open set -> nextvote was received *)
+(** A vote in a user's nextvote open set means a nextvote was received. *)
 Lemma received_nextvote_open
  g0 trace (H_path: is_trace g0 trace)
  r0 (H_start: state_before_round r0 g0) :
@@ -925,7 +918,7 @@ Proof.
   }
 Qed.
 
-(* vote in users nextvote_val set -> nextvote_val was received *)
+(** A vote in a user's nextvote_val set means a nextvote_val message was received. *)
 Lemma received_nextvote_val
  g0 trace (H_path: is_trace g0 trace)
  r0 (H_start: state_before_round r0 g0) :
@@ -1052,25 +1045,20 @@ Proof.
   }
 Qed.
 
-(* ------------------------------------------------------------ *)
-(* Softvote in user state means voter softvoted earlier in path *)
-(* ------------------------------------------------------------ *)
+(** ** Softvotes in user state means a voter softvoted earlier in the path *)
 
-  (*
-    Suppose (voter,v) \in u.(softvotes) r p
-    => message (Softvote, val v, r, p, i) was received
-    => message (Softvote, val v, r, p, i) was sent:
-      either
-      - user i sent (Softvote, val v, r, p, i)
-        (through an internal transition only)
-        => softvoting preconditions imply i was a committee member
-      - or adversary (using i) forged and sent the message
-        => forging does the credentials check
-      - or adversary replayed the message
-        => the message is in msg_history
-        => user i sent it (through an internal transition only)
-        => softvoting preconditions imply i was a committee member
-   *)
+(** Suppose [(voter,v) \in u.(softvotes) r p]. Then,
+- message [(Softvote, val v, r, p, i)] was received, and
+- message [(Softvote, val v, r, p, i)] was sent.
+
+In the latter case, either
+- user [i] sent [(Softvote, val v, r, p, i)] (through an internal transition only), meaning
+  softvoting preconditions imply [i] was a committee member, or
+- the adversary (using [i]) forged and sent the message, meaning forging does the credentials check, or
+- the adversary replayed the message, meaning
+-- the message is in [msg_history], and
+-- user [i] sent it (through an internal transition only), and
+-- softvoting preconditions imply [i] was a committee member. *)
 Lemma softvotes_sent
       g0 trace (H_path: is_trace g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -1145,9 +1133,7 @@ Proof.
   by move: H_honest;rewrite /honest_during_step all_rcons => /andP [] _.
 Qed.
 
-(* ------------------------------------------------------------ *)
-(* Sender/forger of a message has sufficiently small credential *)
-(* ------------------------------------------------------------ *)
+(** ** Sender or forger of a message has sufficiently small credential *)
 
 Lemma user_sent_credential uid msg g1 g2:
   user_sent uid msg g1 g2 ->
@@ -1191,11 +1177,9 @@ Proof.
   (apply/imfsetP;exists sender;[|reflexivity];apply/asboolP;assumption).
 Qed.
 
-(* -------------------- *)
-(* Checking credentials *)
-(* -------------------- *)
+(** ** Checking credentials *)
 
-(* all softvoters in a round/period are in the committee for step 2 *)
+(** All softvoters in a round/period are in the committee for step 2. *)
 Lemma softvote_credentials_checked
       g0 trace (H_path: is_trace g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -1238,7 +1222,7 @@ Proof.
   apply user_forged_credential in H_forge. assumption.
 Qed.
 
-(* all nextvoters for bot in a round/period/step are in the committee *)
+(** All nextvoters for bot in a round/period/step are in the committee. *)
 Lemma nextvote_open_credentials_checked
       g0 trace (H_path: is_trace g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -1281,7 +1265,7 @@ Proof.
   apply user_forged_credential in H_forge. assumption.
 Qed.
 
-(* all nextvoters for bota val in a round/period/step are in the committee *)
+(** All nextvoters for bot val in a round/period/step are in the committee. *)
 Lemma nextvote_val_credentials_checked
       g0 trace (H_path: is_trace g0 trace)
       r0 (H_start: state_before_round r0 g0):
@@ -1323,12 +1307,10 @@ Proof.
   apply user_forged_credential in H_forge. assumption.
 Qed.
 
-(* ---------------- *)
-(* Advancing period *)
-(* ---------------- *)
+(** ** Advancing the period *)
 
-(* period advances to p, step of ustate changes to (r,p,1) with round the same,
-   original ustate must have had smaller period *)
+(** When the period advances to [p], and step of ustate changes to [(r,p,1)] with round the same,
+then original ustate must have had a smaller period. *)
 Definition period_advances uid r p (users1 users2: {fmap UserId -> UState}) : Prop :=
   {ukey_1: uid \in users1 &
   {ukey_2: uid \in users2 &
@@ -1338,13 +1320,13 @@ Definition period_advances uid r p (users1 users2: {fmap UserId -> UState}) : Pr
   /\ step_lt (step_of_ustate ustate1) (r,p,0)
   /\ step_of_ustate ustate2 = (r,p,1)}}.
 
-(* period advances from g1 to g2 at given index in path *)
+(** Period advances from [g1] to [g2] at given index in path. *)
 Definition period_advance_at n path uid r p g1 g2 : Prop :=
   step_in_path_at g1 g2 n path /\ period_advances uid r p (g1.(users)) (g2.(users)).
 
-(* period advances to r.p from ge1 to ge2, and there is a message sent from gs1
-   to gs2 in the path at r.p along with a step in the path from gs1 to gs2, then
-   gs1 is reachable from ge2 *)
+(** Period advances to [r,p] from [ge1] to [ge2], and there is a message sent from [gs1]
+to [gs2] in the path at [r,p] along with a step in the path from [gs1] to [gs2], then
+[gs1] is reachable from [ge2]. *)
 Lemma post_enter_reaches_sent
       g0 trace (H_path:is_trace g0 trace)
       ix_e uid r p ge1 ge2 (H_enter: period_advance_at ix_e trace uid r p ge1 ge2)
@@ -1374,20 +1356,19 @@ Lemma post_enter_reaches_sent
                        (step_in_path_onth_pre H_step)).
 Qed.
 
-(* a node enters period p > 0 only if it received t_H next-votes for the same
-   value from some step s of period p-1 *)
+(** A node enters period [p > 0] only if it received [t_H] next-votes for the same
+value from some step [s] of period [p-1]. *)
 Lemma period_advance_only_by_next_votes
-      g0 trace (H_path: is_trace g0 trace)
-      r0 (H_start: state_before_round r0 g0):
-    forall n uid r p,
-      r0 <= r ->
-    forall g1 g2, period_advance_at n trace uid r p g1 g2 ->
-      exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
-        next_voters `<=` committee r p.-1 s
-        /\ (if v then tau_v else tau_b) <= #|` next_voters |
-        /\ (exists u, g2.(users).[? uid] = Some u /\ u.(stv).[? p] = v)
-        /\ forall voter, voter \in next_voters ->
-           received_next_vote uid voter r p.-1 s v trace.
+ g0 trace (H_path: is_trace g0 trace)
+ r0 (H_start: state_before_round r0 g0) :
+ forall n uid r p, r0 <= r ->
+ forall g1 g2, period_advance_at n trace uid r p g1 g2 ->
+   exists (s:nat) (v:option Value) (next_voters:{fset UserId}),
+     next_voters `<=` committee r p.-1 s
+     /\ (if v then tau_v else tau_b) <= #|` next_voters |
+     /\ (exists u, g2.(users).[? uid] = Some u /\ u.(stv).[? p] = v)
+     /\ forall voter, voter \in next_voters ->
+        received_next_vote uid voter r p.-1 s v trace.
 Proof.
   clear -H_path H_start.
   intros n uid r p H_r g1 g2 H_adv.
@@ -1807,10 +1788,10 @@ Proof.
     by rewrite (in_fnd ustate_key).
 Qed.
 
-(* An honest node can enter period p'>1 only if at least one honest node
-   participated in period p'-1 *)
-(* Note that we freeze the state of corrupt users, so any user whose period
-   actually advanced must have been honest at the time *)
+(** An honest node can enter period [p' > 1] only if at least one honest node
+participated in period [p' - 1]. Note that we freeze the state of corrupt
+users, so any user whose period actually advanced must have been honest
+at the time. *)
 Lemma adv_period_from_honest_in_prev g0 trace (H_path: is_trace g0 trace)
   r0 (H_start: state_before_round r0 g0):
   forall n uid r p,
@@ -1868,12 +1849,10 @@ Proof.
   }
 Qed.
 
-(* ------------------------------------------------- *)
-(* Users cannot nextvote for both a value and bottom *)
-(* ------------------------------------------------- *)
+(** ** Users cannot nextvote for both a value and bottom *)
 
-(* definition that states that if there is a quorum of voters for the value v,
-   then there cannot be a quorum of voters for bottom *)
+(** If there is a quorum of voters for the value [v],
+then there cannot be a quorum of voters for bottom. *)
 Definition period_nextvoted_exclusively_for (v:Value) (r p:nat) (trace: seq GState) : Prop :=
   (forall s (voters: {fset UserId}),
      voters `<=` committee r p s ->
@@ -1882,8 +1861,7 @@ Definition period_nextvoted_exclusively_for (v:Value) (r p:nat) (trace: seq GSta
    (forall u, u \in voters ->
       honest_during_step (r,p,s) u trace ->
       nextvoted_val_in_path trace u r p s v')
-   -> v' = v)
-  /\
+   -> v' = v) /\
   (forall s (voters: {fset UserId}),
      voters `<=` committee r p s ->
     tau_b <= #|` voters | ->
@@ -1891,8 +1869,8 @@ Definition period_nextvoted_exclusively_for (v:Value) (r p:nat) (trace: seq GSta
       honest_during_step (r,p,s) u trace ->
       nextvoted_bot_in_path trace u r p s)).
 
-(* if all users nextvte for v and all users did not nextvote for bottom, then
-   the above definition holds *)
+(** If all users nextvote for [v] and all users did not nextvote for bottom, then
+[period_nextvoted_exclusively_for] holds. *)
 Lemma period_nextvoted_exclusively_from_nextvotes
       g0 trace (H_path: is_trace g0 trace)
       r (H_start: state_before_round r g0)
@@ -1918,7 +1896,7 @@ Proof.
     }
 Qed.
 
-(* period_nextvoted_exclusively_for disallows nextvote_bottom_quorum *)
+(** [period_nextvoted_exclusively_for] disallows [nextvote_bottom_quorum]. *)
 Lemma no_bottom_quorums_during_from_nextvoted_excl
   g0 trace (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0)
@@ -1940,12 +1918,10 @@ Lemma no_bottom_quorums_during_from_nextvoted_excl
    by apply/(received_was_sent H_path H_start H_recv).
 Qed.
 
-(* ---------------------------------------------- *)
-(* Lemmas for entering period with starting value *)
-(* ---------------------------------------------- *)
+(** ** Lemmas for entering period with starting value *)
 
-(* users enter exclusively for v and u advances to p+1 implies u's starting
-   value at p+1 is v *)
+(** If users enter exclusively for [v] and [u] advances to [p + 1], then [u]'s starting
+value at [p + 1] is [v]. *)
 Lemma stv_at_entry_from_excl
       g0 trace (H_path:is_trace g0 trace)
       r (H_start: state_before_round r g0)
@@ -1976,19 +1952,19 @@ Proof.
     exact (received_was_sent H_path H_start H_recv (leqnn _) H_voter_honest).
 Qed.
 
-(* users enters exclusively for v in r.p-1 and u sends a message at r.p, then
-   u's starting value at p is v. *)
+(** If users enter exclusively for [v] in [r, p - 1] and [u] sends a message at [r,p], then
+[u]'s starting value at [p] is [v]. *)
 Lemma stv_at_send_from_excl
-      g0 trace (H_path:is_trace g0 trace)
-      r (H_start: state_before_round r g0)
-      p (H_p_gt: 1 < p)
-      v (H_excl: period_nextvoted_exclusively_for v r p.-1 trace)
-      ix g1 g2 (H_step: step_in_path_at g1 g2 ix trace)
-      uid msg (H_send : user_sent uid msg g1 g2)
-      (H_r_msg: msg_round msg = r)
-      (H_p_msg: msg_period msg = p)
-      u (H_u: g1.(users).[?uid] = Some u)
-      : u.(stv).[? p] = Some v.
+  g0 trace (H_path:is_trace g0 trace)
+  r (H_start: state_before_round r g0)
+  p (H_p_gt: 1 < p)
+  v (H_excl: period_nextvoted_exclusively_for v r p.-1 trace)
+  ix g1 g2 (H_step: step_in_path_at g1 g2 ix trace)
+  uid msg (H_send : user_sent uid msg g1 g2)
+  (H_r_msg: msg_round msg = r)
+  (H_p_msg: msg_period msg = p)
+  u (H_u: g1.(users).[?uid] = Some u) :
+ u.(stv).[? p] = Some v.
 Proof.
   have H_sent_at: user_sent_at ix trace uid msg by exists g1, g2;split;assumption.
   have H_honest_in := user_honest_in_from_send H_sent_at.
@@ -2015,13 +1991,11 @@ Proof.
   by apply (stv_forward H_reach H_ue H_u);congruence.
 Qed.
 
-(* ----------------------------------------------------------- *)
-(* Vote uniqueness based on value nextvoted in previous period *)
-(* ----------------------------------------------------------- *)
+(** ** Vote uniqueness based on value nextvoted in previous period *)
 
-(* if all honest nodes that entered a period p-1 >= 2 did so exclusively for
-   value v, then an honest node cannot cert-vote for any value other than v in step
-   2 of period p. *)
+(** If all honest nodes that entered a period [p - 1 >= 2] did so exclusively for
+value [v], then an honest node cannot cert-vote for any value other than [v] in step
+2 of period [p]. *)
 Lemma prev_period_nextvotes_limits_honest_soft_vote
   g0 trace (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0)
@@ -2061,9 +2035,9 @@ Proof.
     }
 Qed.
 
-(* if all honest nodes that entered a period p >= 2 did so exclusively for
-   value v, then an honest node cannot cert-vote for any value other than v in step
-   3 of period p'. *)
+(** If all honest nodes that entered a period [p >= 2] did so exclusively for
+value [v], then an honest node cannot cert-vote for any value other than [v] in step
+3 of period [p']. *)
 Lemma prev_period_nextvotes_limits_cert_vote :
   forall g0 trace (H_path: is_trace g0 trace),
   forall r (H_start: state_before_round r g0) ,
@@ -2108,12 +2082,10 @@ Proof.
   apply (received_was_sent H_path H_start H_recv (leqnn r) H_sv_honest).
 Qed.
 
-(* --------------------------------------------------------------- *)
-(* Lemmas for propagating value nextvoted for from previous period *)
-(* --------------------------------------------------------------- *)
+(** ** Lemmas for propagating value nextvoted for from previous period *)
 
-(* in p-1, all nextvotes were for v, and at step 2 in p, all softvotes were for
-   v, then at all steps in p, all nextvotes were for v *)
+(** In [p - 1], all nextvotes were for [v], and at step 2 in [p], all softvotes were for
+[v], then at all steps in [p], all nextvotes were for [v]. *)
 Lemma nextvotes_val_follow_softvotes
       g0 trace (H_path: is_trace g0 trace)
       r (H_start: state_before_round r g0)
@@ -2155,7 +2127,7 @@ Proof.
     by case => ->.
 Qed.
 
-(* users enter exclusively for v in p-1 implies users enter exclusively for v in p *)
+(** If users enter exclusively for [v] in [p - 1], then users enter exclusively for [v] in [p]. *)
 Lemma excl_enter_excl_next:
   forall g0 trace (H_path: is_trace g0 trace),
   forall r (H_start: state_before_round r g0),
@@ -2199,11 +2171,9 @@ Proof.
   by apply/(period_nextvoted_exclusively_from_nextvotes H_path).
 Qed.
 
-(* ----------------------------------------- *)
-(* Propagate certificate information forward *)
-(* ----------------------------------------- *)
+(** ** Propagate certificate information forward *)
 
-(* cert info from saw_v at r.p remains true at g1 *)
+(** Cert info from [saw_v] at [r,p] remains true at [g1]. *)
 Lemma certinfo_forward
   g0 trace (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0)
@@ -2272,11 +2242,9 @@ Proof.
   by split;[|exists b';split].
 Qed.
 
-(* ----------------------------------- *)
-(* Entering period for certified value *)
-(* ----------------------------------- *)
+(** ** Entering period for certified value *)
 
-(* v certified in p means users enter p nextvoting for v *)
+(** [v] certified in [p] means users enter [p] nextvoting for [v]. *)
 Lemma certificate_is_start_of_next_period
   g0 trace (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0)
@@ -2420,7 +2388,7 @@ Proof.
   }
 Qed.
 
-(* v certified in r.p means users enter all p' >= p nextvoting for v *)
+(** [v] certified in [r,p] means users enter all [p' >= p] nextvoting for [v]. *)
 Lemma certificate_is_start_of_later_periods
   trace g0  (H_path: is_trace g0 trace)
   r (H_start: state_before_round r g0):
@@ -2442,11 +2410,9 @@ Proof.
   by rewrite ltnS addn_gt0 H_p.
 Qed.
 
-(* -------------------------- *)
-(* One certificate per period *)
-(* -------------------------- *)
+(** ** One certificate per period *)
 
-(* only one value can be certified in a given r.p pair *)
+(** Only one value can be certified in a given [r,p] pair. *)
 Lemma one_certificate_per_period: forall g0 trace r p,
     state_before_round r g0 ->
     is_trace g0 trace ->
@@ -2498,12 +2464,10 @@ Proof.
   by destruct (no_two_certvotes_in_p H_path H_cert1 H_honest1 H_cert2 H_honest2).
 Qed.
 
-(* ------ *)
-(* SAFETY *)
-(* ------ *)
+(** ** Safety *)
 
-(* The safety theorem: only one value can be certified in each round. This means
-   that at most one block is approved in a given round. *)
+(** The safety theorem: only one value can be certified in each round. This means
+that at most one block is approved in a given round. *)
 Theorem safety : forall (g0 : GState) (trace : seq GState) (r : nat),
   state_before_round r g0 ->
   is_trace g0 trace ->

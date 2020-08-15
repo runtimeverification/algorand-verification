@@ -451,10 +451,8 @@ Definition advancing_rp (u : UState) r p : Prop :=
 Definition matchValue (x : Vote) (v : Value) : bool :=
   let: (u', v') := x in v == v'.
 
-(**
-The sequence of all values appearing in a given sequence of votes with
-duplicates removed.
-*)
+(** The sequence of all values appearing in a given sequence of votes with
+duplicates removed. *)
 Definition vote_values (vs: seq Vote) : seq Value :=
   undup [seq x.2 | x <- vs].
 
@@ -1052,11 +1050,11 @@ Definition delivery_result pre uid (uid_has_mailbox : uid \in pre.(msg_in_transi
   let users' := pre.(users).[uid <- ustate_post] in
   let user_msgs' := (pre.(msg_in_transit).[uid_has_mailbox] `\ delivered)%mset in
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
-                              pre.(msg_in_transit).[uid <- user_msgs'] sent in
-  let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  pre <| users          := users' |>
-      <| msg_in_transit := msgs'  |>
-      <| msg_history    := msgh'  |>.
+    pre.(msg_in_transit).[uid <- user_msgs'] sent in
+  let msgh' := (pre.(msg_history) `+` (seq_mset sent))%mset in
+  pre <| users := users' |>
+      <| msg_in_transit := msgs' |>
+      <| msg_history := msgh' |>.
 
 Arguments delivery_result : clear implicits.
 
@@ -1067,9 +1065,9 @@ Definition step_result pre uid ustate_post (sent: seq Msg) : GState :=
   let msgs' := send_broadcasts pre.(now) (domf (honest_users pre.(users)) `\ uid)
                                pre.(msg_in_transit) sent in
   let msgh' := (pre.(msg_history)  `+` (seq_mset sent))%mset in
-  pre <| users          := users' |>
-      <| msg_in_transit := msgs'  |>
-      <| msg_history    := msgh'  |>.
+  pre <| users := users' |>
+      <| msg_in_transit := msgs' |>
+      <| msg_history := msgh'  |>.
 
 Definition new_deadline now cur_deadline msg : R :=
   let max_deadline := msg_deadline msg now in

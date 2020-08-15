@@ -453,13 +453,15 @@ Definition int_of_Z (n : Z) :=
   | Zneg p => Negz (Pos.to_nat p).-1
   end.
 
-Lemma int_of_ZK : cancel int_of_Z Z_of_int. Proof. case=> //= p; lia. Qed.
+Lemma int_of_ZK : cancel int_of_Z Z_of_int.
+Proof. case=> //= p; lia. Qed.
 
 Instance Op_int_of_Z : UnOp int_of_Z :=
   { TUOp := id : Z -> Z; TUOpInj := int_of_ZK }.
 Add UnOp Op_int_of_Z.
 
-Lemma Z_of_intK : cancel Z_of_int int_of_Z. Proof. move=> ?; lia. Qed.
+Lemma Z_of_intK : cancel Z_of_int int_of_Z.
+Proof. move=> ?; lia. Qed.
 
 (******************************************************************************)
 (* intdiv                                                                     *)
