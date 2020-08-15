@@ -16,13 +16,12 @@ Statements of some _liveness_ properties for the transition system are also prov
 
 ## Requirements
 
-- [`Coq 8.11`](https://github.com/coq/coq/releases/tag/V8.11.2)
-- [`MathComp ssreflect 1.11`](https://math-comp.github.io)
-- [`MathComp algebra`](https://math-comp.github.io)
-- [`MathComp finmap 1.5.0`](https://github.com/math-comp/finmap)
-- [`MathComp analysis 0.3.1`](https://github.com/math-comp/analysis)
-- [`Interval 4.0.0`](http://coq-interval.gforge.inria.fr)
-- [`Coq record update`](https://github.com/tchajed/coq-record-update)
+- [Coq 8.12](https://github.com/coq/coq/releases/tag/V8.12.0)
+- [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+- [MathComp algebra](https://math-comp.github.io)
+- [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
+- [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+- [Coq record update](https://github.com/tchajed/coq-record-update)
 
 ## Building
 
@@ -30,9 +29,9 @@ We recommend installing the dependencies of the project via
 [OPAM](http://opam.ocaml.org/doc/Install.html), for example:
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq.8.11.2 coq-mathcomp-ssreflect.1.11.0 \
-  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 coq-record-update \
-  coq-mathcomp-analysis.0.3.1 coq-interval.4.0.0
+opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
+  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
+  coq-mathcomp-analysis.0.3.2 coq-record-update
 ```
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
@@ -42,7 +41,6 @@ Then, run `make` in the project root directory. This will check all the definiti
 All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
 
 - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
-- `R_util.v`: auxiliary lemmas on real numbers
 - `fmap_ext.v`: auxiliary definitions and results on finite maps
 - `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system

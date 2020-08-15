@@ -10,20 +10,19 @@ license: "NCSA"
 synopsis: "A verified model of the Algorand consensus protocol in Coq"
 description: """
 The Algorand consensus protocol provides the foundation for a
-decentralized digital currency and transactions platform.
-This project provides a model of the protocol in Coq, expressed as a transition
+decentralized digital currency and transactions platform. This project
+provides a model of the protocol in Coq, expressed as a transition
 system over global states in a message-passing distributed system.
 Included is a formal proof of safety for the transition system."""
 
 build: ["dune" "build" "-p" name "-j" jobs]
 depends: [
   "dune" {>= "2.5"}
-  "coq" {>= "8.11" & < "8.12~"}
+  "coq" {>= "8.12" & < "8.13~"}
   "coq-mathcomp-ssreflect" {>= "1.11" & < "1.12~"}
   "coq-mathcomp-algebra" 
   "coq-mathcomp-finmap" {>= "1.5"}
-  "coq-mathcomp-analysis" {>= "0.3.1"}
-  "coq-interval" {>= "4.0.0"}
+  "coq-mathcomp-analysis" {>= "0.3.2"}
   "coq-record-update" 
 ]
 

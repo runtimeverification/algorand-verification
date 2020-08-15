@@ -1,0 +1,10 @@
+GLOBFILES = $(VFILES:.v=.glob)
+COQ2HTML = coq2html
+COQ2HTMLDIR = docs/coq2html
+COQ2HTMLFLAGS = -base Algorand -external https://math-comp.github.io/htmldoc/ mathcomp
+
+coq2html: $(GLOBFILES) $(VFILES)
+	$(SHOW)'COQ2HTML -d $(COQ2HTMLDIR)'
+	$(HIDE)mkdir -p $(COQ2HTMLDIR)
+	$(HIDE)cd theories && $(COQ2HTML) $(COQ2HTMLFLAGS) -d ../$(COQ2HTMLDIR) *.v *.glob
+.PHONY: coq2html
