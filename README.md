@@ -5,23 +5,25 @@
 [action-shield]: https://github.com/runtimeverification/algorand-verification/workflows/CI/badge.svg?branch=master
 [action-link]: https://github.com/runtimeverification/algorand-verification/actions?query=workflow%3ACI
 
-A formalization of the [Algorand](https://www.algorand.com) consensus protocol using the [Coq proof assistant](https://coq.inria.fr).
-The project provides: 
-- an abstract and timed specification of the protocol as a transition system, including node-level behavior, asynchronous messaging and a model of the adversary,
-- a **complete** formal proof of _asynchronous safety_ for the transition system.
+The Algorand consensus protocol is the foundation of a decentralized
+digital currency and transactions platform. This project provides a
+model of the protocol in Coq, expressed as a transition system over
+global states in a message-passing distributed system. Included is
+a formal proof of safety for the transition system.
 
-<img src="resources/pdf-icon.png" alt="PDF" width="2%" /> *[Modeling and Verification of the Algorand Consensus Protocol](https://github.com/runtimeverification/algorand-verification/blob/master/report/report.pdf)*
+## Meta
 
-Statements of some _liveness_ properties for the transition system are also provided, but these are work-in-progress and their proofs are currently **incomplete**.
-
-## Requirements
-
-- [Coq 8.12](https://github.com/coq/coq/releases/tag/V8.12.0)
-- [MathComp ssreflect 1.11.0](https://math-comp.github.io)
-- [MathComp algebra](https://math-comp.github.io)
-- [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
-- [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
-- [Coq record update](https://github.com/tchajed/coq-record-update)
+- License: [University of Illinois/NCSA Open Source License](LICENSE.md)
+- Compatible Coq versions: 8.12
+- Additional dependencies:
+  - [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+  - [MathComp algebra](https://math-comp.github.io)
+  - [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
+  - [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+  - [Coq record update](https://github.com/tchajed/coq-record-update)
+- Coq namespace: `Algorand`
+- Related publication(s):
+  - [Towards a Verified Model of the Algorand Consensus Protocol in Coq](https://arxiv.org/abs/1907.05523) doi:[10.1007/978-3-030-54994-7_27](https://doi.org/10.1007/978-3-030-54994-7_27)
 
 ## Building
 
@@ -36,9 +38,19 @@ opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
 
-## Files
+## Contents
 
-All Coq vernacular files can be found under the `theories` directory, and their content is as follows:
+The project includes: 
+- an abstract and timed specification in Coq of the Algorand consensus protocol as a transition system, including node-level behavior, asynchronous messaging and a model of the adversary,
+- a **complete** formal proof of _asynchronous safety_ for the transition system.
+
+For more details on the formalization, see the report:
+
+<img src="resources/pdf-icon.png" alt="PDF" width="2%" /> *[Modeling and Verification of the Algorand Consensus Protocol](https://github.com/runtimeverification/algorand-verification/blob/master/report/report.pdf)*
+
+Statements of some _liveness_ properties for the transition system are also provided, but these are work-in-progress and their proofs are currently **incomplete**.  
+
+All Coq source files can be found under the `theories` directory, and their content is as follows:
 
 - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
 - `fmap_ext.v`: auxiliary definitions and results on finite maps

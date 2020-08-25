@@ -1,0 +1,126 @@
+---
+fullname: Algorand Verification
+shortname: algorand-verification
+opam_name: coq-algorand
+organization: runtimeverification
+community: false
+dune: true
+action: true
+
+synopsis: A verified model of the Algorand consensus protocol in Coq
+
+description: |-
+  The Algorand consensus protocol is the foundation of a decentralized
+  digital currency and transactions platform. This project provides a
+  model of the protocol in Coq, expressed as a transition system over
+  global states in a message-passing distributed system. Included is
+  a formal proof of safety for the transition system.
+
+publications:
+- pub_url: https://arxiv.org/abs/1907.05523
+  pub_doi: 10.1007/978-3-030-54994-7_27
+  pub_title: Towards a Verified Model of the Algorand Consensus Protocol in Coq
+
+authors:
+- name: Musab A. Alturki
+- name: Jing Chen
+- name: Victor Luchangco
+- name: Brandon Moore
+- name: Karl Palmskog
+- name: Lucas Peña
+- name: Grigore Roșu
+
+opam-file-maintainer: palmskog@gmail.com
+
+opam-file-version: dev
+
+license:
+  fullname: University of Illinois/NCSA Open Source License
+  identifier: NCSA
+  file: LICENSE.md
+
+supported_coq_versions:
+  text: '8.12'
+  opam: '{>= "8.12" & < "8.13~"}'
+
+tested_coq_opam_versions:
+- version: '1.11.0-coq-8.12'
+  repo: 'mathcomp/mathcomp'
+
+dependencies:
+- opam:
+    name: coq-mathcomp-ssreflect
+    version: '{>= "1.11" & < "1.12~"}'
+  description: |-
+    [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+- opam:
+    name: coq-mathcomp-algebra
+  description: |-
+    [MathComp algebra](https://math-comp.github.io)
+- opam:
+    name: coq-mathcomp-finmap
+    version: '{>= "1.5"}'
+  description: |-
+    [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
+- opam:
+    name: coq-mathcomp-analysis
+    version: '{>= "0.3.2"}'
+  description: |-
+    [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+- opam:
+    name: coq-record-update
+  description: |-
+    [Coq record update](https://github.com/tchajed/coq-record-update)
+
+namespace: Algorand
+
+keywords:
+- name: distributed algorithms
+- name: blockchain
+- name: consensus
+- name: algorand
+
+categories:
+- name: Computer Science/Concurrent Systems and Protocols/Theory of concurrent systems
+
+build: |-
+  ## Building
+  
+  We recommend installing the dependencies of the project via
+  [OPAM](http://opam.ocaml.org/doc/Install.html), for example:
+  ```shell
+  opam repo add coq-released https://coq.inria.fr/opam/released
+  opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
+    coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
+    coq-mathcomp-analysis.0.3.2 coq-record-update
+  ```
+
+  Then, run `make` in the project root directory. This will check all the definitions and proofs.
+
+documentation: |-
+  ## Contents
+
+  The project includes: 
+  - an abstract and timed specification in Coq of the Algorand consensus protocol as a transition system, including node-level behavior, asynchronous messaging and a model of the adversary,
+  - a **complete** formal proof of _asynchronous safety_ for the transition system.
+
+  For more details on the formalization, see the report:
+
+  <img src="resources/pdf-icon.png" alt="PDF" width="2%" /> *[Modeling and Verification of the Algorand Consensus Protocol](https://github.com/runtimeverification/algorand-verification/blob/master/report/report.pdf)*
+
+  Statements of some _liveness_ properties for the transition system are also provided, but these are work-in-progress and their proofs are currently **incomplete**.  
+
+  All Coq source files can be found under the `theories` directory, and their content is as follows:
+
+  - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
+  - `fmap_ext.v`: auxiliary definitions and results on finite maps
+  - `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
+  - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
+  - `quorums.v`: definitions and hypotheses about quorums of nodes
+  - `safety.v`: statement and complete formal proof of safety for the transition system
+  - `liveness.v`: an initial attempt at specifying liveness properties for the transition system. This part is work-in-progress and thus the file contains incomplete (admitted) proofs.
+
+  ## Help and Feedback
+
+  Feel free to report GitHub issues or to contact us at: contact@runtimeverification.com
+---
