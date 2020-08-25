@@ -1,0 +1,517 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module Algorand.liveness</title>
+<meta name="description" content="Documentation of Coq module Algorand.liveness" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="coq2html.js"> </script>
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module Algorand.liveness</h1>
+<div class="coq">
+<span class="id">From</span> <span class="id">mathcomp.ssreflect</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id">all_ssreflect</span>.<br/>
+<br/>
+<span class="id">From</span> <span class="id">mathcomp.finmap</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id">finmap</span> <span class="id">multiset</span>.<br/>
+<br/>
+<span class="id">From</span> <span class="id">Coq</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id">Reals</span> <span class="id">Relation_Definitions</span> <span class="id">Relation_Operators</span> <span class="id">Lra</span>.<br/>
+<br/>
+<span class="id">From</span> <span class="id">mathcomp.analysis</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id">boolp</span> <span class="id">Rstruct</span>.<br/>
+<br/>
+<span class="id">From</span> <span class="id">Algorand</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id">fmap_ext</span> <span class="id">algorand_model</span> <span class="id">safety_helpers</span> <span class="id">quorums</span> <span class="id">safety</span>.<br/>
+<br/>
+<span class="kwd">Set</span> <span class="kwd">Implicit</span> <span class="id">Arguments</span>.<br/>
+<span class="kwd">Unset</span> <span class="kwd">Strict</span> <span class="kwd">Implicit</span>.<br/>
+<span class="kwd">Unset</span> <span class="id">Printing</span> <span class="kwd">Implicit</span> <span class="id">Defensive</span>.<br/>
+<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">mset_scope</span>.<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fmap_scope</span>.<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fset_scope</span>.<br/>
+<br/>
+<div class="doc">NOTE: This is only an initial attempt at specifying liveness 
+properties for the transition system. This part is still 
+work-in-progress and thus the file contains incomplete 
+(admitted) proofs. </div>
+<br/>
+<span class="kwd">Definition</span> <span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span> : {<span class="id">fmap</span> <span class="id">UserId</span> -&gt; <span class="id">UState</span>} :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">drop</span> <span class="id">ix</span> <span class="id">path</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id">g1</span> :: <span class="id">_</span> =&gt; <span class="id">g1</span>.(<span class="id">users</span>)<br/>
+&nbsp;&nbsp;| <span class="id">_</span> =&gt; [<span class="id">fmap</span>]<br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id">user_stv_val</span> (<span class="id">uid</span>:<span class="id">UserId</span>) (<span class="id">g</span>:<span class="id">GState</span>) (<span class="id">p</span>:<span class="id">nat</span>) (<span class="id">stv</span>':<span class="id">option</span> <span class="id">Value</span>) : <span class="id">bool</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">if</span> <span class="id">g</span>.(<span class="id">users</span>).[? <span class="id">uid</span>] <span class="id">is</span> <span class="id">Some</span> <span class="id">ustate</span> <span class="kwd">then</span> <span class="id">ustate</span>.(<span class="id">stv</span>).[? <span class="id">p</span>] == <span class="id">stv</span>' <span class="kwd">else</span> <span class="id">false</span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id">user_stv_val_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">p</span> <span class="id">stv</span> : <span class="id">bool</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">drop</span> <span class="id">ix</span> <span class="id">path</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| <span class="id">g1</span> :: <span class="id">_</span> =&gt; <span class="id">user_stv_val</span> <span class="id">uid</span> <span class="id">g1</span> <span class="id">p</span> <span class="id">stv</span><br/>
+&nbsp;&nbsp;| <span class="id">_</span> =&gt; <span class="id">false</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>.<br/>
+<br/>
+<h2> Sensible states </h2>
+<br/>
+<div class="doc">This notion specifies what states can be considered valid states. The idea
+is that we only consider execution traces that begin at sensible states,
+since sensibility is preserved by the transition system (to be shown), the
+set of reachable states will also be sensible (to be shown). This means that
+it is not important which specific state is assumed as the initial state as
+long as the state is sensible.
+Note: the traditional operational notion of an initial state is a now a
+special case of sensibility. </div>
+<span class="kwd">Definition</span> <span class="id">sensible_ustate</span> (<span class="id">us</span> : <span class="id">UState</span>) : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;(<span class="id">us</span>.(<span class="id">p_start</span>) &gt;= 0)%<span class="id">R</span> /\<br/>
+&nbsp;&nbsp;(0 &lt;= <span class="id">us</span>.(<span class="id">timer</span>) &lt;= <span class="id">us</span>.(<span class="id">deadline</span>))%<span class="id">R</span> .<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id">sensible_gstate</span> (<span class="id">gs</span> : <span class="id">GState</span>) : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;(<span class="id">gs</span>.(<span class="id">now</span>) &gt;= 0)%<span class="id">R</span> /\<br/>
+&nbsp;&nbsp;~ <span class="id">gs</span>.(<span class="id">users</span>) = [<span class="id">fmap</span>] /\<br/>
+&nbsp;&nbsp;<span class="id">domf</span> <span class="id">gs</span>.(<span class="id">msg_in_transit</span>) `&lt;=` <span class="id">domf</span> <span class="id">gs</span>.(<span class="id">users</span>) /\ <br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">uid</span> (<span class="id">k</span>:<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">gs</span>.(<span class="id">users</span>)), <span class="id">sensible_ustate</span> <span class="id">gs</span>.(<span class="id">users</span>).[<span class="id">k</span>].<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">step_later_deadlines</span> : <span class="kwd">forall</span> <span class="id">s</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">s</span> &gt; 3 -&gt; <span class="id">next_deadline</span> <span class="id">s</span> = (<span class="id">lambda</span> + <span class="id">big_lambda</span> + (<span class="id">INR</span> <span class="id">s</span> - 3) * <span class="id">L</span>)%<span class="id">R</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof23')">Proof.</div>
+<div class="proofscript" id="proof23">
+&nbsp;&nbsp;<span class="tactic">intros</span> <span class="id">s</span> <span class="id">H_s</span>; <span class="tactic">clear</span> -<span class="id">H_s</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">next_deadline</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">do</span> 3 (<span class="tactic">destruct</span> <span class="id">s</span>;[<span class="id">exfalso</span>;<span class="tactic">apply</span> <span class="id">not_false_is_true</span>;<span class="tactic">assumption</span>|]).<br/>
+&nbsp;&nbsp;<span class="tactic">reflexivity</span>.<br/>
+Qed.</div>
+<br/>
+<div class="doc">The user transition relation preserves sensibility of user states. </div>
+<span class="kwd">Lemma</span> <span class="id">utr_msg_preserves_sensibility</span> : <span class="kwd">forall</span> <span class="id">uid</span> <span class="id">us</span> <span class="id">us</span>' <span class="id">m</span> <span class="id">ms</span>,<br/>
+&nbsp;&nbsp;<span class="id">sensible_ustate</span> <span class="id">us</span> -&gt; <span class="id">uid</span> # <span class="id">us</span> ; <span class="id">m</span> ~&gt; (<span class="id">us</span>', <span class="id">ms</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">sensible_ustate</span> <span class="id">us</span>'.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof24')">Proof.</div>
+<div class="proofscript" id="proof24">
+&nbsp;&nbsp;<span class="tactic">intros</span> <span class="id">uid</span> <span class="id">us</span> <span class="id">us</span>' <span class="id">m</span> <span class="id">ms</span> <span class="id">H_sensible</span> <span class="id">Hstep</span>;<br/>
+&nbsp;&nbsp;<span class="id">remember</span> (<span class="id">us</span>',<span class="id">ms</span>) <span class="kwd">as</span> <span class="id">ustep_output</span> <span class="id">eqn</span>:<span class="id">H_output</span>;<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">Hstep</span>; <span class="tactic">injection</span> <span class="id">H_output</span>; <span class="tactic">intros</span>; <span class="tactic">subst</span>;<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| [<span class="id">H_sensible</span> : <span class="id">sensible_ustate</span> ?<span class="id">s</span> |- <span class="id">_</span>] =&gt; <span class="id">is_var</span> <span class="id">s</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">s</span>;<span class="tactic">unfold</span> <span class="id">sensible_ustate</span> <span class="kwd">in</span> * |- *;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">decompose</span> <span class="id">record</span> <span class="id">H_sensible</span>;<span class="tactic">clear</span> <span class="id">H_sensible</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> * |- *<br/>
+&nbsp;&nbsp;<span class="kwd">end</span>;<br/>
+&nbsp;&nbsp;<span class="id">autounfold</span> <span class="kwd">with</span> <span class="id">utransition_unfold</span> <span class="kwd">in</span> * |- *;<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| [<span class="id">H</span> : <span class="id">context</span> <span class="id">C</span> [<span class="id">valid_rps</span>] |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">valid_rps</span> <span class="kwd">in</span> <span class="id">H</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> <span class="id">H</span>;<span class="id">decompose</span> <span class="id">record</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;| <span class="id">_</span> =&gt; <span class="id">idtac</span><br/>
+&nbsp;&nbsp;<span class="kwd">end</span>;<br/>
+&nbsp;&nbsp;<span class="tactic">try</span> <span class="tactic">by</span> <span class="tactic">intuition</span> <span class="id">lra</span>.<br/>
+&nbsp;&nbsp;<span class="comment">(*&nbsp;deliver&nbsp;nonvote&nbsp;msg&nbsp;needs&nbsp;some&nbsp;custom&nbsp;steps&nbsp;*)</span><br/>
+&nbsp;&nbsp;<span class="tactic">clear</span> <span class="id">H_output</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">msg</span> <span class="kwd">as</span> [<span class="id">mtype</span> <span class="id">ex_val</span> ? ? ?];<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">ex_val</span>;<span class="tactic">simpl</span>;[<span class="tactic">destruct</span> <span class="id">mtype</span>;<span class="tactic">simpl</span>|..];<span class="tactic">intuition</span> <span class="id">lra</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">utr_nomsg_preserves_sensibility</span> : <span class="kwd">forall</span> <span class="id">uid</span> <span class="id">us</span> <span class="id">us</span>' <span class="id">ms</span>,<br/>
+&nbsp;&nbsp;<span class="id">sensible_ustate</span> <span class="id">us</span> -&gt; <span class="id">uid</span> # <span class="id">us</span> ~&gt; (<span class="id">us</span>', <span class="id">ms</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">sensible_ustate</span> <span class="id">us</span>'.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof25')">Proof.</div>
+<div class="proofscript" id="proof25">
+&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">use_hyp</span> <span class="id">H</span> := (<span class="tactic">unfold</span> <span class="id">valid_rps</span> <span class="kwd">in</span> <span class="id">H</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">decompose</span> <span class="id">record</span> <span class="id">H</span>) <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">tidy</span> <span class="id">_</span> :=<br/>
+&nbsp;&nbsp;(<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ |- <span class="id">context</span> <span class="id">C</span> [ <span class="id">next_deadline</span> (?<span class="id">s</span> + 1 - 1) ] ] =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">replace</span> (<span class="id">s</span> + 1 - 1) <span class="kwd">with</span> <span class="id">s</span> <span class="tactic">by</span> (<span class="tactic">rewrite</span> <span class="id">addn1</span>;<span class="tactic">rewrite</span> <span class="id">subn1</span>;<span class="tactic">symmetry</span>;<span class="tactic">apply</span> <span class="id">Nat.pred_succ</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [ <span class="id">H</span> : <span class="id">is_true</span> (3 &lt; ?<span class="id">s</span>) |- <span class="id">context</span> <span class="id">C</span> [<span class="id">next_deadline</span> ?<span class="id">s</span>] ] =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id">step_later_deadlines</span> <span class="id">H</span>)<br/>
+&nbsp;&nbsp;<span class="kwd">end</span>) <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="tactic">intros</span> <span class="id">uid</span> <span class="id">us</span> <span class="id">us</span>' <span class="id">ms</span> <span class="id">H_sensible</span> <span class="id">Hstep</span>;<br/>
+&nbsp;&nbsp;<span class="id">remember</span> (<span class="id">us</span>',<span class="id">ms</span>) <span class="kwd">as</span> <span class="id">ustep_output</span> <span class="id">eqn</span>:<span class="id">H_output</span>;<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">Hstep</span>; <span class="tactic">injection</span> <span class="id">H_output</span>; <span class="tactic">intros</span>; <span class="tactic">subst</span>;<br/>
+&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;| [<span class="id">H_sensible</span> : <span class="id">sensible_ustate</span> ?<span class="id">s</span> |- <span class="id">_</span>] =&gt; <span class="id">is_var</span> <span class="id">s</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">s</span>;<span class="tactic">unfold</span> <span class="id">sensible_ustate</span> <span class="kwd">in</span> * |- *;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">decompose</span> <span class="id">record</span> <span class="id">H_sensible</span>;<span class="tactic">clear</span> <span class="id">H_sensible</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> * |- *<br/>
+&nbsp;&nbsp;<span class="kwd">end</span>;<br/>
+&nbsp;&nbsp;<span class="tactic">try</span> (<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">match</span> <span class="id">goal</span> <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">propose_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">propose_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">repropose_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">repropose_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">no_propose_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">no_propose_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">softvote_new_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">softvote_new_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">softvote_repr_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">softvote_repr_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">no_softvote_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">no_softvote_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">certvote_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">certvote_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">no_certvote_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">no_certvote_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">nextvote_val_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">nextvote_val_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">nextvote_open_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">nextvote_open_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">nextvote_stv_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> /\ <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">destruct</span> <span class="id">H</span> <span class="kwd">as</span> [<span class="id">H</span> <span class="id">Hs</span>]; <span class="tactic">unfold</span> <span class="id">nextvote_stv_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">no_nextvote_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">no_nextvote_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">set_softvotes</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">set_softvotes</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| [<span class="id">H</span>: <span class="id">certvote_timeout_ok</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> |- <span class="id">_</span>] =&gt; <span class="tactic">unfold</span> <span class="id">timout_ok</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">use_hyp</span> <span class="id">H</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;| <span class="id">_</span> =&gt; <span class="id">idtac</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">repeat</span> (<span class="id">tidy</span> ());<span class="tactic">intuition</span> <span class="id">lra</span>).<br/>
+&nbsp;&nbsp;&nbsp;- <span class="tactic">split</span> =&gt; //; <span class="tactic">split</span> =&gt; //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;&nbsp;- <span class="tactic">split</span> =&gt; //; <span class="tactic">split</span> =&gt; //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;&nbsp;- <span class="tactic">split</span> =&gt; //; <span class="tactic">split</span> =&gt; //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;&nbsp;- <span class="tactic">split</span> =&gt; //; <span class="tactic">split</span> =&gt; //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="id">admit</span>.<br/>
+Admitted.</div>
+<br/>
+<div class="doc">The global transition relation preserves sensibility of global states. </div>
+<span class="kwd">Lemma</span> <span class="id">gtr_preserves_sensibility</span> : <span class="kwd">forall</span> <span class="id">gs</span> <span class="id">gs</span>',<br/>
+&nbsp;&nbsp;<span class="id">sensible_gstate</span> <span class="id">gs</span> -&gt; <span class="id">GTransition</span> <span class="id">gs</span> <span class="id">gs</span>' -&gt;<br/>
+&nbsp;&nbsp;<span class="id">sensible_gstate</span> <span class="id">gs</span>'.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof26')">Proof.</div>
+<div class="proofscript" id="proof26">
+&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">use_hyp</span> <span class="id">H</span> := (<span class="tactic">unfold</span> <span class="id">valid_rps</span> <span class="kwd">in</span> <span class="id">H</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> <span class="id">H</span>; <span class="id">decompose</span> <span class="id">record</span> <span class="id">H</span>) <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="tactic">intros</span> <span class="id">gs</span> <span class="id">gs</span>' <span class="id">H_sensible</span> <span class="id">Hstep</span>;<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">Hstep</span>.<br/>
+<br/>
+&nbsp;&nbsp;* <span class="tactic">destruct</span> <span class="id">pre</span>. <span class="tactic">unfold</span> <span class="id">tick_update</span>, <span class="id">tick_users</span>. <span class="tactic">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">admit</span>.<br/>
+&nbsp;&nbsp;* <span class="tactic">apply</span> <span class="id">utr_msg_preserves_sensibility</span> <span class="kwd">in</span> <span class="id">H1</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|<span class="tactic">unfold</span> <span class="id">sensible_gstate</span> <span class="kwd">in</span> <span class="id">H_sensible</span>;<span class="id">decompose</span> <span class="id">record</span> <span class="id">H_sensible</span>;<span class="id">done</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">pre</span>;<span class="tactic">unfold</span> <span class="id">sensible_gstate</span> <span class="kwd">in</span> * |- *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">delivery_result</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> * |- *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="tactic">intuition</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="tactic">move</span> :<span class="id">H5</span>. <span class="tactic">clear</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>/(<span class="tactic">f_equal</span> (<span class="kwd">fun</span> <span class="id">f</span> =&gt; <span class="id">uid</span> \<span class="kwd">in</span> <span class="id">f</span>)).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">change</span> (<span class="id">uid</span> \<span class="kwd">in</span> ?<span class="id">f</span>) <span class="kwd">with</span> (<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">domf</span> <span class="id">f</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">dom_setf</span> <span class="id">fset1U1</span> <span class="id">in_fset0</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="tactic">rewrite</span> <span class="id">ffunE</span>. <span class="tactic">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">set</span> <span class="id">test</span> := (<span class="id">uid0</span> == <span class="id">uid</span>);<span class="tactic">destruct</span> <span class="id">test</span> <span class="id">eqn</span>:<span class="id">H_eq</span>;<span class="tactic">subst</span> <span class="id">test</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">change</span> (<span class="id">uid0</span> \<span class="kwd">in</span> ?<span class="id">f</span>) <span class="kwd">with</span> (<span class="id">uid0</span> \<span class="kwd">in</span> <span class="id">domf</span> <span class="id">f</span>) <span class="kwd">in</span> <span class="id">k</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id">dom_setf</span> <span class="id">in_fset1U</span> <span class="id">H_eq</span> /= <span class="kwd">in</span> <span class="id">k</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">in_fnd</span>;<span class="tactic">apply</span> <span class="id">H6</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;* <span class="tactic">apply</span> <span class="id">utr_nomsg_preserves_sensibility</span> <span class="kwd">in</span> <span class="id">H0</span>;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|<span class="tactic">unfold</span> <span class="id">sensible_gstate</span> <span class="kwd">in</span> <span class="id">H_sensible</span>;<span class="id">decompose</span> <span class="id">record</span> <span class="id">H_sensible</span>;<span class="id">done</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">pre</span>;<span class="tactic">unfold</span> <span class="id">sensible_gstate</span> <span class="kwd">in</span> * |- *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">step_result</span>;<span class="tactic">simpl</span> <span class="kwd">in</span> * |- *.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;{ <span class="tactic">intuition</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="tactic">move</span>:<span class="id">H4</span>; <span class="tactic">clear</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>/(<span class="tactic">f_equal</span> (<span class="kwd">fun</span> <span class="id">f</span> =&gt; <span class="id">uid</span> \<span class="kwd">in</span> <span class="id">f</span>)).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">change</span> (<span class="id">uid</span> \<span class="kwd">in</span> ?<span class="id">f</span>) <span class="kwd">with</span> (<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">domf</span> <span class="id">f</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">dom_setf</span> <span class="id">fset1U1</span> <span class="id">in_fset0</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;* <span class="tactic">rewrite</span> <span class="id">ffunE</span>. <span class="tactic">simpl</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">set</span> <span class="id">test</span> := (<span class="id">uid0</span> == <span class="id">uid</span>);<span class="tactic">destruct</span> <span class="id">test</span> <span class="id">eqn</span>:<span class="id">H_eq</span>;<span class="tactic">subst</span> <span class="id">test</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">change</span> (<span class="id">uid0</span> \<span class="kwd">in</span> ?<span class="id">f</span>) <span class="kwd">with</span> (<span class="id">uid0</span> \<span class="kwd">in</span> <span class="id">domf</span> <span class="id">f</span>) <span class="kwd">in</span> <span class="id">k</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id">dom_setf</span> <span class="id">in_fset1U</span> <span class="id">H_eq</span> /= <span class="kwd">in</span> <span class="id">k</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">in_fnd</span>;<span class="tactic">apply</span> <span class="id">H5</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;* <span class="comment">(*&nbsp;recover&nbsp;from&nbsp;partition&nbsp;*)</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">admit</span>.<br/>
+&nbsp;&nbsp;* <span class="comment">(*&nbsp;make&nbsp;partitioned&nbsp;*)</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">admit</span>.<br/>
+&nbsp;&nbsp;* <span class="comment">(*&nbsp;corrupt&nbsp;user&nbsp;*)</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">admit</span>.<br/>
+&nbsp;&nbsp;* <span class="comment">(*&nbsp;replay&nbsp;message&nbsp;*)</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">admit</span>.<br/>
+&nbsp;&nbsp;* <span class="comment">(*&nbsp;forge&nbsp;message&nbsp;*)</span><br/>
+Admitted.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">greachable_preserves_sensibility</span> : <span class="kwd">forall</span> <span class="id">g0</span> <span class="id">g</span>,<br/>
+&nbsp;&nbsp;<span class="id">greachable</span> <span class="id">g0</span> <span class="id">g</span> -&gt; <span class="id">sensible_gstate</span> <span class="id">g0</span> -&gt; <span class="id">sensible_gstate</span> <span class="id">g</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof27')">Proof.</div>
+<div class="proofscript" id="proof27">
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">g0</span> <span class="id">g</span> [<span class="id">p</span> <span class="id">Hp</span>] <span class="id">Hg</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">p</span>. <span class="tactic">inversion</span> <span class="id">Hp</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">is_trace</span> <span class="kwd">in</span> <span class="id">Hp</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">Hp</span> <span class="kwd">as</span> [<span class="id">Hg</span>' <span class="id">Hpath</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">subst</span> <span class="id">g1</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">elim</span>: <span class="id">p</span> <span class="id">g0</span> <span class="id">g</span> <span class="id">Hg</span> <span class="id">Hpath</span> =&gt; /= [<span class="id">g</span> <span class="id">g0</span> <span class="id">Hg</span>|]; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hg</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">g</span> <span class="id">p</span> <span class="id">IH</span> <span class="id">g1</span> <span class="id">g0</span> <span class="id">Hl</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id">andP</span> =&gt; [<span class="id">Ht</span> <span class="id">Hp</span>] <span class="id">Hs</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id">IH</span>: <span class="id">Hp</span> =&gt; <span class="id">Hp</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id">Hp</span>: <span class="id">Hl</span>; <span class="tactic">apply</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Ht</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id">asboolP</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">exact</span>: <span class="id">gtr_preserves_sensibility</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">at_most_one_certval_in_p</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">g0</span> <span class="id">trace</span> (<span class="id">H_path</span>: <span class="id">is_trace</span> <span class="id">g0</span> <span class="id">trace</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">r0</span> (<span class="id">H_start</span>: <span class="id">state_before_round</span> <span class="id">r0</span> <span class="id">g0</span>):<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">ix</span> <span class="id">g</span>, <span class="id">onth</span> <span class="id">trace</span> <span class="id">ix</span> = <span class="id">Some</span> <span class="id">g</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">uid</span> <span class="id">u</span>, <span class="id">g</span>.(<span class="id">users</span>).[? <span class="id">uid</span>] = <span class="id">Some</span> <span class="id">u</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">r</span>, <span class="id">r0</span> &lt;= <span class="id">r</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">p</span> <span class="id">v1</span> <span class="id">v2</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">v1</span> \<span class="kwd">in</span> <span class="id">certvals</span> <span class="id">u</span> <span class="id">r</span> <span class="id">p</span> -&gt; <span class="id">v2</span> \<span class="kwd">in</span> <span class="id">certvals</span> <span class="id">u</span> <span class="id">r</span> <span class="id">p</span> -&gt; <span class="id">v1</span> = <span class="id">v2</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof28')">Proof.</div>
+<div class="proofscript" id="proof28">
+&nbsp;&nbsp;<span class="tactic">clear</span> -<span class="id">H_path</span> <span class="id">H_start</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">ix</span> <span class="id">g</span> <span class="id">H_onth</span> <span class="id">uid</span> <span class="id">u</span> <span class="id">H_lookup</span> <span class="id">r</span> <span class="id">H_round</span> <span class="id">p</span> <span class="id">v1</span> <span class="id">v2</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">certvals</span>, <span class="id">vote_values</span>, <span class="id">soft_weight</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> !<span class="id">mem_filter</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; /<span class="id">andP</span> [<span class="id">Hv1_q</span> <span class="id">Hv1in</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; /<span class="id">andP</span> [<span class="id">Hv2_q</span> <span class="id">Hv2in</span>].<br/>
+&nbsp;&nbsp;<span class="id">have</span> <span class="id">H_votes_checked</span> := (<span class="id">softvote_credentials_checked</span> <span class="id">H_path</span> <span class="id">H_start</span> <span class="id">H_onth</span> <span class="id">H_lookup</span> <span class="id">H_round</span>).<br/>
+<br/>
+&nbsp;&nbsp;<span class="id">have</span> <span class="id">Hq</span> := <span class="id">quorums_s_honest_overlap</span> <span class="id">trace</span>.<br/>
+&nbsp;&nbsp;<span class="id">specialize</span> (<span class="id">Hq</span> <span class="id">r</span> <span class="id">p</span> 2 <span class="id">_</span> <span class="id">_</span> (<span class="id">H_votes_checked</span> <span class="id">_</span> <span class="id">_</span>) <span class="id">Hv1_q</span> (<span class="id">H_votes_checked</span> <span class="id">_</span> <span class="id">_</span>) <span class="id">Hv2_q</span>).<br/>
+<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hq</span> =&gt; [<span class="id">softvoter</span> [<span class="id">H_voted_v1</span> [<span class="id">H_voted_v2</span> <span class="id">H_softvoter_honest</span>]]].<br/>
+&nbsp;&nbsp;<span class="tactic">assert</span> (<span class="id">softvoted_in_path</span> <span class="id">trace</span> <span class="id">softvoter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v1</span>) <span class="kwd">as</span> <span class="id">H_sent_v1</span>. {<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span> (<span class="id">softvotes_sent</span> <span class="id">H_path</span> <span class="id">H_start</span> <span class="id">H_onth</span> <span class="id">H_lookup</span> <span class="id">H_round</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>:<span class="id">H_voted_v1</span> =&gt; /<span class="id">imfsetP</span> /= [] <span class="id">x</span> /<span class="id">andP</span> [<span class="id">H_x_in</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">matchValue</span>. <span class="tactic">destruct</span> <span class="id">x</span>. <span class="tactic">move</span> =&gt; /<span class="id">eqP</span> ? /= ?;<span class="tactic">subst</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;<span class="tactic">assert</span> (<span class="id">softvoted_in_path</span> <span class="id">trace</span> <span class="id">softvoter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v2</span>) <span class="kwd">as</span> <span class="id">H_sent_v2</span>. {<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span> (<span class="id">softvotes_sent</span> <span class="id">H_path</span> <span class="id">H_start</span> <span class="id">H_onth</span> <span class="id">H_lookup</span> <span class="id">H_round</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>:<span class="id">H_voted_v2</span> =&gt; /<span class="id">imfsetP</span> /= [] <span class="id">x</span> /<span class="id">andP</span> [<span class="id">H_x_in</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">matchValue</span>. <span class="tactic">destruct</span> <span class="id">x</span>. <span class="tactic">move</span> =&gt; /<span class="id">eqP</span> ? /= ?;<span class="tactic">subst</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">assumption</span>.<br/>
+&nbsp;&nbsp;}<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">H_sent_v1</span> =&gt; [<span class="id">ix_v1</span> <span class="id">H_sent_v1</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">H_sent_v2</span> =&gt; [<span class="id">ix_v2</span> <span class="id">H_sent_v2</span>].<br/>
+<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">case</span>:(<span class="id">no_two_softvotes_in_p</span> <span class="id">H_path</span> <span class="id">H_sent_v1</span> <span class="id">H_sent_v2</span>).<br/>
+Qed.</div>
+<br/>
+<div class="doc">A user has (re-)proposed a value/block for a given round/period
+along a given path. </div>
+<span class="kwd">Definition</span> <span class="id">proposed_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id">exists</span> <span class="id">g1</span> <span class="id">g2</span>, <span class="id">step_in_path_at</span> <span class="id">g1</span> <span class="id">g2</span> <span class="id">ix</span> <span class="id">path</span> /\<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">user_sent</span> <span class="id">uid</span> (<span class="id">mkMsg</span> <span class="id">Proposal</span> (<span class="id">val</span> <span class="id">v</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span> /\<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">user_sent</span> <span class="id">uid</span> (<span class="id">mkMsg</span> <span class="id">Block</span> (<span class="id">val</span> <span class="id">b</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span> \/<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">user_sent</span> <span class="id">uid</span> (<span class="id">mkMsg</span> <span class="id">Reproposal</span> (<span class="id">repr_val</span> <span class="id">v</span> <span class="id">uid</span> <span class="id">p</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span>).<br/>
+<br/>
+<div class="doc">A block proposer (potential leader) for a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id">block_proposer_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">committee</span> <span class="id">r</span> <span class="id">p</span> 1 /\<br/>
+&nbsp;&nbsp;<span class="id">valid_block_and_hash</span> <span class="id">b</span> <span class="id">v</span> /\<br/>
+&nbsp;&nbsp;<span class="id">proposed_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span>.<br/>
+<br/>
+<div class="doc">The block proposer (the leader) for a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id">leader_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id">block_proposer_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span> /\<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">id</span>, <span class="id">id</span> \<span class="kwd">in</span> <span class="id">committee</span> <span class="id">r</span> <span class="id">p</span> 1 /\ <span class="id">id</span> &lt;&gt; <span class="id">uid</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">credential</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> 1 &lt; <span class="id">credential</span> <span class="id">id</span> <span class="id">r</span> <span class="id">p</span> 1)%<span class="id">O</span>.<br/>
+<br/>
+<div class="doc">A trace is partition-free if it is either empty or it is a valid trace that
+starts at an unparitioned state and does not involve a partitioning
+transition -- Note: not compatible with <span class="bracket"><span class="id">is_trace</span></span> above. </div>
+<br/>
+<span class="kwd">Definition</span> <span class="id">partition_free</span> <span class="id">g0</span> <span class="id">trace</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id">is_trace</span> <span class="id">g0</span> <span class="id">trace</span> /\<br/>
+&nbsp;&nbsp;<span class="id">is_unpartitioned</span> <span class="id">g0</span> /\<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">n</span>, ~ <span class="id">step_at</span> <span class="id">trace</span> <span class="id">n</span> <span class="id">lbl_enter_partition</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">partition_state</span> : <span class="kwd">forall</span> <span class="id">g</span>,<br/>
+&nbsp;&nbsp;<span class="id">is_unpartitioned</span> <span class="id">g</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">is_partitioned</span> (<span class="id">make_partitioned</span> <span class="id">g</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof29')">Proof.</div>
+<div class="proofscript" id="proof29">
+&nbsp;&nbsp;<span class="tactic">intros</span> <span class="id">g</span> <span class="id">unp_H</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">is_unpartitioned</span>,<span class="id">is_partitioned</span> <span class="kwd">in</span> <span class="id">unp_H</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">is_partitioned</span>, <span class="id">make_partitioned</span>, <span class="id">flip_partition_flag</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">simpl</span>. <span class="tactic">assumption</span>.<br/>
+Qed.</div>
+<br/>
+<div class="doc"><span class="bracket"><span class="id">is_partitioned</span></span> as a proposition. </div>
+<span class="kwd">Lemma</span> <span class="id">is_partitionedP</span> : <span class="kwd">forall</span> <span class="id">g</span> : <span class="id">GState</span>,<br/>
+&nbsp;&nbsp;<span class="id">reflect</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">g</span>.(<span class="id">network_partition</span>) = <span class="id">true</span>)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">is_partitioned</span> <span class="id">g</span>).<br/>
+Admitted.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">partition_free_step</span> : <span class="kwd">forall</span> <span class="id">g0</span> <span class="id">g1</span>,<br/>
+&nbsp;&nbsp;<span class="id">is_unpartitioned</span> <span class="id">g0</span> -&gt; <span class="id">GTransition</span> <span class="id">g0</span> <span class="id">g1</span> -&gt;<br/>
+&nbsp;&nbsp;~ <span class="id">related_by</span> <span class="id">lbl_enter_partition</span> <span class="id">g0</span> <span class="id">g1</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">is_unpartitioned</span> <span class="id">g1</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof30')">Proof.</div>
+<div class="proofscript" id="proof30">
+<span class="tactic">intros</span> <span class="id">g0</span> <span class="id">g1</span> <span class="id">g0unp_H</span> <span class="id">g0g1step_H</span> <span class="id">notpstep_H</span>.<br/>
+<span class="tactic">unfold</span> <span class="id">related_by</span> <span class="kwd">in</span> <span class="id">notpstep_H</span>. <span class="tactic">intuition</span>.<br/>
+<span class="tactic">unfold</span> <span class="id">make_partitioned</span> <span class="kwd">in</span> <span class="id">H0</span>. <span class="tactic">unfold</span> <span class="id">flip_partition_flag</span> <span class="kwd">in</span> <span class="id">H0</span>. <span class="tactic">simpl</span> <span class="kwd">in</span> * |- *.<br/>
+<span class="comment">(*&nbsp;almost&nbsp;all&nbsp;cases&nbsp;are&nbsp;straightforward&nbsp;*)</span><br/>
+<span class="tactic">destruct</span> <span class="id">g0g1step_H</span> ; <span class="tactic">auto</span>.<br/>
+<span class="comment">(*&nbsp;except&nbsp;recover_from_partitioned,&nbsp;which&nbsp;is&nbsp;handled&nbsp;separately&nbsp;*)</span><br/>
+&nbsp;&nbsp;<span class="tactic">unfold</span> <span class="id">is_unpartitioned</span> <span class="kwd">in</span> <span class="id">g0unp_H</span>. <span class="tactic">rewrite</span> <span class="id">H</span> <span class="kwd">in</span> <span class="id">g0unp_H</span>. <span class="tactic">auto</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">partition_free_prefix</span> : <span class="kwd">forall</span> <span class="id">g0</span> <span class="id">n</span> <span class="id">trace</span>,<br/>
+&nbsp;&nbsp;<span class="id">n</span> &gt; 0 -&gt;<br/>
+&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> <span class="id">trace</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> (<span class="id">take</span> <span class="id">n</span> <span class="id">trace</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof31')">Proof.</div>
+<div class="proofscript" id="proof31">
+Admitted.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">partition_free_suffix</span> : <span class="kwd">forall</span> <span class="id">g0</span> <span class="id">n</span> <span class="id">trace</span>,<br/>
+&nbsp;&nbsp;<span class="id">n</span> &lt; <span class="id">size</span> <span class="id">trace</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> <span class="id">trace</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> (<span class="id">drop</span> <span class="id">n</span> <span class="id">trace</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof32')">Proof.</div>
+<div class="proofscript" id="proof32">
+Admitted.</div>
+<br/>
+<span class="kwd">Definition</span> <span class="id">message_recorded</span> <span class="id">ustate</span> <span class="id">msg</span> : <span class="kwd">Prop</span> :=<br/>
+<span class="kwd">match</span> <span class="id">msg_type</span> <span class="id">msg</span>, <span class="id">msg_ev</span> <span class="id">msg</span> <span class="kwd">with</span><br/>
+| <span class="id">Block</span>, <span class="id">val</span> <span class="id">b</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="id">b</span> \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">blocks</span>) <span class="id">r</span><br/>
+| <span class="id">Proposal</span>, <span class="id">val</span> <span class="id">v</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="id">exists</span> <span class="id">c</span>, (<span class="id">uid</span>, <span class="id">c</span>, <span class="id">v</span>, <span class="id">true</span>) \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">proposals</span>) (<span class="id">r</span>, <span class="id">p</span>)<br/>
+| <span class="id">Reproposal</span>, <span class="id">repr_val</span> <span class="id">v</span> <span class="id">uid</span>' <span class="id">p</span>' =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="id">exists</span> <span class="id">c</span>, (<span class="id">uid</span>, <span class="id">c</span>, <span class="id">v</span>, <span class="id">false</span>) \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">proposals</span>) (<span class="id">r</span>, <span class="id">p</span>)<br/>
+| <span class="id">Softvote</span>, <span class="id">val</span> <span class="id">v</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;(<span class="id">uid</span>, <span class="id">v</span>) \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">softvotes</span>) (<span class="id">r</span>, <span class="id">p</span>)<br/>
+| <span class="id">Certvote</span>, <span class="id">val</span> <span class="id">v</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;(<span class="id">uid</span>, <span class="id">v</span>) \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">certvotes</span>) (<span class="id">r</span>, <span class="id">p</span>)<br/>
+| <span class="id">Nextvote_Open</span>, <span class="id">step_val</span> <span class="id">s</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">nextvotes_open</span>) (<span class="id">r</span>, <span class="id">p</span>, <span class="id">s</span>)<br/>
+| <span class="id">Nextvote_Val</span>, <span class="id">next_val</span> <span class="id">v</span> <span class="id">s</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">uid</span> := <span class="id">msg_sender</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">r</span> := <span class="id">msg_round</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;<span class="kwd">let</span>: <span class="id">p</span> := <span class="id">msg_period</span> <span class="id">msg</span> <span class="kwd">in</span><br/>
+&nbsp;&nbsp;(<span class="id">uid</span>, <span class="id">v</span>) \<span class="kwd">in</span> <span class="id">ustate</span>.(<span class="id">nextvotes_val</span>) (<span class="id">r</span>, <span class="id">p</span>, <span class="id">s</span>)<br/>
+| <span class="id">_</span>, <span class="id">_</span> =&gt; <span class="id">True</span><br/>
+<span class="kwd">end</span>.<br/>
+<br/>
+<div class="doc">The effect of the message is recorded in the state of the target user on or
+before the message's deadline. </div>
+<span class="kwd">Definition</span> <span class="id">msg_timely_delivered</span> <span class="id">msg</span> <span class="id">deadline</span> <span class="id">gstate</span> <span class="id">target</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id">Rle</span> <span class="id">gstate</span>.(<span class="id">now</span>) <span class="id">deadline</span> /\<br/>
+&nbsp;&nbsp;<span class="id">exists</span> <span class="id">ustate</span>, <span class="id">gstate</span>.(<span class="id">users</span>).[? <span class="id">target</span>] = <span class="id">Some</span> <span class="id">ustate</span> /\<br/>
+&nbsp;&nbsp;<span class="id">message_recorded</span> <span class="id">ustate</span> <span class="id">msg</span>.<br/>
+<br/>
+<div class="doc">If a message is sent along a partition-free trace, and the trace is long enough,
+   then the message is received by all honest users in a timely fashion. </div>
+<span class="kwd">Lemma</span> <span class="id">sent_msg_timely_received</span> : <span class="kwd">forall</span> <span class="id">sender</span> <span class="id">msg</span> <span class="id">g0</span> <span class="id">g1</span> <span class="id">trace</span>,<br/>
+&nbsp;&nbsp;<span class="kwd">let</span> <span class="id">deadline</span> := <span class="id">msg_deadline</span> <span class="id">msg</span> <span class="id">g0</span>.(<span class="id">now</span>) <span class="kwd">in</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">user_sent</span> <span class="id">sender</span> <span class="id">msg</span> <span class="id">g0</span> <span class="id">g1</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">path</span> <span class="id">gtransition</span> <span class="id">g0</span> (<span class="id">g1</span> :: <span class="id">trace</span>) -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> (<span class="id">g1</span> :: <span class="id">trace</span>) -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">Rle</span> <span class="id">deadline</span> (<span class="id">last</span> <span class="id">g0</span> (<span class="id">g1</span> :: <span class="id">trace</span>)).(<span class="id">now</span>) -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">exists</span> <span class="id">ix</span> <span class="id">g</span>, <span class="id">ohead</span> (<span class="id">drop</span> <span class="id">ix</span> (<span class="id">g1</span> :: <span class="id">trace</span>)) = <span class="id">Some</span> <span class="id">g</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/\ (<span class="kwd">forall</span> <span class="id">target</span>, <span class="id">target</span> \<span class="kwd">in</span> <span class="id">honest_users</span> <span class="id">g</span>.(<span class="id">users</span>) -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">msg_timely_delivered</span> <span class="id">msg</span> <span class="id">deadline</span> <span class="id">g</span> <span class="id">target</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof33')">Proof.</div>
+<div class="proofscript" id="proof33">
+Admitted.</div>
+<br/>
+<br/>
+<div class="doc">If the block proposer of period <span class="bracket"><span class="id">r</span>,1</span> is honest, then a certificate for round <span class="bracket"><span class="id">r</span></span>
+is produced at period <span class="bracket"><span class="id">r</span>,1</span>. </div>
+<span class="kwd">Lemma</span> <span class="id">prop_a</span> : <span class="kwd">forall</span> <span class="id">g0</span> <span class="id">g1</span> <span class="id">trace</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">v</span> <span class="id">b</span>,<br/>
+&nbsp;&nbsp;<span class="id">path</span> <span class="id">gtransition</span> <span class="id">g0</span> (<span class="id">g1</span> :: <span class="id">trace</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">partition_free</span> <span class="id">g0</span> (<span class="id">g0</span> :: <span class="id">g1</span> :: <span class="id">trace</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">leader_in_path_at</span> 0 (<span class="id">g0</span> :: <span class="id">g1</span> :: <span class="id">trace</span>) <span class="id">uid</span> <span class="id">r</span> 1 <span class="id">v</span> <span class="id">b</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">user_honest_at</span> 0 (<span class="id">g0</span> :: <span class="id">g1</span> :: <span class="id">trace</span>) <span class="id">uid</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">certified_in_period</span> <span class="id">trace</span> <span class="id">r</span> 1 <span class="id">v</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof34')">Proof.</div>
+<div class="proofscript" id="proof34">
+<span class="tactic">intros</span> <span class="id">g0</span> <span class="id">g1</span> <span class="id">trace</span> <span class="id">sender</span> <span class="id">r</span> <span class="id">v</span> <span class="id">b</span> <span class="id">tr_H</span> <span class="id">pfree_tr_H</span> <span class="id">leader_H</span> <span class="id">honest_H</span>.<br/>
+<span class="tactic">destruct</span> <span class="id">leader_H</span> <span class="kwd">as</span> [<span class="id">proposer_H</span> <span class="id">crommitte_H</span>].<br/>
+<span class="tactic">destruct</span> <span class="id">proposer_H</span> <span class="kwd">as</span> [<span class="id">poleader_H</span> [<span class="id">vb_H</span> <span class="id">proposed_H</span>]].<br/>
+<span class="tactic">destruct</span> <span class="id">proposed_H</span> <span class="kwd">as</span> [<span class="id">g</span>' <span class="id">prop_sent_H</span>].<br/>
+<span class="tactic">destruct</span> <span class="id">prop_sent_H</span> <span class="kwd">as</span> [<span class="id">g</span>'' [<span class="id">prop_step_H</span> <span class="id">prop_sent_H</span>]]. <span class="tactic">destruct</span> <span class="id">prop_step_H</span>. <span class="tactic">subst</span>.<br/>
+&nbsp;&nbsp;<span class="comment">(*&nbsp;Need&nbsp;to&nbsp;identify:&nbsp;-&nbsp;the&nbsp;step&nbsp;and&nbsp;state&nbsp;at&nbsp;which&nbsp;the&nbsp;message&nbsp;is&nbsp;received<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;the&nbsp;user&nbsp;who&nbsp;is&nbsp;receiving&nbsp;the&nbsp;message&nbsp;*)</span><br/>
+<span class="tactic">destruct</span> <span class="id">prop_sent_H</span> <span class="kwd">as</span> [<span class="id">propsent_H</span> | <span class="id">repropsent_H</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">destruct</span> <span class="id">propsent_H</span> <span class="kwd">as</span> [<span class="id">propsent_H</span> <span class="id">blocksent_H</span>].<br/>
+&nbsp;&nbsp;<span class="id">pose</span> <span class="id">proof</span> (@<span class="id">sent_msg_timely_received</span> <span class="id">sender</span> (<span class="id">mkMsg</span> <span class="id">Proposal</span> (<span class="id">val</span> <span class="id">v</span>) <span class="id">r</span> 1 <span class="id">sender</span>) <span class="id">g</span>' <span class="id">g</span>'' <span class="id">trace</span>). <span class="tactic">simpl</span> <span class="kwd">in</span> * |- *.<br/>
+Admitted.</div>
+<br/>
+<br/>
+<div class="doc">If some period <span class="bracket"><span class="id">r</span>,<span class="id">p</span></span> for <span class="bracket"><span class="id">p</span> &gt;= 2</span> is reached with unique starting value bot and the
+leader is honest, then the leader’s proposal is certified. </div>
+<span class="kwd">Lemma</span> <span class="id">prop_c</span> : <span class="kwd">forall</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span>,<br/>
+&nbsp;&nbsp;<span class="id">p</span> &gt;= 2 -&gt;<br/>
+&nbsp;&nbsp;<span class="id">all</span> (<span class="kwd">fun</span> <span class="id">u</span> =&gt; <span class="id">user_stv_val_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">u</span> <span class="id">p</span> <span class="id">None</span>) (<span class="id">domf</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>)) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">leader_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> 1 <span class="id">v</span> <span class="id">b</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">user_honest_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">certified_in_period</span> <span class="id">path</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof35')">Proof.</div>
+<div class="proofscript" id="proof35">
+Admitted.</div>
+<br/>
+<div class="doc">Softvote quorum of all honest users implies certvote quorum. </div>
+<span class="kwd">Lemma</span> <span class="id">honest_softvote_quorum_implies_certvote</span> : <span class="kwd">forall</span> (<span class="id">softvote_quorum</span> : {<span class="id">fset</span> <span class="id">UserId</span>}) <span class="id">ix</span> <span class="id">path</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>,<br/>
+&nbsp;&nbsp;(<span class="kwd">forall</span> <span class="id">voter</span> : <span class="id">UserId</span>, <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">softvote_quorum</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">voter</span> \<span class="kwd">in</span> <span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>))) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">softvote_quorum</span> `&lt;=` <span class="id">committee</span> <span class="id">r</span> <span class="id">p</span> 3 -&gt;<br/>
+&nbsp;&nbsp;<span class="id">tau_c</span> &lt;= #|<span class="id">softvote_quorum</span>| -&gt;<br/>
+&nbsp;&nbsp;(<span class="kwd">forall</span> <span class="id">voter</span> : <span class="id">UserId</span>, <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">softvote_quorum</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&gt; <span class="id">softvoted_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>) -&gt;<br/>
+&nbsp;&nbsp;(<span class="kwd">forall</span> <span class="id">voter</span> : <span class="id">UserId</span>, <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">softvote_quorum</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-&gt; <span class="id">certvoted_in_path</span> <span class="id">path</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof36')">Proof.</div>
+<div class="proofscript" id="proof36">
+Abort.</div>
+<br/>
+<div class="doc">Honest user softvotes starting value. </div>
+<span class="kwd">Lemma</span> <span class="id">stv_not_bot_softvote</span> : <span class="kwd">forall</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">uid</span>,<br/>
+&nbsp;&nbsp;<span class="id">uid</span> \<span class="kwd">in</span> <span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>)) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">user_stv_val_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">p</span> (<span class="id">Some</span> <span class="id">v</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">softvoted_in_path_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof37')">Proof.</div>
+<div class="proofscript" id="proof37">
+Abort.</div>
+<br/>
+<div class="doc">If some period <span class="bracket"><span class="id">r</span>,<span class="id">p</span></span> with <span class="bracket"><span class="id">p</span> &gt;= 2</span> is reached, and all honest users have starting
+value <span class="bracket"><span class="id">H</span>(<span class="id">B</span>)</span>, then a certificate for <span class="bracket"><span class="id">H</span>(<span class="id">B</span>)</span> that period is produced by the honest users. </div>
+<span class="kwd">Lemma</span> <span class="id">prop_e</span> : <span class="kwd">forall</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> <span class="id">b</span>,<br/>
+&nbsp;&nbsp;<span class="id">p</span> &gt;= 2 -&gt;<br/>
+&nbsp;&nbsp;<span class="id">all</span> (<span class="kwd">fun</span> <span class="id">u</span> =&gt; <span class="id">user_stv_val_at</span> <span class="id">ix</span> <span class="id">path</span> <span class="id">u</span> <span class="id">p</span> (<span class="id">Some</span> <span class="id">v</span>))<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>))) -&gt;<br/>
+&nbsp;&nbsp;<span class="id">valid_block_and_hash</span> <span class="id">b</span> <span class="id">v</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id">certified_in_period</span> <span class="id">path</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof38')">Proof.</div>
+<div class="proofscript" id="proof38">
+&nbsp;&nbsp;<span class="tactic">intros</span>.<br/>
+&nbsp;&nbsp;<span class="id">exists</span> (<span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>))).<br/>
+&nbsp;&nbsp;<span class="comment">(*&nbsp;quorum&nbsp;subset&nbsp;of&nbsp;committee&nbsp;at&nbsp;step&nbsp;3&nbsp;*)</span><br/>
+&nbsp;&nbsp;<span class="tactic">assert</span> (<span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>)) `&lt;=` <span class="id">committee</span> <span class="id">r</span> <span class="id">p</span> 3) <span class="tactic">by</span> <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;<span class="comment">(*&nbsp;at&nbsp;least&nbsp;t_H&nbsp;honest&nbsp;users&nbsp;*)</span><br/>
+&nbsp;&nbsp;<span class="tactic">assert</span> (<span class="id">tau_c</span> &lt;= #|<span class="id">domf</span> (<span class="id">honest_users</span> (<span class="id">users_at</span> <span class="id">ix</span> <span class="id">path</span>))|) <span class="tactic">by</span> <span class="id">admit</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">repeat</span> <span class="tactic">split</span>; <span class="tactic">try</span> <span class="tactic">assumption</span>.<br/>
+Admitted.</div>
+<br/>
+<div class="doc">If any honest user is in period <span class="bracket"><span class="id">r</span>,<span class="id">p</span></span> with starting value bottom, then within
+time <span class="bracket">(2*<span class="id">lambda</span>+<span class="id">Lambda</span>)</span>, every honest user in period <span class="bracket"><span class="id">r</span>,<span class="id">p</span></span> will either certify a
+value (i.e., will get a certificate) or move to the next period. </div>
+<span class="kwd">Lemma</span> <span class="id">prop_f</span> : <span class="kwd">forall</span> <span class="id">r</span> <span class="id">p</span> <span class="id">g0</span> <span class="id">g1</span> <span class="id">g2</span> <span class="id">path_seq</span> <span class="id">uid</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">path</span> <span class="id">gtransition</span> <span class="id">g0</span> <span class="id">path_seq</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">g2</span> = <span class="id">last</span> <span class="id">g0</span> <span class="id">path_seq</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">g1</span> = <span class="id">last</span> <span class="id">g0</span> (<span class="id">drop</span> 1 <span class="id">path_seq</span>) -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">user_honest</span> <span class="id">uid</span> <span class="id">g1</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">user_stv_val</span> <span class="id">uid</span> <span class="id">g1</span> <span class="id">p</span> <span class="id">None</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="id">exists</span> <span class="id">v</span>, <span class="id">certvoted_in_path</span> <span class="id">path_seq</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> \/<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">period_advance_at</span> 1 <span class="id">path_seq</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">g1</span> <span class="id">g2</span>).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof39')">Proof.</div>
+<div class="proofscript" id="proof39">
+Admitted.</div>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>

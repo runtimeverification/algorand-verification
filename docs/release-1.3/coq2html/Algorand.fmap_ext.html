@@ -1,0 +1,464 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module Algorand.fmap_ext</title>
+<meta name="description" content="Documentation of Coq module Algorand.fmap_ext" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="coq2html.js"> </script>
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module Algorand.fmap_ext</h1>
+<div class="coq">
+<span class="id">From</span> <span class="id">mathcomp.ssreflect</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.all_ssreflect.html">all_ssreflect</a></span>.<br/>
+<br/>
+<span class="id">From</span> <span class="id">mathcomp.finmap</span><br/>
+<span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html">finmap</a></span>.<br/>
+<br/>
+<span class="kwd">Set</span> <span class="kwd">Implicit</span> <span class="id">Arguments</span>.<br/>
+<span class="kwd">Unset</span> <span class="kwd">Strict</span> <span class="kwd">Implicit</span>.<br/>
+<span class="kwd">Unset</span> <span class="id">Printing</span> <span class="kwd">Implicit</span> <span class="id">Defensive</span>.<br/>
+<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fmap_scope</span>.<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fset_scope</span>.<br/>
+<br/>
+<h1> General utility lemmas for finite maps </h1>
+<br/>
+<span class="kwd">Section</span> <span class="id"><a name="CheckAllFmap">CheckAllFmap</a></span>.<br/>
+<br/>
+<span class="kwd">Variables</span> (<span class="id"><a name="CheckAllFmap.V">V</a></span> : <span class="kwd">Type</span>) (<span class="id"><a name="CheckAllFmap.I">I</a></span> : <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.choice.html#Choice.Exports.choiceType">choiceType</a></span>).<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="CheckAllFmap.P">P</a></span> : <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#pred">pred</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.V">V</a></span>.<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="CheckAllFmap.f">f</a></span> : {<span class="id">fmap</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.I">I</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.V">V</a></span>}.<br/>
+<br/>
+<span class="kwd">Section</span> <span class="id"><a name="CheckAllFmap.AllFs">AllFs</a></span>.<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="CheckAllFmap.AllFs.s">s</a></span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.I">I</a></span>}.<br/>
+<br/>
+<div class="doc">Check the predicate <span class="bracket"><span class="id">P</span></span> on given domain elements in the map <span class="bracket"><span class="id">f</span></span>. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="allfs">allfs</a></span> :=<br/>
+&nbsp;\<span class="id">big</span>[<span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#andb">andb</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>]<span class="id">_</span>(<span class="id">i</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.AllFs.s">s</a></span>) (<span class="kwd">if</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>.[? <span class="id">i</span>] <span class="id">is</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span> <span class="kwd">then</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.P">P</a></span> <span class="id">v</span> <span class="kwd">else</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#true">true</a></span>).<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="allfsP">allfsP</a></span> : <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#reflect">reflect</a></span> (<span class="kwd">forall</span> (<span class="id">i</span> : <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.I">I</a></span>) (<span class="id">h</span> : <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>), <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.AllFs.s">s</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.P">P</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>.[<span class="id">h</span>]) <span class="id"><a href="Algorand.fmap_ext.html#allfs">allfs</a></span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof10')">Proof.</div>
+<div class="proofscript" id="proof10">
+<span class="tactic">apply</span>: (<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#iffP">iffP</a></span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>); <span class="id">last</span> <span class="id">first</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#allfs">allfs</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_seq">big_seq</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">elim</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_ind">big_ind</a></span>: <span class="id">_</span> =&gt; //; <span class="id">last</span> <span class="id">first</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">Hs</span> <span class="id">Hi</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hf</span>: (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>); <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> // <span class="id">Hf</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hf</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">exact</span>: <span class="id">Hi</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">x</span> <span class="id">y</span> <span class="id">Hx</span> <span class="id">Hy</span> <span class="id">Hp</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>; <span class="tactic">split</span>; [<span class="tactic">apply</span> <span class="id">Hx</span>|<span class="tactic">apply</span> <span class="id">Hy</span>].<br/>
+<span class="tactic">move</span> =&gt; <span class="id">Hb</span> <span class="id">i</span> <span class="id">Hi</span> <span class="id">Hs</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hp</span>: (<span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.P">P</a></span> <span class="id">_</span>) =&gt; //.<br/>
+<span class="id">have</span> <span class="id">Hip</span>: <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>.[? <span class="id">i</span>] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>.[<span class="id">Hi</span>] <span class="tactic">by</span> <span class="tactic">apply</span>: <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span>.<br/>
+<span class="tactic">move</span>: <span class="id">Hb</span>.<br/>
+<span class="tactic">set</span> <span class="id">B</span> : <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#pred">pred</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.I">I</a></span> := <span class="kwd">fun</span> <span class="id">j</span> =&gt; <span class="id">j</span> == <span class="id">i</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#allfs">allfs</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#big_fsetID">big_fsetID</a></span> <span class="id">_</span> <span class="id">B</span>) /=.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Ha</span> <span class="id">Hb</span>].<br/>
+<span class="tactic">move</span>: <span class="id">Ha</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id">B</span> /=.<br/>
+<span class="id">suff</span> <span class="id">Hsuff</span>: [<span class="id">fset</span> <span class="id">x</span> | <span class="id">x</span> <span class="kwd">in</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.AllFs.s">s</a></span> &amp; <span class="id">x</span> == <span class="id">i</span>] = [<span class="id">fset</span> <span class="id">i</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hsuff</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#big_seq_fset1">big_seq_fset1</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hi</span>) <span class="id">Hp</span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetP">fsetP</a></span> =&gt; <span class="id">x</span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetE">in_fsetE</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>; <span class="tactic">case</span>.<br/>
+<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt;-&gt;; <span class="tactic">rewrite</span> <span class="id">Hs</span>; <span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">End</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.AllFs">AllFs</a></span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="allf">allf</a></span> := <span class="id"><a href="Algorand.fmap_ext.html#allfs">allfs</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>).<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="allfP">allfP</a></span> : <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#reflect">reflect</a></span> (<span class="kwd">forall</span> (<span class="id">i</span> : <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.I">I</a></span>) (<span class="id">h</span> : <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>), <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.P">P</a></span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap.f">f</a></span>.[<span class="id">h</span>]) <span class="id"><a href="Algorand.fmap_ext.html#allf">allf</a></span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof11')">Proof.</div>
+<div class="proofscript" id="proof11">
+<span class="tactic">apply</span>: (<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#iffP">iffP</a></span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>); <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">move</span> =&gt; <span class="id">Hf</span>; <span class="tactic">apply</span>/<span class="id"><a href="Algorand.fmap_ext.html#allfsP">allfsP</a></span>.<br/>
+<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="Algorand.fmap_ext.html#allfsP">allfsP</a></span> =&gt; <span class="id">Hf</span> <span class="id">i</span> <span class="id">h</span>; <span class="tactic">apply</span>: <span class="id">Hf</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">End</span> <span class="id"><a href="Algorand.fmap_ext.html#CheckAllFmap">CheckAllFmap</a></span>.<br/>
+<br/>
+<span class="kwd">Section</span> <span class="id"><a name="UpdateAllFmap">UpdateAllFmap</a></span>.<br/>
+<br/>
+<span class="kwd">Variables</span> (<span class="id"><a name="UpdateAllFmap.V">V</a></span> : <span class="kwd">Type</span>) (<span class="id"><a name="UpdateAllFmap.I">I</a></span> : <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.choice.html#Choice.Exports.choiceType">choiceType</a></span>).<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="UpdateAllFmap.P">P</a></span> : <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#pred">pred</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span>.<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="UpdateAllFmap.f">f</a></span> : {<span class="id">fmap</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span>}.<br/>
+<br/>
+<span class="kwd">Variable</span> <span class="id"><a name="UpdateAllFmap.s">s</a></span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span>}.<br/>
+<br/>
+<div class="doc">Update function parameter for individual values. </div>
+<span class="kwd">Variable</span> <span class="id"><a name="UpdateAllFmap.upd">upd</a></span> : <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span>.<br/>
+<br/>
+<div class="doc">Update values for given elements in map domain. </div>
+<span class="kwd">Definition</span> <span class="id">updf</span>' :=<br/>
+&nbsp;&nbsp;\<span class="id">big</span>[(@<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#catf">catf</a></span> <span class="id">_</span> <span class="id">_</span>)/[<span class="id">fmap</span>]]<span class="id">_</span>(<span class="id">i</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>)<br/>
+&nbsp;&nbsp;&nbsp;(<span class="kwd">if</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[? <span class="id">i</span>] <span class="id">is</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span> <span class="kwd">then</span> [<span class="id">fmap</span>].[<span class="id">i</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.upd">upd</a></span> <span class="id">i</span> <span class="id">v</span>] <span class="kwd">else</span> [<span class="id">fmap</span>]).<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">updf</span>'<span class="id">_update</span> : <span class="kwd">forall</span> (<span class="id">i</span> : <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span>) (<span class="id">h</span> : <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>),<br/>
+&nbsp;&nbsp;<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">updf</span>' -&gt; <span class="id">updf</span>'.[? <span class="id">i</span>] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.upd">upd</a></span> <span class="id">i</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[<span class="id">h</span>]).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof12')">Proof.</div>
+<div class="proofscript" id="proof12">
+<span class="tactic">rewrite</span> /<span class="id">updf</span>'.<br/>
+<span class="tactic">elim</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_rec">big_rec</a></span>: <span class="id">_</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">h</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset0">in_fset0</a></span>.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">x</span> <span class="id">Ht</span> <span class="id">IH</span> <span class="id">i0</span> <span class="id">h</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hi</span>: (<span class="id">i0</span> == <span class="id">i</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hi</span> =&gt;&lt;-.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">h</span>) =&gt; <span class="id">Hi</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetU0">fsetU0</a></span> <span class="kwd">in</span> <span class="id">Hi</span>.   <br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#catf_setl">catf_setl</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#ifP">ifP</a></span> =&gt; <span class="id">Hx</span>'.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#cat0f">cat0f</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">exact</span>: <span class="id">IH</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#cat0f">cat0f</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hx</span>' =&gt; <span class="id">Hx</span>'.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#dom_setf">dom_setf</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">left</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">h</span>'.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#getf_set">getf_set</a></span>.<br/>
+<span class="id">have</span> <span class="id">IH</span>' := <span class="id">IH</span> <span class="id">_</span> <span class="id">h</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hi</span> =&gt; <span class="id">Hi</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hii</span>: (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>). <br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hii</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> [<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">_</span>]/=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> {1}<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetU0">fsetU0</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD">in_fsetD</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">H1</span> <span class="id">H2</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">H2</span> <span class="id">Hi</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>.<br/>
+&nbsp;<span class="tactic">move</span> =&gt; <span class="id">Hi0</span>.<br/>
+&nbsp;<span class="id">have</span> <span class="id">IH</span>'' := <span class="id">IH</span>' <span class="id">Hi0</span>.<br/>
+&nbsp;<span class="tactic">rewrite</span> -<span class="id">IH</span>''.<br/>
+&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_cat">fnd_cat</a></span>.<br/>
+&nbsp;<span class="tactic">case</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#ifP">ifP</a></span> =&gt; //.<br/>
+&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hi0</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hii</span> =&gt; <span class="id">Hii</span>.<br/>
+<span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hii</span>) <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#cat0f">cat0f</a></span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">updf</span>'<span class="id">_domf</span> : <span class="kwd">forall</span> <span class="id">i</span>, <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">updf</span>' -&gt; <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof13')">Proof.</div>
+<div class="proofscript" id="proof13">
+<span class="tactic">rewrite</span> /<span class="id">updf</span>'.<br/>
+<span class="tactic">elim</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_rec">big_rec</a></span>: <span class="id">_</span> =&gt; //.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">x</span> <span class="id">Ht</span> <span class="id">IH</span> <span class="id">i0</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hi0</span>: (<span class="id">i</span> == <span class="id">i0</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hi0</span> =&gt;-&gt;.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#mem_catf">mem_catf</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">exact</span>: <span class="id">IH</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hi0</span>: (<span class="id">i0</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>) =&gt; //.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi0</span> =&gt; <span class="id">Hi0</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hi0</span>).<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#mem_catf">mem_catf</a></span>.<br/>
+<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">exact</span>: <span class="id">IH</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hi</span>: (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>).<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hi</span>) <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#mem_setf">mem_setf</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt; <span class="id">Hii</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hi0</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hii</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi</span> =&gt; <span class="id">Hi</span>.<br/>
+<span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hi</span>).<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">updf</span>'<span class="id">_s</span> : <span class="kwd">forall</span> <span class="id">i</span>, <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">updf</span>' -&gt; <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof14')">Proof.</div>
+<div class="proofscript" id="proof14">
+<span class="tactic">rewrite</span> /<span class="id">updf</span>'.<br/>
+<span class="id">have</span> -&gt;: (\<span class="id">big</span>[<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#catf">catf</a></span> (<span class="id">V</span>:=<span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span>)/[<span class="id">fmap</span>]]<span class="id">_</span>(<span class="id">i0</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>) <span class="kwd">match</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[? <span class="id">i0</span>] <span class="kwd">with</span> | <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span> =&gt; [<span class="id">fmap</span>].[<span class="id">i0</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.upd">upd</a></span> <span class="id">i0</span> <span class="id">v</span>] | <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; [<span class="id">fmap</span>] <span class="kwd">end</span>) =<br/>
+(\<span class="id">big</span>[<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#catf">catf</a></span> (<span class="id">V</span>:=<span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.V">V</a></span>)/[<span class="id">fmap</span>]]<span class="id">_</span>(<span class="id">i0</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span> | <span class="id">i0</span> \<span class="kwd">in</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>) <span class="kwd">match</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[? <span class="id">i0</span>] <span class="kwd">with</span> | <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">v</span> =&gt; [<span class="id">fmap</span>].[<span class="id">i0</span> &lt;- <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.upd">upd</a></span> <span class="id">i0</span> <span class="id">v</span>] | <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; [<span class="id">fmap</span>] <span class="kwd">end</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_seq">big_seq</a></span>.<br/>
+<span class="tactic">elim</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.bigop.html#big_rec">big_rec</a></span>: <span class="id">_</span> =&gt; //.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">x</span> <span class="id">Ht</span> <span class="id">IH</span> <span class="id">i0</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hi0</span>: (<span class="id">i0</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">x</span>); <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span> =&gt; <span class="id">Hi0</span>'; <span class="tactic">apply</span>: <span class="id">IH</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi0</span> =&gt; <span class="id">Hi0</span>.<br/>
+<span class="tactic">case</span> <span class="id">Hi</span>: (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>).<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hi</span>) /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetU0">fsetU0</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">move</span> =&gt; <span class="id">Hi0</span>'; <span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi0</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD">in_fsetD</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Ha</span> <span class="id">Ha</span>'].<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Ha</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt;-&gt;.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi</span> =&gt; <span class="id">Hi</span>.<br/>
+<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hi</span>).<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#mem_catf">mem_catf</a></span>.<br/>
+<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span> =&gt; //.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">Hi0</span>'.<br/>
+<span class="tactic">exact</span>: <span class="id">IH</span>.<br/>
+Qed.</div>
+<br/>
+<div class="doc">Update given domain elements while retaining original mapping for other elements. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="updf">updf</a></span> := <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span> + <span class="id">updf</span>'.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">domf_s_updf</span>' : <span class="kwd">forall</span> <span class="id">i</span>, <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span> -&gt; (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#enum_fset">enum_fset</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>) = (<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id">updf</span>').<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof15')">Proof.</div>
+<div class="proofscript" id="proof15">
+<span class="tactic">rewrite</span> /<span class="id">updf</span>'.<br/>
+<span class="id">have</span> <span class="id">Hs</span> := <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fset_uniq">fset_uniq</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssreflect.html#unlock">unlock</a></span>.<br/>
+<span class="tactic">elim</span>: (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#enum_fset">enum_fset</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span>) <span class="id">Hs</span> =&gt; //=.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">a</span> <span class="id">l</span> <span class="id">IH</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Ha</span> <span class="id">Hu</span>].<br/>
+<span class="tactic">move</span>/<span class="id">IH</span>: <span class="id">Hu</span> =&gt; {<span class="id">IH</span>} <span class="id">IH</span>.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">Hi</span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.seq.html#in_cons">in_cons</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>; <span class="id">first</span> <span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>.<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Haa</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hi</span>; <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Haa</span>=&gt;-&gt; =&gt; <span class="id">Hi</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> -<span class="id">IH</span> //.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hi</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">left</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD">in_fsetD</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>; <span class="tactic">split</span>; <span class="id">last</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetU0">fsetU0</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Ha</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">IH</span>.<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hf</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">right</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> -<span class="id">IH</span>.<br/>
+- <span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">last</span> <span class="id">first</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> -<span class="id">IH</span> //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">move</span> =&gt;-&gt;; <span class="tactic">rewrite</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orbT">orbT</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD">in_fsetD</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> -<span class="id">IH</span> //.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Hd</span> <span class="id">Hf</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hia</span>: (<span class="id">i</span> == <span class="id">a</span>); <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orbC">orbC</a></span> <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orbT">orbT</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hia</span>; <span class="tactic">case</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hf</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Haa</span>: (<span class="id">a</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>); <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Haa</span>) /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetU0">fsetU0</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Haa</span> =&gt; <span class="id">Haa</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Haa</span>).<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="updf_update">updf_update</a></span> : <span class="kwd">forall</span> (<span class="id">i</span> : <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span>) (<span class="id">h</span> : <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>),<br/>
+&nbsp;&nbsp;<span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span>.[? <span class="id">i</span>] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.upd">upd</a></span> <span class="id">i</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[<span class="id">h</span>]).<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof16')">Proof.</div>
+<div class="proofscript" id="proof16">
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">h</span> <span class="id">Hi</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_cat">fnd_cat</a></span>.<br/>
+<span class="tactic">case</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#ifP">ifP</a></span>; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span> =&gt; <span class="id">Hi</span>'; <span class="tactic">apply</span>: <span class="id">updf</span>'<span class="id">_update</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>; <span class="tactic">case</span>.<br/>
+<span class="tactic">by</span> <span class="tactic">rewrite</span> -<span class="id">domf_s_updf</span>'.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id">updf_update</span>' : <span class="kwd">forall</span> (<span class="id">i</span> : <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.I">I</a></span>) (<span class="id">h</span> : <span class="id">i</span> \<span class="kwd">in</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>),<br/>
+&nbsp;&nbsp;<span class="id">i</span> \<span class="id">notin</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.s">s</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span>.[? <span class="id">i</span>] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span>.[<span class="id">h</span>].<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof17')">Proof.</div>
+<div class="proofscript" id="proof17">
+<span class="tactic">move</span> =&gt; <span class="id">i</span> <span class="id">h</span> <span class="id">Hi</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_cat">fnd_cat</a></span>.<br/>
+<span class="tactic">case</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#ifP">ifP</a></span>; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span>/<span class="id">updf</span>'<span class="id">_s</span>; <span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hi</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>.<br/>
+<span class="tactic">rewrite</span> -<span class="id">domf_s_updf</span>' // =&gt; <span class="id">Hs</span>.<br/>
+<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="updf_domf">updf_domf</a></span> : <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap.f">f</a></span> = <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf">domf</a></span> <span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof18')">Proof.</div>
+<div class="proofscript" id="proof18">
+<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsetP">fsetP</a></span> =&gt; <span class="id">x</span>; <span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#idP">idP</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">Hx</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf_cat">domf_cat</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">left</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#updf">updf</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#domf_cat">domf_cat</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span>; <span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span> =&gt; <span class="id">Hx</span> //.<br/>
+<span class="tactic">exact</span>: <span class="id">updf</span>'<span class="id">_domf</span>.<br/>
+Qed.</div>
+&nbsp;&nbsp;&nbsp;&nbsp;<br/>
+<span class="kwd">End</span> <span class="id"><a href="Algorand.fmap_ext.html#UpdateAllFmap">UpdateAllFmap</a></span>.<br/>
+<br/>
+<span class="kwd">Section</span> <span class="id"><a name="SetFs">SetFs</a></span>.<br/>
+<br/>
+<span class="kwd">Variables</span> (<span class="id"><a name="SetFs.K">K</a></span> : <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.choice.html#Choice.Exports.choiceType">choiceType</a></span>) (<span class="id"><a name="SetFs.V">V</a></span> : <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#Equality.Exports.eqType">eqType</a></span>).<br/>
+<br/>
+<span class="kwd">Variable</span> (<span class="id"><a name="SetFs.default">default</a></span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>).<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="setfs_fmap">setfs_fmap</a></span> (<span class="id">fm</span> : {<span class="id">fmap</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>}) (<span class="id">k</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) (<span class="id">v</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>) : {<span class="id">fmap</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>} :=<br/>
+<span class="kwd">if</span> <span class="id">v</span> == <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> <span class="id">k</span> <span class="kwd">then</span> <span class="kwd">if</span> <span class="id">k</span> \<span class="kwd">in</span> <span class="id">fm</span> <span class="kwd">then</span> <span class="id">fm</span>.[~ <span class="id">k</span>] <span class="kwd">else</span> <span class="id">fm</span><br/>
+<span class="kwd">else</span> <span class="id">fm</span>.[<span class="id">k</span> &lt;- <span class="id">v</span>].<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="setfs_not_default_remove">setfs_not_default_remove</a></span> (<span class="id">fs</span>: {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>}) (<span class="id">k</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) (<span class="id">v</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>) :<br/>
+&nbsp;[<span class="kwd">forall</span> <span class="id">k0</span>, (<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> <span class="id">fs</span>) <span class="id">k</span> <span class="id">v</span>) <span class="id">k0</span> != <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsval">fsval</a></span> <span class="id">k0</span>)].<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof19')">Proof.</div>
+<div class="proofscript" id="proof19">
+<span class="tactic">case</span>: <span class="id">fs</span> =&gt; <span class="id">fs</span> /=.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.fintype.html#forallP">forallP</a></span> =&gt; <span class="id">Hx</span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.fintype.html#forallP">forallP</a></span>.<br/>
+<span class="tactic">rewrite</span> /= /<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span>.<br/>
+<span class="tactic">case</span> <span class="id">Heq</span>: (<span class="id">v</span> == <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> <span class="id">k</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heq</span> =&gt; <span class="id">Heq</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hif</span>: (<span class="id">k</span> \<span class="kwd">in</span> <span class="id">fs</span>) =&gt; //.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> =&gt; <span class="id">k</span>' <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: (<span class="id">Hk</span>) =&gt; <span class="id">Hk</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">simpl</span> <span class="kwd">in</span> <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#mem_remf1">mem_remf1</a></span> <span class="kwd">in</span> <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>: <span class="id">Hk</span> =&gt; [<span class="id">Hkk</span>' <span class="id">Hk</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>.<br/>
+&nbsp;&nbsp;<span class="id">have</span> <span class="id">Hxx</span> := (<span class="id">Hx</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#FSetSub">FSetSub</a></span> <span class="id">Hk</span>)).<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /= <span class="kwd">in</span> <span class="id">Hxx</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> [<span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> <span class="id">_</span>]/= =&gt; <span class="id">Hd</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hxx</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> -<span class="id">Hd</span>.<br/>
+&nbsp;&nbsp;<span class="id">suff</span> <span class="id">Hsuff</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">fs</span>.[<span class="id">Hk</span>] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id">fs</span>.[~ <span class="id">k</span>] [` <span class="id">Hk</span>']) <span class="tactic">by</span> <span class="tactic">case</span>: <span class="id">Hsuff</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> -2!<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_rem1">fnd_rem1</a></span> <span class="id">Hkk</span>'.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heq</span> =&gt; <span class="id">Heq</span> <span class="id">x</span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.finfun.html#ffunE">ffunE</a></span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt; <span class="id">Heqx</span>.<br/>
+<span class="tactic">move</span>: <span class="id">Heqx</span>.<br/>
+<span class="tactic">case</span> <span class="id">Heqk</span>: (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#val">eqtype.val</a></span> <span class="id">x</span> == <span class="id">k</span>); <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heqk</span> =&gt;-&gt;.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt; /= <span class="id">Heqx</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heqk</span> =&gt; <span class="id">Heqk</span>.<br/>
+<span class="tactic">move</span>: <span class="id">x</span> <span class="id">Heqx</span> <span class="id">Heqk</span> =&gt; /=.<br/>
+<span class="tactic">case</span> =&gt; /= <span class="id">k0</span>.<br/>
+<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetU">in_fsetU</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+<span class="tactic">case</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>.<br/>
+<span class="tactic">move</span> =&gt; <span class="id">Hk0</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span> =&gt; <span class="id">Heqv</span> <span class="id">Heqk</span>.<br/>
+<span class="id">have</span> <span class="id">Hxx</span> := (<span class="id">Hx</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#FSetSub">FSetSub</a></span> <span class="id">Hk0</span>)).<br/>
+<span class="tactic">case</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hxx</span>.<br/>
+<span class="tactic">rewrite</span> /= -<span class="id">Heqv</span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#odflt">odflt</a></span> /= /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#oapp">oapp</a></span>.<br/>
+<span class="tactic">by</span> <span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hk0</span>).<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="setfs">setfs</a></span> (<span class="id">fs</span>: {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>}) (<span class="id">k</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) (<span class="id">v</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>) : {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>} :=<br/>
+@<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#Fsfun">Fsfun</a></span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> (<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> <span class="id">fs</span>) <span class="id">k</span> <span class="id">v</span>) (<span class="id"><a href="Algorand.fmap_ext.html#setfs_not_default_remove">setfs_not_default_remove</a></span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span>).<br/>
+<br/>
+<span class="kwd">Local</span> <span class="id">Arguments</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#Fsfun">Fsfun</a></span> : <span class="tactic">clear</span> <span class="id">implicits</span>.<br/>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="getfs_set">getfs_set</a></span> (<span class="id">fs</span>: {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>}) (<span class="id">k</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) (<span class="id">v</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>) :<br/>
+&nbsp;<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> <span class="id">fs</span> <span class="id">k</span> <span class="id">v</span> <span class="id">k</span> = <span class="id">v</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof20')">Proof.</div>
+<div class="proofscript" id="proof20">
+<span class="tactic">case</span>: <span class="id">fs</span> =&gt; <span class="id">fm</span> /=; <span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> /= =&gt; <span class="id">i</span>.<br/>
+<span class="tactic">move</span>: (<span class="id"><a href="Algorand.fmap_ext.html#setfs_not_default_remove">setfs_not_default_remove</a></span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span>) =&gt; /=.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span> /=.<br/>
+<span class="tactic">case</span> <span class="id">Heq</span>: (<span class="id">v</span> == <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> <span class="id">k</span>); <span class="id">first</span> <span class="tactic">case</span> <span class="id">Hk</span>: (<span class="id">k</span> \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hkk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heq</span> =&gt;-&gt;.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#odflt">odflt</a></span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#oapp">oapp</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> //=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetE">in_fsetE</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span> =&gt; <span class="id">Hmem</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span>: <span class="id">Hmem</span> =&gt; [<span class="id">Hmem</span> <span class="id">Hmemk</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hmemk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD">in_fsetD</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Heqk</span> <span class="id">Hdomf</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heqk</span>.<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hkk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heq</span> =&gt;-&gt;.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#odflt">odflt</a></span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#oapp">oapp</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> //=.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hk</span>.<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hkk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> /=.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /=.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#orP">orP</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">left</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1">in_fset1</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.finfun.html#ffunE">ffunE</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Heqk</span>: (<span class="id">k</span> == <span class="id">k</span>) =&gt; //.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heqk</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="setfs_get">setfs_get</a></span> (<span class="id">fs</span>: {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>}) (<span class="id">k</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) :<br/>
+&nbsp;<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> <span class="id">fs</span> <span class="id">k</span> (<span class="id">fs</span> <span class="id">k</span>) = <span class="id">fs</span>.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof21')">Proof.</div>
+<div class="proofscript" id="proof21">
+<span class="tactic">case</span>: <span class="id">fs</span> =&gt; <span class="id">fm</span> <span class="id">Hfm</span>.<br/>
+<span class="tactic">apply</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fsfunP">fsfunP</a></span> =&gt; <span class="id">k0</span>.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> /= /<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span> /=.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span> /=.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#odflt">odflt</a></span> /= /<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrfun.html#oapp">oapp</a></span>.<br/>
+<span class="tactic">case</span> <span class="id">Hkk</span>: (<span class="id">k</span> \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hkk</span>).<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.fintype.html#forallP">forallP</a></span>: <span class="id">Hfm</span> =&gt; <span class="id">Hx</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: (<span class="id">Hx</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#FSetSub">FSetSub</a></span> <span class="id">Hkk</span>)) =&gt; {<span class="id">Hx</span>}.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Heqd</span>: (<span class="id">_</span> == <span class="id">_</span>) =&gt; // <span class="id">_</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hk0</span>: (<span class="id">k0</span> \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_set">fnd_set</a></span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hk0</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hkk0</span>: (<span class="id">k0</span> == <span class="id">k</span>) =&gt; //.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hkk0</span> =&gt; <span class="id">Hkk0</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span> =&gt; {<span class="id">Heqd</span>}.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span>: (<span class="id">Hkk</span>) (<span class="id">Hk0</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id">Hkk0</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">exact</span>: <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#eq_getf">eq_getf</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_set">fnd_set</a></span>.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Heqk</span>: (<span class="id">_</span> == <span class="id">_</span>) =&gt; //.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Heqk</span> (<span class="id">Hkk</span>) (<span class="id">Hk0</span>) =&gt; <span class="id">Heqk</span> {<span class="id">Heqd</span>}.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> -<span class="id">Heqk</span> <span class="id">Hk0</span> <span class="kwd">in</span> <span class="id">Hkk</span>.<br/>
+<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hkk</span> =&gt; <span class="id">Hkk</span>.<br/>
+<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hkk</span>).<br/>
+<span class="tactic">case</span> <span class="id">Hd</span>: (<span class="id">_</span> == <span class="id">_</span>) =&gt; //.<br/>
+<span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hd</span>.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">Lemma</span> <span class="id"><a name="setfsNK">setfsNK</a></span> (<span class="id">fs</span>: {<span class="id">fsfun</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span> -&gt; <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span> <span class="kwd">for</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span>}) (<span class="id">k</span> <span class="id">k</span>' : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.K">K</a></span>) (<span class="id">v</span> : <span class="id"><a href="Algorand.fmap_ext.html#SetFs.V">V</a></span>) :<br/>
+&nbsp;<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> <span class="id">fs</span> <span class="id">k</span> <span class="id">v</span> <span class="id">k</span>' = <span class="kwd">if</span> <span class="id">k</span>' == <span class="id">k</span> <span class="kwd">then</span> <span class="id">v</span> <span class="kwd">else</span> <span class="id">fs</span> <span class="id">k</span>'.<br/>
+<div class="toggleproof" onclick="toggleDisplay('proof22')">Proof.</div>
+<div class="proofscript" id="proof22">
+<span class="tactic">case</span> <span class="id">Hk</span>: (<span class="id">k</span>' == <span class="id">k</span>); <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">move</span>/<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.eqtype.html#eqP">eqP</a></span>: <span class="id">Hk</span> =&gt;-&gt;; <span class="tactic">rewrite</span> <span class="id"><a href="Algorand.fmap_ext.html#getfs_set">getfs_set</a></span>.<br/>
+<span class="tactic">case</span>: <span class="id">fs</span> =&gt; <span class="id">fm</span> /=; <span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#setfs">setfs</a></span> /= =&gt; <span class="id">i</span>.<br/>
+<span class="tactic">move</span>: (<span class="id"><a href="Algorand.fmap_ext.html#setfs_not_default_remove">setfs_not_default_remove</a></span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span>) =&gt; /=.<br/>
+<span class="tactic">rewrite</span> /<span class="id"><a href="Algorand.fmap_ext.html#setfs_fmap">setfs_fmap</a></span> /=.<br/>
+<span class="tactic">case</span> <span class="id">Heq</span>: (<span class="id">v</span> == <span class="id"><a href="Algorand.fmap_ext.html#SetFs.default">default</a></span> <span class="id">k</span>); <span class="id">first</span> <span class="tactic">case</span> <span class="id">Hkk</span>: (<span class="id">k</span> \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hk0</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hkk</span>': (<span class="id">k</span>' \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hkk</span>') /=.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> /=; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD1">in_fsetD1</a></span> <span class="id">Hkk</span>' <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">Hkk</span>''.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">set</span> <span class="id">fm</span>' := [<span class="id">ffun</span> <span class="id">x</span> =&gt; <span class="id">_</span>].<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">suff</span> <span class="id">Hsuff</span>: <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">fm</span>'.[<span class="id">Hkk</span>''] = <span class="id"><a href="http://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> (<span class="id">fm</span>.[<span class="id">Hkk</span>']) <span class="tactic">by</span> <span class="tactic">case</span>: <span class="id">Hsuff</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> -2!<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fnd_rem1">fnd_rem1</a></span> <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hkk</span>' =&gt; <span class="id">Hkk</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hkk</span>') /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> //.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#finmap_of_finfun">finmap_of_finfun</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetE">in_fsetE</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fsetD1">in_fsetD1</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">apply</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; <span class="id">Hk</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hk</span>' =&gt; [<span class="id">Hk1</span> <span class="id">Hk2</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>: <span class="id">Hk2</span>.<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#andP">andP</a></span> =&gt; [<span class="id">Heqk</span> <span class="id">Hdk</span>].<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id">Hdk</span> <span class="kwd">in</span> <span class="id">Hkk</span>'.<br/>
+- <span class="tactic">by</span> <span class="tactic">move</span> =&gt; <span class="id">Hkk</span>'.<br/>
+- <span class="tactic">move</span> =&gt; <span class="id">Hkk</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fun_of_fsfun">fun_of_fsfun</a></span> /<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#fmap_of_fsfun">fmap_of_fsfun</a></span> /=.<br/>
+&nbsp;&nbsp;<span class="tactic">case</span> <span class="id">Hk</span>': (<span class="id">k</span>' \<span class="kwd">in</span> <span class="id">fm</span>).<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hk</span>') /=.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> /=; <span class="id">first</span> <span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1U">in_fset1U</a></span> <span class="id">Hk</span>' <span class="id">Hk</span>.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">move</span> =&gt; <span class="id">Hk</span>'0.<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.finfun.html#ffunE">ffunE</a></span> /= <span class="id">Hk</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fnd">in_fnd</a></span> <span class="id">Hk</span>').<br/>
+&nbsp;&nbsp;<span class="tactic">move</span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>/<span class="id"><a href="http://coq.inria.fr/library/Coq.ssr.ssrbool.html#negP">negP</a></span>: <span class="id">Hk</span>' =&gt; <span class="id">Hk</span>'.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> (<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> <span class="id">Hk</span>') /=.<br/>
+&nbsp;&nbsp;<span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#not_fnd">not_fnd</a></span> //=.<br/>
+&nbsp;&nbsp;<span class="tactic">by</span> <span class="tactic">rewrite</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#inE">inE</a></span> /= <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html#in_fset1U">in_fset1U</a></span> /= <span class="id">Hk</span> <span class="id">Hk</span>'.<br/>
+Qed.</div>
+<br/>
+<span class="kwd">End</span> <span class="id"><a href="Algorand.fmap_ext.html#SetFs">SetFs</a></span>.<br/>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>
