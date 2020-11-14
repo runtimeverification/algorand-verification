@@ -834,16 +834,17 @@ Proof.
   move: H_gtrans H_pre H_post;unfold P, upred;clear;destruct 1;
       try solve [move => /negP H_n /H_n []].
   { (* tick *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  unfold tick_update, tick_users. cbn.
-  destruct (uid \in pre.(users)) eqn:H_uid.
-  * rewrite updf_update // in_fnd.
-    move: (pre.(users)[` H_uid]) => u.
-    by unfold user_advance_timer;destruct u, corrupt;simpl.
-  * apply negbT in H_uid.
-    rewrite [(updf _ _ _).[? uid]] not_fnd //.
-    change (?k \in ?f) with (k \in domf f).
-    rewrite -updf_domf. assumption.
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    unfold tick_update, tick_users. cbn.
+    destruct (uid \in pre.(users)) eqn:H_uid.
+    * rewrite updf_update // in_fnd.
+      move: (pre.(users)[` H_uid]) => u.
+      by unfold user_advance_timer;destruct u, corrupt;simpl.
+    * apply negbT in H_uid.
+      rewrite [(updf _ _ _).[? uid]] not_fnd //.
+      change (?k \in ?f) with (k \in domf f).
+      rewrite -updf_domf. assumption.
   }
   { (* deliver *)
     rewrite fnd_set.
@@ -899,22 +900,24 @@ Proof.
     by destruct v;first destruct m.
   }
   { (* internal *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  rewrite in_fnd.
-  move: (pre.(users)[` ustate_key]) H0 => u H_step.
-  clear -H_step.
-  remember (ustate_post,sent) as result;destruct H_step;
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|done].
+    move => /eqP in H_uids. subst uid0.
+    rewrite in_fnd.
+    move: (pre.(users)[` ustate_key]) H0 => u H_step.
+    clear -H_step.
+    remember (ustate_post,sent) as result;destruct H_step;
     case: Heqresult => <- _;by destruct pre.
   }
   { (* corrupt *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  by rewrite in_fnd.
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|done].
+    move => /eqP in H_uids. subst uid0.
+    by rewrite in_fnd.
   }
 Qed.
 
@@ -957,16 +960,17 @@ Proof.
   move: H_gtrans H_pre H_post;unfold P, upred;clear;destruct 1;
       try solve [move => /negP H_n /H_n []].
   { (* tick *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  unfold tick_update, tick_users. cbn.
-  destruct (uid \in pre.(users)) eqn:H_uid.
-  * rewrite updf_update // in_fnd.
-    move: (pre.(users)[` H_uid]) => u.
-    by unfold user_advance_timer;destruct u, corrupt;simpl.
-  * apply negbT in H_uid.
-    rewrite [(updf _ _ _).[? uid]] not_fnd //.
-    change (?k \in ?f) with (k \in domf f).
-    rewrite -updf_domf. assumption.
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    unfold tick_update, tick_users. cbn.
+    destruct (uid \in pre.(users)) eqn:H_uid.
+    * rewrite updf_update // in_fnd.
+      move: (pre.(users)[` H_uid]) => u.
+      by unfold user_advance_timer;destruct u, corrupt;simpl.
+    * apply negbT in H_uid.
+      rewrite [(updf _ _ _).[? uid]] not_fnd //.
+      change (?k \in ?f) with (k \in domf f).
+      rewrite -updf_domf. assumption.
   }
   { (* deliver *)
     rewrite fnd_set.
@@ -1026,22 +1030,24 @@ Proof.
     by destruct v0;first destruct m.
   }
   { (* internal *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  rewrite in_fnd.
-  move: (pre.(users)[` ustate_key]) H0 => u H_step.
-  clear -H_step.
-  remember (ustate_post,sent) as result;destruct H_step;
-    case: Heqresult => <- _;by destruct pre.
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|done].
+    move => /eqP in H_uids. subst uid0.
+    rewrite in_fnd.
+    move: (pre.(users)[` ustate_key]) H0 => u H_step.
+    clear -H_step.
+    remember (ustate_post,sent) as result;destruct H_step;
+      case: Heqresult => <- _;by destruct pre.
   }
   { (* corrupt *)
-  move => /negP H_n H_p. exfalso. move: H_n H_p. apply contrap.
-  rewrite fnd_set.
-  destruct (uid == uid0) eqn:H_uids;[|done].
-  move => /eqP in H_uids. subst uid0.
-  by rewrite in_fnd.
+    move => /negP H_n H_p. exfalso.
+    case: H_n; move: H_p.
+    rewrite fnd_set.
+    destruct (uid == uid0) eqn:H_uids;[|done].
+    move => /eqP in H_uids. subst uid0.
+    by rewrite in_fnd.
   }
 Qed.
 
