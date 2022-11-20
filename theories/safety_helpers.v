@@ -1,17 +1,9 @@
-From mathcomp.ssreflect
-Require Import all_ssreflect.
-
-From mathcomp.finmap
-Require Import finmap multiset.
-
-From Coq
-Require Import Reals Relation_Definitions Relation_Operators.
-
-From mathcomp.analysis
-Require Import boolp Rstruct.
-
-From Algorand
-Require Import zify fmap_ext algorand_model.
+From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import finmap multiset.
+From mathcomp Require Import zify.
+From Coq Require Import Reals Relation_Definitions Relation_Operators.
+From mathcomp Require Import boolp Rstruct.
+From Algorand Require Import fmap_ext algorand_model.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -31,7 +23,7 @@ Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexis
 (** Gather all the unfoldings we might want for working with transitions into
 a hint database for use with autounfold. *)
 Create HintDb utransition_unfold discriminated.
-Hint Unfold
+#[export] Hint Unfold
      (* UTransitionInternal *)
      propose_result      propose_ok repropose_ok no_propose_ok
      softvote_result     softvote_new_ok softvote_repr_ok no_softvote_ok
@@ -46,7 +38,7 @@ Hint Unfold
      vote_msg deliver_nonvote_msg_result : utransition_unfold.
 
 Create HintDb gtransition_unfold discriminated.
-Hint Unfold
+#[export] Hint Unfold
      tick_ok tick_update tick_users
      delivery_result
      step_result
@@ -421,8 +413,8 @@ Qed.
 (** [step] is not less than itself. *)
 Lemma step_lt_irrefl r p s: ~step_lt (r,p,s) (r,p,s).
 Proof.
-  clear.
-  unfold step_lt;intuition;by rewrite -> ltnn in * |- .
+  rewrite /step_lt => Hrp; case: Hrp; rewrite ltnn //.
+  by case => ?; rewrite ltnn; case => //; case.
 Qed.
 
 (** [step] is less than or equal to itself. *)
@@ -555,17 +547,19 @@ Lemma broadcasts_prop
 Proof.
   clear.
   move => H_sub H_pre H_post.
-  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
+  have: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
     by case:fndP H_post;[|rewrite enum_mset0].
+  move {H_post} => H_post.
 
   rewrite send_broadcastsE in H_pre.
   case:mailboxes'.[?uid]/fndP => H_mb';
    [|by move:H_pre;rewrite not_fnd //;
      congr (uid \notin _): H_mb';apply updf_domf].
 
-  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
+  have: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
     by apply/contraNN:H_post => /hasP /= [x H_in H_x];
        apply/hasP;exists x;[apply (msubset_subset H_sub);rewrite in_fnd|].
+  move {H_post} => H_post.
 
   move: {mailboxes H_sub}H_pre.
 
@@ -1019,9 +1013,10 @@ Proof.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel; case: Hrel.
     * by move => Htick ->; eapply step_tick; eassumption.
-    * move => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    * move => x [H_uid [ustate_post [H_ustep Hg2]]].
+      move: Hg2 => [key_mailbox [Hg1 Hg2]].
       by subst g2; eapply step_deliver_msg; eassumption.
-    * move => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    * move => x [H_uid [ustate_post [H_corrupt Hg2]]].
       by subst g2; eapply step_internal; eassumption.
     * move => H_part H_g2.
       by subst g2; eapply step_exit_partition; eassumption.
@@ -1170,18 +1165,18 @@ Proof.
     intros <- <-; inversion H_step'; subst; try (by []); exfalso.
   subst pre'; subst pre'0; clear -H2 H6.
   unfold set_softvotes, certvote_ok, valid_rps in H2; simpl in H2.
-    by rewrite <- H6 in H2; intuition.
+    by rewrite <- H6 in H2; intuition auto.
   subst pre'; subst pre'0; clear -c H6.
   unfold set_softvotes, certvote_ok, valid_rps in c; simpl in c.
-    by rewrite H6 in c; intuition.
+    by rewrite H6 in c; intuition auto.
   unfold vote_msg in H3; simpl in H3.
-    by intuition.
+    by intuition auto.
   subst pre'; subst pre'0.
   unfold deliver_nonvote_msg_result, certvote_result in H.
   destruct pre; simpl in *.
   case: H; intros <-; intro; clear -H3.
   unfold certvote_ok, set_softvotes, valid_rps in H3; simpl in H3.
-    by intuition.
+    by intuition auto.
 Qed.
 
 (** [delivery_result] on a global state is the same means the message delivery
@@ -2013,17 +2008,17 @@ Proof.
   all: destruct pre;simpl;autounfold with utransition_unfold.
   all: repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
   all: move => x H_x //.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     move/eqP: Hrp; case =><--<-.
     by rewrite in_cons mem_undup H_x orbT.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     move/eqP: Hrp; case =><--<-.
     by rewrite in_cons mem_undup H_x orbT.
@@ -2122,10 +2117,10 @@ Proof.
            | _ => progress simpl end;
   try (by apply subxx_hint);
   try (by move => x H_x).
-  - rewrite setfsNK => b Hb.
+  - rewrite fsfun_withE => b Hb.
     case Hr: (r == r0) => //; move/eqP: Hr =><-.
     by rewrite mem_undup.
-  - rewrite setfsNK => b Hb.
+  - rewrite fsfun_withE => b Hb.
     case Hr: (r == r0) => //; move/eqP: Hr =><-.
     by rewrite in_cons mem_undup Hb orbT.
 Qed.

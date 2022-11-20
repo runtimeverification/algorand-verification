@@ -1,21 +1,10 @@
-From mathcomp.ssreflect
-Require Import all_ssreflect.
-
-From mathcomp.finmap
-Require Import finmap multiset.
-
-From Coq
-Require Import Reals Relation_Definitions Relation_Operators.
-
-From mathcomp.analysis
-Require Import boolp Rstruct.
-
-From RecordUpdate
-Require Import RecordSet.
+From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import finmap multiset.
+From Coq Require Import Reals Relation_Definitions Relation_Operators.
+From mathcomp Require Import boolp Rstruct.
+From RecordUpdate Require Import RecordSet.
+From Algorand Require Import fmap_ext.
 Import RecordSetNotations.
-
-From Algorand
-Require Import fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -236,7 +225,7 @@ Record UState :=
     nextvotes_val : {fsfun nat * nat * nat -> seq Vote with [::]} (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
-Instance UState_Settable : Settable _ :=
+#[export] Instance UState_Settable : Settable _ :=
   settable! mkUState <corrupt;round;period;step;timer;deadline;p_start;
    proposals;stv;blocks;softvotes;certvotes;nextvotes_open;nextvotes_val>.
 
@@ -263,22 +252,28 @@ Canonical UState_choiceType := ChoiceType UState (PcanChoiceMixin cancelUState).
 
 (** Update functions for sequences maintained in the user state. *)
 Definition set_proposals u r' p' prop : UState :=
-  u <| proposals := setfs u.(proposals) (r', p') (undup (prop :: u.(proposals) (r', p'))) |>.
+  u <| proposals := [fsfun u.(proposals) with
+   (r', p') |-> (undup (prop :: u.(proposals) (r', p')))] |>.
 
 Definition set_blocks (u : UState) (r':nat) block : UState :=
-  u <| blocks := setfs u.(blocks) r' (undup (block :: u.(blocks) r')) |>.
+  u <| blocks := [fsfun u.(blocks) with
+   r' |-> (undup (block :: u.(blocks) r'))] |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  u <| softvotes := setfs u.(softvotes) (r', p') (undup (sv :: u.(softvotes) (r', p'))) |>.
+  u <| softvotes := [fsfun u.(softvotes) with
+   (r', p') |-> (undup (sv :: u.(softvotes) (r', p')))] |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
-  u <| certvotes := setfs u.(certvotes) (r', p') (undup (sv :: u.(certvotes) (r', p'))) |>.
+  u <| certvotes := [fsfun u.(certvotes) with
+   (r', p') |-> (undup (sv :: u.(certvotes) (r', p')))] |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  u <| nextvotes_open := setfs u.(nextvotes_open) (r', p', s') (undup (nvo :: u.(nextvotes_open) (r', p', s'))) |>.
+  u <| nextvotes_open := [fsfun u.(nextvotes_open) with
+   (r', p', s') |-> (undup (nvo :: u.(nextvotes_open) (r', p', s')))] |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  u <| nextvotes_val := setfs u.(nextvotes_val) (r', p', s') (undup (nvv :: u.(nextvotes_val) (r', p', s'))) |>.
+  u <| nextvotes_val := [fsfun u.(nextvotes_val) with
+   (r', p', s') |-> (undup (nvv :: u.(nextvotes_val) (r', p', s')))] |>.
 
 (** Update function for advancing the period of a user state. *)
 Definition advance_period (u : UState) : UState :=
@@ -310,7 +305,7 @@ Record GState :=
     msg_history : {mset Msg} (**r the history of all broadcasted messages as a multiset of messages *)
   }.
 
-Instance GState_Settable : Settable _ :=
+#[export] Instance GState_Settable : Settable _ :=
  settable! mkGState <now;network_partition;users;msg_in_transit;msg_history>.
 
 (** State with empty maps, unpartitioned, at global time 0. *)

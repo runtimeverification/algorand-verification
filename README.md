@@ -1,9 +1,12 @@
 # Algorand Verification
 
-[![CI][action-shield]][action-link]
+[![Docker CI][docker-action-shield]][docker-action-link]
 
-[action-shield]: https://github.com/runtimeverification/algorand-verification/workflows/CI/badge.svg?branch=master
-[action-link]: https://github.com/runtimeverification/algorand-verification/actions?query=workflow%3ACI
+[docker-action-shield]: https://github.com/runtimeverification/algorand-verification/workflows/Docker%20CI/badge.svg?branch=master
+[docker-action-link]: https://github.com/runtimeverification/algorand-verification/actions?query=workflow:"Docker%20CI"
+
+
+
 
 The Algorand consensus protocol is the foundation of a decentralized
 digital currency and transactions platform. This project provides a
@@ -14,12 +17,13 @@ a formal proof of safety for the transition system.
 ## Meta
 
 - License: [University of Illinois/NCSA Open Source License](LICENSE.md)
-- Compatible Coq versions: 8.12
+- Compatible Coq versions: 8.14 or later
 - Additional dependencies:
-  - [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+  - [MathComp ssreflect 1.14.0 or later](https://math-comp.github.io)
   - [MathComp algebra](https://math-comp.github.io)
-  - [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
-  - [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+  - [MathComp finmap 1.5.1 or later](https://github.com/math-comp/finmap)
+  - [MathComp analysis 0.5.0 or later](https://github.com/math-comp/analysis)
+  - [Mczify](https://github.com/math-comp/mczify)
   - [Coq record update](https://github.com/tchajed/coq-record-update)
 - Coq namespace: `Algorand`
 - Related publication(s):
@@ -28,12 +32,12 @@ a formal proof of safety for the transition system.
 ## Building
 
 We recommend installing the dependencies of the project via
-[OPAM](http://opam.ocaml.org/doc/Install.html), for example:
+[opam](http://opam.ocaml.org/doc/Install.html), for example:
 ```shell
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
-  coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
-  coq-mathcomp-analysis.0.3.2 coq-record-update
+opam install coq.8.16.0 coq-mathcomp-ssreflect.1.15.0 \
+ coq-mathcomp-algebra coq-mathcomp-finmap.1.5.2 \
+ coq-mathcomp-analysis.0.5.4 coq-mathcomp-zify coq-record-update
 ```
 
 Then, run `make` in the project root directory. This will check all the definitions and proofs.
@@ -52,7 +56,6 @@ Statements of some _liveness_ properties for the transition system are also prov
 
 All Coq source files can be found under the `theories` directory, and their content is as follows:
 
-- `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
 - `fmap_ext.v`: auxiliary definitions and results on finite maps
 - `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
 - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system
