@@ -40,33 +40,37 @@ license:
   file: LICENSE.md
 
 supported_coq_versions:
-  text: '8.12'
-  opam: '{>= "8.12" & < "8.13~"}'
+  text: '8.14 or later'
+  opam: '{>= "8.14"}'
 
 tested_coq_opam_versions:
-- version: '1.11.0-coq-8.12'
+- version: '1.15.0-coq-8.16'
   repo: 'mathcomp/mathcomp'
 
 dependencies:
 - opam:
     name: coq-mathcomp-ssreflect
-    version: '{>= "1.11" & < "1.12~"}'
+    version: '{>= "1.15"}'
   description: |-
-    [MathComp ssreflect 1.11.0](https://math-comp.github.io)
+    [MathComp ssreflect 1.15.0 or later](https://math-comp.github.io)
 - opam:
     name: coq-mathcomp-algebra
   description: |-
     [MathComp algebra](https://math-comp.github.io)
 - opam:
     name: coq-mathcomp-finmap
-    version: '{>= "1.5"}'
+    version: '{>= "1.5.2"}'
   description: |-
-    [MathComp finmap 1.5.0](https://github.com/math-comp/finmap)
+    [MathComp finmap 1.5.2 or later](https://github.com/math-comp/finmap)
 - opam:
     name: coq-mathcomp-analysis
-    version: '{>= "0.3.2"}'
+    version: '{>= "0.5.4"}'
   description: |-
-    [MathComp analysis 0.3.2](https://github.com/math-comp/analysis)
+    [MathComp analysis 0.5.2 or later](https://github.com/math-comp/analysis)
+- opam:
+    name: coq-mathcomp-zify
+  description: |-
+    [Mczify](https://github.com/math-comp/mczify)
 - opam:
     name: coq-record-update
   description: |-
@@ -87,12 +91,12 @@ build: |-
   ## Building
   
   We recommend installing the dependencies of the project via
-  [OPAM](http://opam.ocaml.org/doc/Install.html), for example:
+  [opam](http://opam.ocaml.org/doc/Install.html), for example:
   ```shell
   opam repo add coq-released https://coq.inria.fr/opam/released
-  opam install coq.8.12.0 coq-mathcomp-ssreflect.1.11.0 \
-    coq-mathcomp-algebra coq-mathcomp-finmap.1.5.0 \
-    coq-mathcomp-analysis.0.3.2 coq-record-update
+  opam install coq.8.16.0 coq-mathcomp-ssreflect.1.15.0 \
+   coq-mathcomp-algebra coq-mathcomp-finmap.1.5.2 \
+   coq-mathcomp-analysis.0.5.4 coq-mathcomp-zify coq-record-update
   ```
 
   Then, run `make` in the project root directory. This will check all the definitions and proofs.
@@ -112,7 +116,6 @@ documentation: |-
 
   All Coq source files can be found under the `theories` directory, and their content is as follows:
 
-  - `zify.v`: definitions for using the `lia` arithmetic tactic for MathComp from [mczify](https://github.com/pi8027/mczify)
   - `fmap_ext.v`: auxiliary definitions and results on finite maps
   - `algorand_model.v`: definition of the Algorand local state, global state, and transition system, along with helper functions and facts
   - `safety_helpers.v`: helper functions and lemmas used when proving safety of the transition system

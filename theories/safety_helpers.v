@@ -1011,9 +1011,10 @@ Proof.
   + (* reverse - find transition from label *)
     destruct 1 as [[] Hrel];simpl in Hrel; case: Hrel.
     * by move => Htick ->; eapply step_tick; eassumption.
-    * move => [H_uid [ustate_post [H_ustep [H_corrupt [key_mailbox [H_mail H_g2]]]]]].
+    * move => x [H_uid [ustate_post [H_ustep Hg2]]].
+      move: Hg2 => [key_mailbox [Hg1 Hg2]].
       by subst g2; eapply step_deliver_msg; eassumption.
-    * move => [H_uid [ustate_post [H_corrupt [H_ustep H_g2]]]].
+    * move => x [H_uid [ustate_post [H_corrupt Hg2]]].
       by subst g2; eapply step_internal; eassumption.
     * move => H_part H_g2.
       by subst g2; eapply step_exit_partition; eassumption.

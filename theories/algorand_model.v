@@ -4,7 +4,6 @@ From Coq Require Import Reals Relation_Definitions Relation_Operators.
 From mathcomp.analysis Require Import boolp Rstruct.
 From RecordUpdate Require Import RecordSet.
 From Algorand Require Import fmap_ext.
-
 Import RecordSetNotations.
 
 Set Implicit Arguments.

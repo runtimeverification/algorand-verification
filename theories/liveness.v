@@ -1,17 +1,8 @@
-From mathcomp.ssreflect
-Require Import all_ssreflect.
-
-From mathcomp.finmap
-Require Import finmap multiset.
-
-From Coq
-Require Import Reals Relation_Definitions Relation_Operators Lra.
-
-From mathcomp.analysis
-Require Import boolp Rstruct.
-
-From Algorand
-Require Import fmap_ext algorand_model safety_helpers quorums safety.
+From mathcomp.ssreflect Require Import all_ssreflect.
+From mathcomp.finmap Require Import finmap multiset.
+From Coq Require Import Reals Relation_Definitions Relation_Operators Lra.
+From mathcomp.analysis Require Import boolp Rstruct.
+From Algorand Require Import fmap_ext algorand_model safety_helpers quorums safety.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
