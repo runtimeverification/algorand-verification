@@ -252,22 +252,28 @@ Canonical UState_choiceType := ChoiceType UState (PcanChoiceMixin cancelUState).
 
 (** Update functions for sequences maintained in the user state. *)
 Definition set_proposals u r' p' prop : UState :=
-  u <| proposals := setfs u.(proposals) (r', p') (undup (prop :: u.(proposals) (r', p'))) |>.
+  u <| proposals := [fsfun u.(proposals) with
+   (r', p') |-> (undup (prop :: u.(proposals) (r', p')))] |>.
 
 Definition set_blocks (u : UState) (r':nat) block : UState :=
-  u <| blocks := setfs u.(blocks) r' (undup (block :: u.(blocks) r')) |>.
+  u <| blocks := [fsfun u.(blocks) with
+   r' |-> (undup (block :: u.(blocks) r'))] |>.
 
 Definition set_softvotes (u : UState) r' p' sv : UState :=
-  u <| softvotes := setfs u.(softvotes) (r', p') (undup (sv :: u.(softvotes) (r', p'))) |>.
+  u <| softvotes := [fsfun u.(softvotes) with
+   (r', p') |-> (undup (sv :: u.(softvotes) (r', p')))] |>.
 
 Definition set_certvotes (u : UState) r' p' sv : UState :=
-  u <| certvotes := setfs u.(certvotes) (r', p') (undup (sv :: u.(certvotes) (r', p'))) |>.
+  u <| certvotes := [fsfun u.(certvotes) with
+   (r', p') |-> (undup (sv :: u.(certvotes) (r', p')))] |>.
 
 Definition set_nextvotes_open (u : UState) r' p' s' nvo : UState :=
-  u <| nextvotes_open := setfs u.(nextvotes_open) (r', p', s') (undup (nvo :: u.(nextvotes_open) (r', p', s'))) |>.
+  u <| nextvotes_open := [fsfun u.(nextvotes_open) with
+   (r', p', s') |-> (undup (nvo :: u.(nextvotes_open) (r', p', s')))] |>.
 
 Definition set_nextvotes_val (u : UState) r' p' s' nvv : UState :=
-  u <| nextvotes_val := setfs u.(nextvotes_val) (r', p', s') (undup (nvv :: u.(nextvotes_val) (r', p', s'))) |>.
+  u <| nextvotes_val := [fsfun u.(nextvotes_val) with
+   (r', p', s') |-> (undup (nvv :: u.(nextvotes_val) (r', p', s')))] |>.
 
 (** Update function for advancing the period of a user state. *)
 Definition advance_period (u : UState) : UState :=

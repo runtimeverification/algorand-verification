@@ -688,12 +688,12 @@ Proof.
       revert H_pg2.
       match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
        try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-        rewrite setfsNK /=.
+        rewrite fsfun_withE /=.
         case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
         case/eqP: eq_rp => eq_r eq_p; subst.
         rewrite mem_undup => H_pg2.
         by rewrite H_pg2 in H_pg1.
-      rewrite setfsNK.
+      rewrite fsfun_withE.
       case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
       case/eqP: eq_rp => eq_r eq_p. subst r p.
       rewrite in_cons mem_undup => H_pg2.
@@ -720,12 +720,12 @@ Proof.
       revert H_pg2.
       match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b eqn:Hb1 end;
         try (by intro; rewrite H_pg2 in H_pg1; inversion H_pg1).
-        rewrite setfsNK /=.
+        rewrite fsfun_withE /=.
         case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
         case/eqP: eq_rp => eq_r eq_p; subst.
         rewrite mem_undup => H_pg2.
         by rewrite H_pg2 in H_pg1.
-      rewrite setfsNK.
+      rewrite fsfun_withE.
       case eq_rp: (_ == _); last by move => H_pg2; rewrite H_pg2 in H_pg1.
       case/eqP: eq_rp => eq_r eq_p. subst r p.
       rewrite in_cons mem_undup => H_pg2.
@@ -855,11 +855,12 @@ Proof.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
     move: H_p. unfold set_nextvotes_open;simpl.
-    rewrite setfsNK. by rewrite H_neq.
-    } case: H2 => ? ? ?;subst r0 p0 s0.
+    by rewrite fsfun_withE H_neq.
+    }
+    case: H2 => ? ? ?;subst r0 p0 s0.
     assert (i = voter). {
       symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= setfsNK eqxx in H_p.
+    rewrite /set_nextvotes_open /= fsfun_withE eqxx in H_p.
     match type of H_p with context C [if ?b then _ else _] => destruct b end.
       by rewrite mem_undup in H_p.
       by rewrite in_cons H_neq mem_undup in H_p.
@@ -871,11 +872,11 @@ Proof.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
     move: H_p. unfold set_nextvotes_open;simpl.
-    by rewrite setfsNK H_neq.
+    by rewrite fsfun_withE H_neq.
     } case: H2 => ? ? ?;subst r0 p0 s0.
     assert (i = voter). {
       symmetry. apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    rewrite /set_nextvotes_open /= setfsNK eqxx in H_p.
+    rewrite /set_nextvotes_open /= fsfun_withE eqxx in H_p.
 
     match type of H_p with context C [if ?b then _ else _] => destruct b end.
       by rewrite mem_undup in H_p.
@@ -981,11 +982,11 @@ Proof.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
     move: H_p. unfold set_nextvotes_val;simpl.
-    by rewrite setfsNK H_neq.
+    by rewrite fsfun_withE H_neq.
     } case: H2 => ? ? ?;subst r0 p0 s0.
     assert ((voter,v) = (i,v0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p; rewrite /set_nextvotes_val /= setfsNK eqxx.
+    move: H_p; rewrite /set_nextvotes_val /= fsfun_withE eqxx.
     match goal with
       [|- context C[(i, v0) \in ?nvs]] => destruct ((i,v0) \in nvs) eqn:H_in
     end.
@@ -999,11 +1000,11 @@ Proof.
     move => H_n H_p.
     assert ((r,p,s) = (r0,p0,s0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    by move: H_p; rewrite /set_nextvotes_val /= setfsNK H_neq.
+    by move: H_p; rewrite /set_nextvotes_val /= fsfun_withE H_neq.
     } case: H2 => ? ? ?;subst r0 p0 s0.
     assert ((voter,v) = (i,v0)). {
     apply /eqP. apply/contraNT: H_n => /negbTE H_neq.
-    move: H_p; rewrite /set_nextvotes_val /= setfsNK eqxx.
+    move: H_p; rewrite /set_nextvotes_val /= fsfun_withE eqxx.
     match goal with
       [|- context C[(i, v0) \in ?nvs]] => destruct ((i,v0) \in nvs) eqn:H_in
     end.

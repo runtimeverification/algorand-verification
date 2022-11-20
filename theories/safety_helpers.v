@@ -2006,17 +2006,17 @@ Proof.
   all: destruct pre;simpl;autounfold with utransition_unfold.
   all: repeat match goal with [ |- context C[ match ?b with _ => _ end]] => destruct b end.
   all: move => x H_x //.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     move/eqP: Hrp; case =><--<-.
     by rewrite in_cons mem_undup H_x orbT.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     by move/eqP: Hrp; case =><--<-; rewrite mem_undup.
-  - rewrite setfsNK.
+  - rewrite fsfun_withE.
     case Hrp: (_ == _) => //.
     move/eqP: Hrp; case =><--<-.
     by rewrite in_cons mem_undup H_x orbT.
@@ -2115,10 +2115,10 @@ Proof.
            | _ => progress simpl end;
   try (by apply subxx_hint);
   try (by move => x H_x).
-  - rewrite setfsNK => b Hb.
+  - rewrite fsfun_withE => b Hb.
     case Hr: (r == r0) => //; move/eqP: Hr =><-.
     by rewrite mem_undup.
-  - rewrite setfsNK => b Hb.
+  - rewrite fsfun_withE => b Hb.
     case Hr: (r == r0) => //; move/eqP: Hr =><-.
     by rewrite in_cons mem_undup Hb orbT.
 Qed.
