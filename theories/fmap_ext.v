@@ -194,7 +194,7 @@ rewrite unlock.
 elim: (enum_fset s) Hs => //=.
 move => a l IH.
 move/andP => [Ha Hu].
-move/IH: Hu => {IH} IH.
+move/IH: Hu {IH} => IH.
 move => i Hi.
 rewrite in_cons in_fsetU.
 apply/idP/idP; first case/orP.

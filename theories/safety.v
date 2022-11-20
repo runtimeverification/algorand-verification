@@ -1707,7 +1707,7 @@ Proof.
     rewrite {1}/delivery_result /P /upred fnd_set.
     destruct (uid == uid0) eqn:H_eq;
       [move/eqP in H_eq;subst uid0
-      |by move => A {A}/A].
+      |by move => A /A{A}].
     rewrite (in_fnd key_ustate).
     remember (pre.(users)[` key_ustate] : UState) as u.
     move => H_pre /andP [/eqP H_r /eqP H_p].
@@ -1753,7 +1753,7 @@ Proof.
       rewrite {1}/step_result /P /upred fnd_set.
       destruct (uid == uid0) eqn:H_eq;
         [move/eqP in H_eq;subst uid0
-        |by move => A {A}/A].
+        |by move => A /A {A}].
       rewrite (in_fnd ustate_key).
       remember (pre.(users)[` ustate_key] : UState) as u.
       move => H_pre /andP [/eqP H_r /eqP H_p].

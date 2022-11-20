@@ -547,17 +547,19 @@ Lemma broadcasts_prop
 Proof.
   clear.
   move => H_sub H_pre H_post.
-  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
+  have: ~~has (fun p: R * Msg => p.2 == msg) (odflt mset0 mailboxes.[?uid])
     by case:fndP H_post;[|rewrite enum_mset0].
+  move {H_post} => H_post.
 
   rewrite send_broadcastsE in H_pre.
   case:mailboxes'.[?uid]/fndP => H_mb';
    [|by move:H_pre;rewrite not_fnd //;
      congr (uid \notin _): H_mb';apply updf_domf].
 
-  have{H_post}H_post: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
+  have: ~~has (fun p: R * Msg => p.2 == msg) (mailboxes'.[H_mb'])
     by apply/contraNN:H_post => /hasP /= [x H_in H_x];
        apply/hasP;exists x;[apply (msubset_subset H_sub);rewrite in_fnd|].
+  move {H_post} => H_post.
 
   move: {mailboxes H_sub}H_pre.
 
