@@ -1,0 +1,220 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Module Algorand.quorums</title>
+<meta name="description" content="Documentation of Coq module Algorand.quorums" />
+<link href="coq2html.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="coq2html.js"> </script>
+</head>
+
+<body onload="hideAll('proofscript')">
+<h1 class="title">Module Algorand.quorums</h1>
+<div class="coq">
+<span class="kwd">From</span> <span class="id">mathcomp</span> <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.all_ssreflect.html">all_ssreflect</a></span>.<br/>
+<span class="kwd">From</span> <span class="id">mathcomp</span> <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.finmap.html">finmap</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.finmap.multiset.html">multiset</a></span>.<br/>
+<span class="kwd">From</span> <span class="id">Coq</span> <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Reals.Reals.html">Reals</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Relations.Relation_Definitions.html">Relation_Definitions</a></span> <span class="id"><a href="https://coq.inria.fr/library/Coq.Relations.Relation_Operators.html">Relation_Operators</a></span>.<br/>
+<span class="kwd">From</span> <span class="id">mathcomp</span> <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.analysis.boolp.html">boolp</a></span> <span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.analysis.Rstruct.html">Rstruct</a></span>.<br/>
+<span class="kwd">From</span> <span class="id">Algorand</span> <span class="kwd">Require</span> <span class="kwd">Import</span> <span class="id"><a href="Algorand.fmap_ext.html">fmap_ext</a></span> <span class="id"><a href="Algorand.algorand_model.html">algorand_model</a></span> <span class="id"><a href="Algorand.safety_helpers.html">safety_helpers</a></span>.<br/>
+<br/>
+<span class="kwd">Set</span> <span class="kwd">Implicit</span> <span class="kwd">Arguments</span>.<br/>
+<span class="id">Unset</span> <span class="id">Strict</span> <span class="kwd">Implicit</span>.<br/>
+<span class="id">Unset</span> <span class="id">Printing</span> <span class="kwd">Implicit</span> <span class="id">Defensive</span>.<br/>
+<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">mset_scope</span>.<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fmap_scope</span>.<br/>
+<span class="kwd">Open</span> <span class="kwd">Scope</span> <span class="id">fset_scope</span>.<br/>
+<br/>
+<h1> Quorum definitions and axioms </h1>
+<br/>
+<div class="doc">This module contains core definitions and axioms related
+to quorums. </div>
+<br/>
+<h2> Committees and quorum overlaps </h2>
+<br/>
+<div class="doc">A committee is a set of users with sufficiently small credentials. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="committee">committee</a></span> (<span class="id">r</span> <span class="id">p</span> <span class="id">s</span>:<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>) : {<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>} :=<br/>
+&nbsp;&nbsp;[<span class="id">fset</span> <span class="id">uid</span> : <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span> | `[&lt;<span class="id"><a href="Algorand.algorand_model.html#committee_cred">committee_cred</a></span> (<span class="id"><a href="Algorand.algorand_model.html#credential">credential</a></span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span>)&gt;] ].<br/>
+<br/>
+<div class="doc">Any two quorums must both contain an honest voter. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id">tau</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> (<span class="id">quorum1</span> <span class="id">quorum2</span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">quorum1</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;#|` <span class="id">quorum1</span> | &gt;= <span class="id">tau</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">quorum2</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;#|` <span class="id">quorum2</span> | &gt;= <span class="id">tau</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">honest_voter</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">honest_voter</span> \<span class="kwd">in</span> <span class="id">quorum1</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/\ <span class="id">honest_voter</span> \<span class="kwd">in</span> <span class="id">quorum2</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/\ <span class="id"><a href="Algorand.safety_helpers.html#honest_during_step">honest_during_step</a></span> (<span class="id">r</span>,<span class="id">p</span>,<span class="id">s</span>) <span class="id">honest_voter</span> <span class="id">trace</span>.<br/>
+<br/>
+<div class="doc">A single quorum must have an honest voter. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id">tau</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> (<span class="id">quorum</span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">quorum</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;#|` <span class="id">quorum</span> | &gt;= <span class="id">tau</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">honest_voter</span>, <span class="id">honest_voter</span> \<span class="kwd">in</span> <span class="id">quorum</span> /\<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.safety_helpers.html#honest_during_step">honest_during_step</a></span> (<span class="id">r</span>,<span class="id">p</span>,<span class="id">s</span>) <span class="id">honest_voter</span> <span class="id">trace</span>.<br/>
+<br/>
+<div class="doc">Specialize two quorum statement to one quorum. </div>
+<span class="kwd">Lemma</span> <span class="id"><a name="quorum_has_honest_from_overlap_stmt">quorum_has_honest_from_overlap_stmt</a></span> <span class="id">tau</span>:<br/>
+&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id">tau</span> -&gt;<br/>
+&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id">tau</span>.<br/>
+<div><span class="toggleproof" onclick="toggleDisplay('proof1')">Proof.</span></div>
+<div class="proofscript" id="proof1">
+&nbsp;&nbsp;<span class="id">clear</span>.<br/>
+&nbsp;&nbsp;<span class="id">intros</span> <span class="id">H_overlap</span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">q</span> <span class="id">H_q</span> <span class="id">H_size</span>.<br/>
+&nbsp;&nbsp;<span class="id">destruct</span> (<span class="id">H_overlap</span> <span class="id">trace</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">_</span> <span class="id">H_q</span> <span class="id">H_size</span> <span class="id">H_q</span> <span class="id">H_size</span>) <span class="kwd">as</span> [<span class="id">honest_voter</span> <span class="id">H</span>].<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">honest_voter</span>;<span class="id">tauto</span>.<br/>
+Qed.</div>
+<br/>
+<div class="doc">One major purpose of cryptographic self-selection is
+to ensure an adversary cannot predict which users will be part
+of a future committee, so any manipulation targeting a subset
+of users should hit a similar fraction of the users which are
+on and not on a committee (up to reasonable statistical variance). </div>
+<br/>
+<div class="doc">For the proofs we need to be able to relate the membership of different
+committees. Intuitively, if a supermajority of one committee satisfies
+some time-independent property (such as having voted a certain way in
+a particular past round) then also a majority of honest users as a
+whole satisfy this property, and then it's overwhelmingly unlikely
+that another committee could contain a supermajority that does not
+satisfy the property, because most users do. </div>
+<br/>
+<div class="doc">However, this intuitive argument clearly fails for some properties
+like being a member of a specific committee (which is true for
+a supermajority of that committee despite failing for a majority
+of honest users as a whole), so only assume statments for
+particular properties of interest. </div>
+<br/>
+<div class="doc">In fact, it seems that for safety we only need to invoke this
+condition with the property being whether a node decided
+to certvote for a value in some step 3. For honest nodes not
+on a committee the node "decides to certvote" if they receive
+enough softvotes for the value, even though they do not actually
+try to transmit a certvote message unless they are in the
+committee). </div>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="interquorum_property">interquorum_property</a></span> <span class="id">tau1</span> <span class="id">tau2</span> (<span class="id">P</span>: <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span> -&gt; <span class="kwd">Prop</span>) <span class="id">trace</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">r1</span> <span class="id">p1</span> <span class="id">s1</span> (<span class="id">quorum1</span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">quorum1</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r1</span> <span class="id">p1</span> <span class="id">s1</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;#|` <span class="id">quorum1</span> | &gt;= <span class="id">tau1</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="kwd">forall</span> <span class="id">uid</span>, <span class="id">uid</span> \<span class="kwd">in</span> <span class="id">quorum1</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.safety_helpers.html#honest_during_step">honest_during_step</a></span> (<span class="id">r1</span>,<span class="id">p1</span>,<span class="id">s1</span>) <span class="id">uid</span> <span class="id">trace</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">P</span> <span class="id">uid</span>) -&gt;<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">r2</span> <span class="id">p2</span> <span class="id">s2</span> (<span class="id">quorum2</span> : {<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">quorum2</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r2</span> <span class="id">p2</span> <span class="id">s2</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;#|` <span class="id">quorum2</span> | &gt;= <span class="id">tau2</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;(<span class="kwd">exists</span> <span class="id">honest_P_uid</span>, <span class="id">honest_P_uid</span> \<span class="kwd">in</span> <span class="id">quorum2</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/\ <span class="id">P</span> <span class="id">honest_P_uid</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/\ <span class="id"><a href="Algorand.safety_helpers.html#honest_during_step">honest_during_step</a></span> (<span class="id">r2</span>,<span class="id">p2</span>,<span class="id">s2</span>) <span class="id">honest_P_uid</span> <span class="id">trace</span>).<br/>
+<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="quorums_s_honest_overlap">quorums_s_honest_overlap</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_s">tau_s</a></span>.<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_s_has_honest">quorum_s_has_honest</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_s">tau_s</a></span><br/>
+&nbsp;&nbsp;:= <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_from_overlap_stmt">quorum_has_honest_from_overlap_stmt</a></span> <span class="id"><a href="Algorand.quorums.html#quorums_s_honest_overlap">quorums_s_honest_overlap</a></span>.<br/>
+<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="quorums_c_honest_overlap">quorums_c_honest_overlap</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_c">tau_c</a></span>.<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_c_has_honest">quorum_c_has_honest</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_c">tau_c</a></span><br/>
+&nbsp;&nbsp;:= <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_from_overlap_stmt">quorum_has_honest_from_overlap_stmt</a></span> <span class="id"><a href="Algorand.quorums.html#quorums_c_honest_overlap">quorums_c_honest_overlap</a></span>.<br/>
+<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="quorums_b_honest_overlap">quorums_b_honest_overlap</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_b">tau_b</a></span>.<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_b_has_honest">quorum_b_has_honest</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_b">tau_b</a></span><br/>
+&nbsp;&nbsp;:= <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_from_overlap_stmt">quorum_has_honest_from_overlap_stmt</a></span> <span class="id"><a href="Algorand.quorums.html#quorums_b_honest_overlap">quorums_b_honest_overlap</a></span>.<br/>
+<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="quorums_v_honest_overlap">quorums_v_honest_overlap</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_honest_overlap_statement">quorum_honest_overlap_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_v">tau_v</a></span>.<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="quorum_v_has_honest">quorum_v_has_honest</a></span> : <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_statement">quorum_has_honest_statement</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_v">tau_v</a></span><br/>
+&nbsp;&nbsp;:= <span class="id"><a href="Algorand.quorums.html#quorum_has_honest_from_overlap_stmt">quorum_has_honest_from_overlap_stmt</a></span> <span class="id"><a href="Algorand.quorums.html#quorums_v_honest_overlap">quorums_v_honest_overlap</a></span>.<br/>
+<br/>
+<span class="kwd">Definition</span> <span class="id"><a name="saw_v">saw_v</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> := <span class="kwd">fun</span> <span class="id">uid</span> =&gt;<br/>
+&nbsp;&nbsp;<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.seq.html#has">has</a></span> (<span class="kwd">fun</span> <span class="id">g</span> =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">match</span> (<span class="id">g</span>.(<span class="id"><a href="Algorand.algorand_model.html#users">users</a></span>)).[? <span class="id">uid</span>] <span class="kwd">with</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#None">None</a></span> =&gt; <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#false">false</a></span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#Some">Some</a></span> <span class="id">u</span> =&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&amp;&amp; <span class="id">v</span> \<span class="kwd">in</span> <span class="id"><a href="Algorand.algorand_model.html#certvals">certvals</a></span> <span class="id">u</span> <span class="id">r</span> <span class="id">p</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="https://math-comp.github.io/htmldoc/mathcomp.ssreflect.seq.html#has">has</a></span> (<span class="kwd">fun</span> <span class="id">b</span> =&gt; `[&lt; <span class="id"><a href="Algorand.algorand_model.html#valid_block_and_hash">valid_block_and_hash</a></span> <span class="id">b</span> <span class="id">v</span>&gt;]) (<span class="id">u</span>.(<span class="id"><a href="Algorand.algorand_model.html#blocks">blocks</a></span>) <span class="id">r</span>) &amp;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.algorand_model.html#step_leb">step_leb</a></span> (<span class="id"><a href="Algorand.algorand_model.html#step_of_ustate">step_of_ustate</a></span> <span class="id">u</span>) (<span class="id">r</span>,<span class="id">p</span>,4)]<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kwd">end</span>) <span class="id">trace</span>.<br/>
+<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="interquorum_c_v_certinfo">interquorum_c_v_certinfo</a></span>:<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#interquorum_property">interquorum_property</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_c">tau_c</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_v">tau_v</a></span> (<span class="id"><a href="Algorand.quorums.html#saw_v">saw_v</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>) <span class="id">trace</span>.<br/>
+<span class="kwd">Axiom</span> <span class="id"><a name="interquorum_c_b_certinfo">interquorum_c_b_certinfo</a></span>:<br/>
+&nbsp;&nbsp;<span class="kwd">forall</span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>,<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#interquorum_property">interquorum_property</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_c">tau_c</a></span> <span class="id"><a href="Algorand.algorand_model.html#tau_b">tau_b</a></span> (<span class="id"><a href="Algorand.quorums.html#saw_v">saw_v</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>) <span class="id">trace</span>.<br/>
+<br/>
+<h2> Definitions of voting and sufficient votes </h2>
+<br/>
+<div class="doc">A user has certvoted at a specifix index along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="certvoted_in_path_at">certvoted_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="id"><a href="Algorand.safety_helpers.html#user_sent_at">user_sent_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> (<span class="id"><a href="Algorand.algorand_model.html#mkMsg">mkMsg</a></span> <span class="id"><a href="Algorand.algorand_model.html#Certvote">Certvote</a></span> (<span class="id"><a href="Algorand.algorand_model.html#val">val</a></span> <span class="id">v</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>).<br/>
+<br/>
+<div class="doc">A user has certvoted along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="certvoted_in_path">certvoted_in_path</a></span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">ix</span>, <span class="id"><a href="Algorand.quorums.html#certvoted_in_path_at">certvoted_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<br/>
+<div class="doc">Value <span class="bracket"><span class="id">v</span></span> was certified in a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="certified_in_period">certified_in_period</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> (<span class="id">certvote_quorum</span>:{<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">certvote_quorum</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> 3<br/>
+&nbsp;&nbsp;/\ #|` <span class="id">certvote_quorum</span> | &gt;= <span class="id"><a href="Algorand.algorand_model.html#tau_c">tau_c</a></span><br/>
+&nbsp;&nbsp;/\ <span class="kwd">forall</span> (<span class="id">voter</span>:<span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>), <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">certvote_quorum</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#certvoted_in_path">certvoted_in_path</a></span> <span class="id">trace</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<br/>
+<div class="doc">A user has softvoted at a specific index along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="softvoted_in_path_at">softvoted_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">g1</span> <span class="id">g2</span>, <span class="id"><a href="Algorand.algorand_model.html#step_in_path_at">step_in_path_at</a></span> <span class="id">g1</span> <span class="id">g2</span> <span class="id">ix</span> <span class="id">path</span><br/>
+&nbsp;&nbsp;&nbsp;/\ <span class="id"><a href="Algorand.safety_helpers.html#user_sent">user_sent</a></span> <span class="id">uid</span> (<span class="id"><a href="Algorand.algorand_model.html#mkMsg">mkMsg</a></span> <span class="id"><a href="Algorand.algorand_model.html#Softvote">Softvote</a></span> (<span class="id"><a href="Algorand.algorand_model.html#val">val</a></span> <span class="id">v</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span>.<br/>
+<br/>
+<div class="doc">A user has softvoted along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="softvoted_in_path">softvoted_in_path</a></span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">ix</span>, <span class="id"><a href="Algorand.quorums.html#softvoted_in_path_at">softvoted_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<br/>
+<div class="doc">Enough softvotes for a value <span class="bracket"><span class="id">v</span></span> in a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="enough_softvotes_in_period">enough_softvotes_in_period</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> (<span class="id">softvote_quorum</span>:{<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">softvote_quorum</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> 2<br/>
+&nbsp;&nbsp;/\ #|` <span class="id">softvote_quorum</span> | &gt;= <span class="id"><a href="Algorand.algorand_model.html#tau_s">tau_s</a></span><br/>
+&nbsp;&nbsp;/\ <span class="kwd">forall</span> (<span class="id">voter</span>:<span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>), <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">softvote_quorum</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#softvoted_in_path">softvoted_in_path</a></span> <span class="id">trace</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">v</span>.<br/>
+<br/>
+<div class="doc">A user has nextvoted bottom at a specific index along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="nextvoted_bot_in_path_at">nextvoted_bot_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> (<span class="id">r</span> <span class="id">p</span> <span class="id">s</span>:<span class="id"><a href="https://coq.inria.fr/library/Coq.Init.Datatypes.html#nat">nat</a></span>) : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">g1</span> <span class="id">g2</span>, <span class="id"><a href="Algorand.algorand_model.html#step_in_path_at">step_in_path_at</a></span> <span class="id">g1</span> <span class="id">g2</span> <span class="id">ix</span> <span class="id">path</span><br/>
+&nbsp;&nbsp;&nbsp;/\ <span class="id"><a href="Algorand.safety_helpers.html#user_sent">user_sent</a></span> <span class="id">uid</span> (<span class="id"><a href="Algorand.algorand_model.html#mkMsg">mkMsg</a></span> <span class="id"><a href="Algorand.algorand_model.html#Nextvote_Open">Nextvote_Open</a></span> (<span class="id"><a href="Algorand.algorand_model.html#step_val">step_val</a></span> <span class="id">s</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span>.<br/>
+<br/>
+<div class="doc">A user has nextvoted bottom along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="nextvoted_bot_in_path">nextvoted_bot_in_path</a></span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">ix</span>, <span class="id"><a href="Algorand.quorums.html#nextvoted_bot_in_path_at">nextvoted_bot_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span>.<br/>
+<br/>
+<div class="doc">Enough nextvotes for bottom in a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="enough_nextvotes_bot_in_step">enough_nextvotes_bot_in_step</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> (<span class="id">nextvote_quorum</span>:{<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">nextvote_quorum</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span><br/>
+&nbsp;&nbsp;/\ #|` <span class="id">nextvote_quorum</span> | &gt;= <span class="id"><a href="Algorand.algorand_model.html#tau_b">tau_b</a></span><br/>
+&nbsp;&nbsp;/\ <span class="kwd">forall</span> (<span class="id">voter</span>:<span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>), <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">nextvote_quorum</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#nextvoted_bot_in_path">nextvoted_bot_in_path</a></span> <span class="id">trace</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span>.<br/>
+<br/>
+<div class="doc">A user has nextvoted for a value <span class="bracket"><span class="id">v</span></span> at a specific index along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="nextvoted_val_in_path_at">nextvoted_val_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">g1</span> <span class="id">g2</span>, <span class="id"><a href="Algorand.algorand_model.html#step_in_path_at">step_in_path_at</a></span> <span class="id">g1</span> <span class="id">g2</span> <span class="id">ix</span> <span class="id">path</span><br/>
+&nbsp;&nbsp;&nbsp;/\ <span class="id"><a href="Algorand.safety_helpers.html#user_sent">user_sent</a></span> <span class="id">uid</span> (<span class="id"><a href="Algorand.algorand_model.html#mkMsg">mkMsg</a></span> <span class="id"><a href="Algorand.algorand_model.html#Nextvote_Val">Nextvote_Val</a></span> (<span class="id"><a href="Algorand.algorand_model.html#next_val">next_val</a></span> <span class="id">v</span> <span class="id">s</span>) <span class="id">r</span> <span class="id">p</span> <span class="id">uid</span>) <span class="id">g1</span> <span class="id">g2</span>.<br/>
+<br/>
+<div class="doc">A user has nextvoted for a value <span class="bracket"><span class="id">v</span></span> along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="nextvoted_val_in_path">nextvoted_val_in_path</a></span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">v</span> : <span class="kwd">Prop</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> <span class="id">ix</span>, <span class="id"><a href="Algorand.quorums.html#nextvoted_val_in_path_at">nextvoted_val_in_path_at</a></span> <span class="id">ix</span> <span class="id">path</span> <span class="id">uid</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">v</span>.<br/>
+<br/>
+<div class="doc">Enough nextvotes for a value <span class="bracket"><span class="id">v</span></span> in a given round/period along a path. </div>
+<span class="kwd">Definition</span> <span class="id"><a name="enough_nextvotes_val_in_step">enough_nextvotes_val_in_step</a></span> <span class="id">trace</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">v</span> :=<br/>
+&nbsp;&nbsp;<span class="kwd">exists</span> (<span class="id">nextvote_quorum</span>:{<span class="id">fset</span> <span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>}),<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id">nextvote_quorum</span> `&lt;=` <span class="id"><a href="Algorand.quorums.html#committee">committee</a></span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span><br/>
+&nbsp;&nbsp;/\ #|` <span class="id">nextvote_quorum</span> | &gt;= <span class="id"><a href="Algorand.algorand_model.html#tau_v">tau_v</a></span><br/>
+&nbsp;&nbsp;/\ <span class="kwd">forall</span> (<span class="id">voter</span>:<span class="id"><a href="Algorand.algorand_model.html#UserId">UserId</a></span>), <span class="id">voter</span> \<span class="kwd">in</span> <span class="id">nextvote_quorum</span> -&gt;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="id"><a href="Algorand.quorums.html#nextvoted_val_in_path">nextvoted_val_in_path</a></span> <span class="id">trace</span> <span class="id">voter</span> <span class="id">r</span> <span class="id">p</span> <span class="id">s</span> <span class="id">v</span>.<br/>
+
+</div>
+<div class="footer"><hr/>Generated by <a href="https://github.com/xavierleroy/coq2html/">coq2html</a></div>
+</body>
+</html>
