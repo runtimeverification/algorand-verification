@@ -1,8 +1,8 @@
-From mathcomp.ssreflect Require Import all_ssreflect.
-From mathcomp.finmap Require Import finmap multiset.
-From mathcomp.zify Require Import zify.
+From mathcomp Require Import all_ssreflect.
+From mathcomp Require Import finmap multiset.
+From mathcomp Require Import zify.
 From Coq Require Import Reals Relation_Definitions Relation_Operators.
-From mathcomp.analysis Require Import boolp Rstruct.
+From mathcomp Require Import boolp Rstruct.
 From Algorand Require Import fmap_ext algorand_model.
 
 Set Implicit Arguments.
