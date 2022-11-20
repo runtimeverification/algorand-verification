@@ -1,17 +1,9 @@
-From mathcomp.ssreflect
-Require Import all_ssreflect.
-
-From mathcomp.finmap
-Require Import finmap multiset.
-
-From Coq
-Require Import Reals Relation_Definitions Relation_Operators.
-
-From mathcomp.analysis
-Require Import boolp Rstruct.
-
-From Algorand
-Require Import zify fmap_ext algorand_model.
+From mathcomp.ssreflect Require Import all_ssreflect.
+From mathcomp.finmap Require Import finmap multiset.
+From mathcomp.zify Require Import zify.
+From Coq Require Import Reals Relation_Definitions Relation_Operators.
+From mathcomp.analysis Require Import boolp Rstruct.
+From Algorand Require Import fmap_ext algorand_model.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -31,7 +23,7 @@ Ltac finish_case := simpl;solve[repeat first[reflexivity|eassumption|split|eexis
 (** Gather all the unfoldings we might want for working with transitions into
 a hint database for use with autounfold. *)
 Create HintDb utransition_unfold discriminated.
-Hint Unfold
+#[export] Hint Unfold
      (* UTransitionInternal *)
      propose_result      propose_ok repropose_ok no_propose_ok
      softvote_result     softvote_new_ok softvote_repr_ok no_softvote_ok
@@ -46,7 +38,7 @@ Hint Unfold
      vote_msg deliver_nonvote_msg_result : utransition_unfold.
 
 Create HintDb gtransition_unfold discriminated.
-Hint Unfold
+#[export] Hint Unfold
      tick_ok tick_update tick_users
      delivery_result
      step_result

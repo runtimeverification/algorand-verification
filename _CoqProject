@@ -7,7 +7,6 @@
 -arg -w -arg -duplicate-clear
 -arg -w -arg -ambiguous-paths
 
-theories/zify.v
 theories/fmap_ext.v
 theories/algorand_model.v
 theories/safety_helpers.v

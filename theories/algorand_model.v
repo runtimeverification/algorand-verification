@@ -1,21 +1,11 @@
-From mathcomp.ssreflect
-Require Import all_ssreflect.
+From mathcomp.ssreflect Require Import all_ssreflect.
+From mathcomp.finmap Require Import finmap multiset.
+From Coq Require Import Reals Relation_Definitions Relation_Operators.
+From mathcomp.analysis Require Import boolp Rstruct.
+From RecordUpdate Require Import RecordSet.
+From Algorand Require Import fmap_ext.
 
-From mathcomp.finmap
-Require Import finmap multiset.
-
-From Coq
-Require Import Reals Relation_Definitions Relation_Operators.
-
-From mathcomp.analysis
-Require Import boolp Rstruct.
-
-From RecordUpdate
-Require Import RecordSet.
 Import RecordSetNotations.
-
-From Algorand
-Require Import fmap_ext.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -236,7 +226,7 @@ Record UState :=
     nextvotes_val : {fsfun nat * nat * nat -> seq Vote with [::]} (**r a sequence of value-nextvotes seen for the given round/period/step *)
    }.
 
-Instance UState_Settable : Settable _ :=
+#[export] Instance UState_Settable : Settable _ :=
   settable! mkUState <corrupt;round;period;step;timer;deadline;p_start;
    proposals;stv;blocks;softvotes;certvotes;nextvotes_open;nextvotes_val>.
 
@@ -310,7 +300,7 @@ Record GState :=
     msg_history : {mset Msg} (**r the history of all broadcasted messages as a multiset of messages *)
   }.
 
-Instance GState_Settable : Settable _ :=
+#[export] Instance GState_Settable : Settable _ :=
  settable! mkGState <now;network_partition;users;msg_in_transit;msg_history>.
 
 (** State with empty maps, unpartitioned, at global time 0. *)
