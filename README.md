@@ -19,10 +19,10 @@ a formal proof of safety for the transition system.
 - License: [University of Illinois/NCSA Open Source License](LICENSE.md)
 - Compatible Coq versions: 8.14 or later
 - Additional dependencies:
-  - [MathComp ssreflect 1.15.0 or later](https://math-comp.github.io)
+  - [MathComp ssreflect 1.14.0 or later](https://math-comp.github.io)
   - [MathComp algebra](https://math-comp.github.io)
-  - [MathComp finmap 1.5.2 or later](https://github.com/math-comp/finmap)
-  - [MathComp analysis 0.5.2 or later](https://github.com/math-comp/analysis)
+  - [MathComp finmap 1.5.1 or later](https://github.com/math-comp/finmap)
+  - [MathComp analysis 0.5.0 or later](https://github.com/math-comp/analysis)
   - [Mczify](https://github.com/math-comp/mczify)
   - [Coq record update](https://github.com/tchajed/coq-record-update)
 - Coq namespace: `Algorand`
