@@ -579,10 +579,11 @@ Proof.
   refine (softvote_value_unique H_send1 _ H_send2).
   (* honesty follows from user_sent *)
   destruct H_send1 as [ms' [H_msg' [[d1' [in1' H_step']]|H_step']]].
-    destruct H_step' as (key_ustate' & ustate_post' & H_step' & H_honest' & key_mailbox' & H_msg_in_mailbox' & ->).
-    unfold user_honest. rewrite in_fnd. intuition.
+    destruct H_step' as (key_ustate' & ustate_post' & H_step' &
+     H_honest' & key_mailbox' & H_msg_in_mailbox' & ->).
+    by rewrite /user_honest in_fnd; apply/negP.
   destruct H_step' as (key_user' & ustate_post' & H_honest' & H_step' & ->).
-  unfold user_honest. rewrite in_fnd. intuition.
+  by rewrite /user_honest in_fnd; apply/negP.
 Qed.
 
 (** ** Votes present in user state were received *)
